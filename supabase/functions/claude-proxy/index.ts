@@ -1,0 +1,236 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+};
+
+interface AnthropicRequest {
+  operation: 'extract-facts' | 'generate-questions' | 'generate-modules';
+  text: string;
+  facts?: any[];
+  questionCount?: number;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
+  }
+
+  try {
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+
+    if (!apiKey) {
+      throw new Error("ANTHROPIC_API_KEY is not configured");
+    }
+
+    const requestData: AnthropicRequest = await req.json();
+    const { operation, text, facts, questionCount } = requestData;
+
+    let prompt = "";
+    let maxTokens = 3000;
+
+    switch (operation) {
+      case 'extract-facts':
+        prompt = `You are a fact extraction system. Extract key facts from this document with ABSOLUTE PRECISION.
+
+CRITICAL RULES - ZERO TOLERANCE FOR DEVIATION:
+1. Extract ONLY facts that are EXPLICITLY and LITERALLY stated in the document
+2. Include the EXACT quote from the document for each fact - WORD FOR WORD, CHARACTER FOR CHARACTER
+3. Include the section/paragraph where the fact appears EXACTLY as written
+4. NEVER paraphrase, interpret, summarize, or rephrase - copy EXACT text only
+5. NEVER add context, general knowledge, or external information
+6. NEVER make assumptions, inferences, or logical leaps
+7. If something is not explicitly stated, DO NOT include it
+8. Use ONLY text that appears verbatim in the source document
+
+DOCUMENT TEXT:
+${text}
+
+Extract 8-12 facts and respond with ONLY valid JSON in this EXACT format:
+
+{
+  "facts": [
+    {
+      "id": "fact_1",
+      "exactQuote": "exact text from document word-for-word - no changes",
+      "section": "Section number or heading exactly as it appears in document",
+      "category": "procedure|safety|requirement|responsibility",
+      "importance": "critical|important|supplementary"
+    }
+  ]
+}
+
+DO NOT include any text before or after the JSON. Your response must start with { and end with }`;
+        break;
+
+      case 'generate-questions':
+        const questionnableFacts = facts?.filter((f: any) =>
+          f.importance === 'critical' || f.importance === 'important'
+        ).slice(0, questionCount || 5);
+
+        prompt = `You are creating a compliance quiz. Generate questions EXCLUSIVELY from these verified facts with ZERO HALLUCINATION.
+
+CRITICAL RULES - ABSOLUTE COMPLIANCE REQUIRED:
+1. Each question must be based on ONE of the provided facts ONLY
+2. Use the exact quote as your SOLE source of truth - nothing else
+3. The correct answer must be DIRECTLY and LITERALLY extractable from the quote
+4. Wrong answers should be plausible but clearly incorrect based ONLY on the quote
+5. Include the fact ID in your response for verification tracking
+6. DO NOT add "According to Section" or similar prefixes - write questions DIRECTLY
+7. Keep questions concise and direct - ask about the content, not the source
+8. NEVER infer, assume, or add information not in the exact quote
+9. The explanation must quote the source EXACTLY as written
+
+VERIFIED FACTS:
+${JSON.stringify(questionnableFacts, null, 2)}
+
+Generate EXACTLY ${questionnableFacts?.length || 5} questions in this JSON format:
+
+IMPORTANT: Questions should be DIRECT without "According to Section" prefixes.
+EXAMPLE - GOOD: "What is the minimum handwashing time?"
+EXAMPLE - BAD: "According to Section 4, what is the minimum handwashing time?"
+
+{
+  "questions": [
+    {
+      "id": "q1",
+      "basedOnFactId": "fact_1",
+      "question": "Direct question about the content without section prefix",
+      "sourceReference": "Section number from the fact",
+      "exactQuote": "The exact quote this question is based on",
+      "options": [
+        "Correct answer extracted WORD-FOR-WORD from the quote",
+        "Plausible distractor",
+        "Plausible distractor",
+        "Plausible distractor"
+      ],
+      "correctAnswer": 0,
+      "explanation": "The source states: '[Exact quote that proves the answer]'"
+    }
+  ]
+}
+
+DO NOT include any text before or after the JSON.`;
+        maxTokens = 3000;
+        break;
+
+      case 'generate-modules':
+        prompt = `Create a concise course outline with modules from this document. Keep content brief and focused.
+
+CRITICAL RULES:
+1. Extract content EXACTLY as written - NEVER add information
+2. Keep content CONCISE - summarize lengthy paragraphs into key points
+3. Use bullet points (•) instead of long paragraphs where possible
+4. Limit each content section to 2-3 sentences or 3-5 bullet points maximum
+5. Focus on the most important information only
+
+DOCUMENT (first portion):
+${text.substring(0, 20000)}
+
+VERIFIED FACTS:
+${JSON.stringify((facts || []).slice(0, 10), null, 2)}
+
+Create 3-4 SHORT modules. Each module should have 3-5 content sections maximum. Keep all text BRIEF. Respond with ONLY valid JSON:
+
+{
+  "modules": [
+    {
+      "id": "module_1",
+      "title": "Brief module title from document",
+      "duration": "3-5 mins",
+      "content": [
+        {
+          "type": "objectives",
+          "heading": "Learning Objectives",
+          "body": "By the end of this module, you will be able to:\\n• Identify key concepts\\n• Understand main procedures"
+        },
+        {
+          "type": "text",
+          "heading": "Section heading",
+          "body": "Brief summary in 2-3 sentences or bullet points:\\n• Key point 1\\n• Key point 2\\n• Key point 3"
+        },
+        {
+          "type": "callout-important",
+          "heading": "Important",
+          "body": "Critical info in 1-2 sentences"
+        },
+        {
+          "type": "summary",
+          "heading": "Summary",
+          "body": "• Main point 1\\n• Main point 2\\n• Main point 3"
+        }
+      ],
+      "relatedFacts": ["fact_1"]
+    }
+  ]
+}
+
+KEEP IT CONCISE: Each body text should be 1-3 sentences or 3-5 bullet points MAX. Focus on key information only. Set module duration to 3-5 mins since content is brief.`;
+        maxTokens = 4096;
+        break;
+
+      default:
+        throw new Error(`Unknown operation: ${operation}`);
+    }
+
+    const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: maxTokens,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      })
+    });
+
+    if (!anthropicResponse.ok) {
+      const errorText = await anthropicResponse.text();
+      console.error("Anthropic API error:", errorText);
+      throw new Error(`Anthropic API error: ${anthropicResponse.status} - ${errorText}`);
+    }
+
+    const data = await anthropicResponse.json();
+
+    return new Response(
+      JSON.stringify(data),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+  } catch (error) {
+    console.error("Error in claude-proxy:", error);
+
+    return new Response(
+      JSON.stringify({
+        error: error.message || "Internal server error",
+        details: error.toString()
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+});
