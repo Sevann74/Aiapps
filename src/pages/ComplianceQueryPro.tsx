@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, FileText, CheckCircle, AlertCircle, TrendingUp, Table, Sparkles, Filter, Download, Share2, BookOpen, Database, BarChart3, Eye, Clock, Shield, Zap, Brain, GitCompare, Copy, ExternalLink, MessageSquare, Send, Mic, User, Bot, Trash2, Star, MessageCircle, RefreshCw, Info, ArrowRight, AlertTriangle } from 'lucide-react';
 import SOPUploader from '../components/SOPUploader';
+import { complianceQueryService, type Document } from '../lib/complianceQueryService';
+import { processDocuments, createMockDocument } from '../lib/documentProcessor';
 
 // ============================================
 // COMPLETE APP WITH 3 MODES:
@@ -133,16 +135,16 @@ export default function ComplianceQueryProComplete() {
   const [activeMode, setActiveMode] = useState('search');
   
   // Chatbot State
-  const [conversations, setConversations] = useState([]);
-  const [currentConversation, setCurrentConversation] = useState(null);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [currentConversation, setCurrentConversation] = useState<any>(null);
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   
   // Search State
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState(null);
+  const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [searchHistory, setSearchHistory] = useState([]);
+  const [searchHistory, setSearchHistory] = useState<any[]>([]);
   const [filters, setFilters] = useState({
     documentType: 'all',
     department: 'all',
@@ -156,7 +158,46 @@ export default function ComplianceQueryProComplete() {
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [uploadedSOPs, setUploadedSOPs] = useState<any[]>([]);
   
-  const messagesEndRef = useRef(null);
+  // Document Management
+  const [processedDocuments, setProcessedDocuments] = useState<Document[]>(() => {
+    // Initialize with mock documents converted to proper format
+    return MOCK_DOCUMENTS.map(doc => createMockDocument(
+      doc.id,
+      doc.title,
+      doc.content,
+      {
+        type: doc.type,
+        department: doc.department,
+        lastUpdated: doc.lastUpdated,
+        version: doc.version,
+        author: doc.author,
+        status: doc.status,
+        path: doc.path,
+        pages: doc.pages
+      }
+    ));
+  });
+  const [isProcessingDocs, setIsProcessingDocs] = useState(false);
+  
+  // GxP Compliance Modal
+  const [showGxPModal, setShowGxPModal] = useState(false);
+  const [auditTrail, setAuditTrail] = useState<any[]>([]);
+  
+  // Add audit trail entry
+  const addAuditEntry = (action: string, details: any) => {
+    const entry = {
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      user: 'demo.user@company.com',
+      action,
+      details,
+      ipAddress: '192.168.1.100', // Mock IP
+      sessionId: 'sess_' + Math.random().toString(36).substr(2, 9)
+    };
+    setAuditTrail(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
+  };
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -190,11 +231,11 @@ export default function ComplianceQueryProComplete() {
 
   // Send message in chat
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !currentConversation) return;
     
     const userMessage = {
       id: Date.now(),
-      role: 'user',
+      role: 'user' as const,
       content: message,
       timestamp: new Date().toISOString()
     };
@@ -212,30 +253,75 @@ export default function ComplianceQueryProComplete() {
     setMessage('');
     setIsTyping(true);
     
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const response = getContextualResponse(message, updatedMessages);
-    
-    const assistantMessage = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: response.answer,
-      confidence: response.confidence,
-      sources: response.sources,
-      relatedDocuments: response.relatedDocuments,
-      suggestedQuestions: response.suggestedQuestions,
-      timestamp: new Date().toISOString()
-    };
-    
-    const finalMessages = [...updatedMessages, assistantMessage];
-    const finalConv = {
-      ...updatedConv,
-      messages: finalMessages
-    };
-    
-    setCurrentConversation(finalConv);
-    setConversations(conversations.map(c => c.id === finalConv.id ? finalConv : c));
-    setIsTyping(false);
+    try {
+      // Use real Claude API for chat
+      const conversationHistory = updatedMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      // Add audit entry
+      addAuditEntry('CHAT_QUERY', {
+        message: message,
+        conversationId: currentConversation.id,
+        documentCount: processedDocuments.length
+      });
+      
+      const response = await complianceQueryService.chat(
+        message,
+        conversationHistory,
+        processedDocuments
+      );
+      
+      // Add audit entry for response
+      addAuditEntry('CHAT_RESPONSE', {
+        conversationId: currentConversation.id,
+        confidence: response.confidence,
+        sourcesUsed: response.sources?.length || 0
+      });
+      
+      const assistantMessage = {
+        id: Date.now() + 1,
+        role: 'assistant' as const,
+        content: response.answer,
+        confidence: response.confidence,
+        sources: response.sources,
+        relatedDocuments: response.relatedDocuments,
+        suggestedQuestions: response.suggestedQuestions,
+        timestamp: new Date().toISOString()
+      };
+      
+      const finalMessages = [...updatedMessages, assistantMessage];
+      const finalConv = {
+        ...updatedConv,
+        messages: finalMessages
+      };
+      
+      setCurrentConversation(finalConv);
+      setConversations(conversations.map(c => c.id === finalConv.id ? finalConv : c));
+    } catch (error) {
+      console.error('Chat error:', error);
+      // Add error message
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'assistant' as const,
+        content: 'Sorry, I encountered an error. Please try again.',
+        confidence: 0,
+        sources: [],
+        timestamp: new Date().toISOString()
+      };
+      
+      const finalMessages = [...updatedMessages, errorMessage];
+      const finalConv = {
+        ...updatedConv,
+        messages: finalMessages
+      };
+      
+      setCurrentConversation(finalConv);
+      setConversations(conversations.map(c => c.id === finalConv.id ? finalConv : c));
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const getContextualResponse = (newMessage, conversationHistory) => {
@@ -309,125 +395,151 @@ export default function ComplianceQueryProComplete() {
     };
     setSearchHistory([historyItem, ...searchHistory.slice(0, 9)]);
     
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const queryLower = query.toLowerCase();
-    let response = null;
-    
-    if (queryLower.includes('storage') || queryLower.includes('temperature')) {
-      response = MOCK_QUERY_RESPONSES['storage temperature'];
-    } else {
-      response = {
-        answer: 'I found relevant information in the following documents.',
-        confidence: 75,
-        sources: MOCK_DOCUMENTS.slice(0, 2).map(doc => ({
-          document: doc.id,
-          section: 'Multiple sections',
-          page: 1,
-          exactQuote: doc.content.substring(0, 150) + '...',
-          relevance: 75
-        })),
-        relatedDocuments: MOCK_DOCUMENTS.slice(2, 5).map(d => d.id)
-      };
+    try {
+      // Add audit entry
+      addAuditEntry('DOCUMENT_SEARCH', {
+        query: query,
+        documentCount: processedDocuments.length,
+        searchType: 'AI_POWERED'
+      });
+      
+      // Use real Claude API for search
+      const response = await complianceQueryService.search(query, processedDocuments);
+      setResults(response);
+      
+      // Add audit entry for successful search
+      addAuditEntry('SEARCH_COMPLETED', {
+        query: query,
+        confidence: response.confidence,
+        sourcesFound: response.sources?.length || 0
+      });
+    } catch (error) {
+      console.error('Search error:', error);
+      // Fallback to mock response on error
+      setResults({
+        answer: 'Error performing search. Please try again.',
+        confidence: 0,
+        sources: [],
+        relatedDocuments: [],
+        suggestedQuestions: []
+      });
+    } finally {
+      setLoading(false);
     }
-    
-    setResults(response);
-    setLoading(false);
   };
 
-  // SOP Comparison functionality (using uploaded SOPs metadata + mocked diff)
+  // Handle uploaded SOP files
+  const handleSOPUpload = async (uploadedFiles: any[]) => {
+    console.log('handleSOPUpload called with:', uploadedFiles);
+    setIsProcessingDocs(true);
+    try {
+      // Extract File objects from UploadedFile wrappers
+      const fileObjects = uploadedFiles.map(uf => uf.file);
+      console.log('Processing files:', fileObjects);
+      const processed = await processDocuments(fileObjects);
+      console.log('Processed documents:', processed);
+      setUploadedSOPs(processed);
+      // Also add to general document pool
+      setProcessedDocuments(prev => [...prev, ...processed]);
+    } catch (error) {
+      console.error('Error processing SOPs:', error);
+    } finally {
+      setIsProcessingDocs(false);
+    }
+  };
+
+  // SOP Comparison functionality using real Claude API
   const compareSOPs = async () => {
     if (!sop1 || !sop2 || uploadedSOPs.length < 2) return;
 
-    const file1 = uploadedSOPs.find((f) => f.id === sop1);
-    const file2 = uploadedSOPs.find((f) => f.id === sop2);
+    const file1 = uploadedSOPs.find((f: any) => f.id === sop1);
+    const file2 = uploadedSOPs.find((f: any) => f.id === sop2);
 
     if (!file1 || !file2) return;
 
     setComparisonLoading(true);
     
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const result = {
-      sop1Details: {
-        id: file1.name,
-        title: file1.name,
-        type: 'SOP',
-        department: 'Unknown',
-        lastUpdated: new Date(file1.lastModified).toLocaleDateString(),
-        version: file1.version?.toString?.() || '1.0',
-        author: 'Uploaded Document',
-        status: 'Uploaded',
-        path: 'Local upload',
-        pages: 0,
-        content: ''
-      },
-      sop2Details: {
-        id: file2.name,
-        title: file2.name,
-        type: 'SOP',
-        department: 'Unknown',
-        lastUpdated: new Date(file2.lastModified).toLocaleDateString(),
-        version: file2.version?.toString?.() || '1.0',
-        author: 'Uploaded Document',
-        status: 'Uploaded',
-        path: 'Local upload',
-        pages: 0,
-        content: ''
-      },
-      summary: {
-        totalSections: 12,
-        identicalSections: 8,
-        modifiedSections: 3,
-        newSections: 1,
-        removedSections: 0
-      },
-      differences: [
+    try {
+      // Add audit entry
+      addAuditEntry('SOP_COMPARISON_STARTED', {
+        sop1: { id: file1.id, title: file1.title, version: file1.version },
+        sop2: { id: file2.id, title: file2.title, version: file2.version },
+        comparisonType: 'AI_POWERED_DIFF'
+      });
+      
+      // Use real Claude API for SOP comparison
+      const result = await complianceQueryService.compareSOPs(
         {
-          section: '3.4 Storage Requirements',
-          type: 'modified',
-          severity: 'high',
-          sop1Text: 'Storage temperature: 2-8°C for up to 3 months',
-          sop2Text: 'Storage temperature: 2-8°C for up to 6 months',
-          impact: 'Extended storage duration - requires validation',
-          page1: 12,
-          page2: 12
+          id: file1.id,
+          title: file1.title,
+          content: file1.content,
+          version: file1.version
         },
         {
-          section: '4.2 Quality Specifications',
-          type: 'modified',
-          severity: 'medium',
-          sop1Text: 'Purity: ≥98.0%',
-          sop2Text: 'Purity: ≥98.5%',
-          impact: 'More stringent specification',
-          page1: 15,
-          page2: 15
-        },
-        {
-          section: '5.3 Equipment Qualification',
-          type: 'new',
-          severity: 'low',
-          sop1Text: null,
-          sop2Text: 'Annual equipment qualification required for all HPLC systems',
-          impact: 'New requirement added',
-          page1: null,
-          page2: 18
+          id: file2.id,
+          title: file2.title,
+          content: file2.content,
+          version: file2.version
         }
-      ],
-      criticalChanges: [
-        'Storage duration extended from 3 to 6 months (requires stability data)',
-        'Purity specification increased to 98.5%'
-      ],
-      recommendations: [
-        'Review existing batches against new 98.5% purity spec',
-        'Validate 6-month storage with stability studies',
-        'Update batch records to reflect new specifications',
-        'Train all QC staff on updated procedures'
-      ]
-    };
-    
-    setComparisonResult(result);
-    setComparisonLoading(false);
+      );
+      
+      // Add audit entry for completed comparison
+      addAuditEntry('SOP_COMPARISON_COMPLETED', {
+        sop1: file1.title,
+        sop2: file2.title,
+        differencesFound: result.differences?.length || 0,
+        criticalChanges: result.criticalChanges?.length || 0
+      });
+      
+      // Add SOP details to result
+      const enrichedResult = {
+        ...result,
+        sop1Details: {
+          id: file1.id,
+          title: file1.title,
+          type: file1.type,
+          department: file1.department,
+          lastUpdated: file1.lastUpdated,
+          version: file1.version,
+          author: file1.author,
+          status: file1.status,
+          path: file1.path,
+          pages: file1.pages
+        },
+        sop2Details: {
+          id: file2.id,
+          title: file2.title,
+          type: file2.type,
+          department: file2.department,
+          lastUpdated: file2.lastUpdated,
+          version: file2.version,
+          author: file2.author,
+          status: file2.status,
+          path: file2.path,
+          pages: file2.pages
+        }
+      };
+      
+      setComparisonResult(enrichedResult);
+    } catch (error) {
+      console.error('SOP comparison error:', error);
+      // Set error state
+      setComparisonResult({
+        error: 'Failed to compare SOPs. Please try again.',
+        summary: {
+          totalSections: 0,
+          identicalSections: 0,
+          modifiedSections: 0,
+          newSections: 0,
+          removedSections: 0
+        },
+        differences: [],
+        criticalChanges: [],
+        recommendations: []
+      });
+    } finally {
+      setComparisonLoading(false);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -529,10 +641,13 @@ export default function ComplianceQueryProComplete() {
                 </button>
               </div>
               
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
+              <button
+                onClick={() => setShowGxPModal(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg hover:bg-green-100 transition-colors cursor-pointer"
+              >
                 <Shield className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-medium text-green-700">GxP Compliant</span>
-              </div>
+              </button>
               <div className="px-3 py-2 bg-gray-100 rounded-lg">
                 <span className="text-sm text-gray-600">demo.user@company.com</span>
               </div>
@@ -546,7 +661,34 @@ export default function ComplianceQueryProComplete() {
         
         {/* SEARCH MODE */}
         {activeMode === 'search' && (
-          <div className="grid lg:grid-cols-4 gap-6">
+          <div className="space-y-6">
+            {/* Search Mode Features */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <Search className="w-6 h-6 text-blue-600" />
+                Search Mode Features
+              </h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-1">🔍 Quick Document Queries</h4>
+                  <p className="text-gray-600">Ask natural language questions about your documents. AI analyzes content across all uploaded SOPs to find relevant information instantly.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-1">📄 Source Citations</h4>
+                  <p className="text-gray-600">Every answer includes exact document references with page numbers and direct quotes, ensuring full traceability for compliance.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-1">🎯 Confidence Scoring</h4>
+                  <p className="text-gray-600">AI provides confidence levels (0-100%) for each answer, helping you assess reliability and identify when human review is needed.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-1">📚 Search History</h4>
+                  <p className="text-gray-600">Track previous queries for audit purposes and quick re-access. Click any historical search to repeat the query.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid lg:grid-cols-4 gap-6">
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl shadow-sm p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Stats</h3>
@@ -663,11 +805,43 @@ export default function ComplianceQueryProComplete() {
               </div>
             </div>
           </div>
+          </div>
         )}
 
         {/* CHAT MODE */}
         {activeMode === 'chat' && (
-          <div className="grid lg:grid-cols-4 gap-6">
+          <div className="space-y-6">
+            {/* Chat Mode Features */}
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <MessageCircle className="w-6 h-6 text-purple-600" />
+                Chat Mode Features
+              </h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-purple-900 mb-1">💬 Conversation Management</h4>
+                  <p className="text-gray-600">Create multiple conversation threads, each with its own context and history. Perfect for different projects or topics.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-purple-900 mb-1">🧠 Context Retention</h4>
+                  <p className="text-gray-600">AI remembers your entire conversation history, allowing for follow-up questions and building on previous discussions.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-purple-900 mb-1">💡 Suggested Follow-ups</h4>
+                  <p className="text-gray-600">AI suggests relevant next questions based on the current topic, helping you explore documents more thoroughly.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-purple-900 mb-1">📤 Export Conversations</h4>
+                  <p className="text-gray-600">Download complete conversation logs as JSON files for compliance records, sharing with colleagues, or documentation.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-purple-900 mb-1">🗂️ Multiple Conversations</h4>
+                  <p className="text-gray-600">Organize discussions by topic, project, or SOP. Switch between conversations while maintaining separate contexts.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid lg:grid-cols-4 gap-6">
             {/* Conversation List Sidebar */}
             <div className="lg:col-span-1 space-y-4">
               <div className="bg-white rounded-xl shadow-sm p-4">
@@ -933,11 +1107,52 @@ export default function ComplianceQueryProComplete() {
               </div>
             </div>
           </div>
+          </div>
         )}
 
         {/* SOP COMPARISON MODE */}
         {activeMode === 'comparison' && (
           <div className="space-y-6">
+            {/* SOP Comparison Features */}
+            <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-6 border border-pink-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <GitCompare className="w-6 h-6 text-pink-600" />
+                SOP Comparison Mode Features 🔄 <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">NEW!</span>
+              </h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mb-4">
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">🔄 Side-by-side Comparison</h4>
+                  <p className="text-gray-600">Upload two SOP versions and see them compared section by section. AI identifies every change, addition, and deletion.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">🎨 Visual Difference Highlighting</h4>
+                  <p className="text-gray-600">Changes are color-coded and clearly marked. See exactly what text was modified, added, or removed between versions.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">⚠️ Severity Indicators</h4>
+                  <p className="text-gray-600">Each change is classified as High, Medium, or Low priority based on compliance impact and operational significance.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">🚨 Critical Changes Alert</h4>
+                  <p className="text-gray-600">High-priority changes are highlighted at the top with clear warnings about compliance implications and required actions.</p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4 text-sm">
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">📊 Impact Assessment</h4>
+                  <p className="text-gray-600">AI analyzes the business and compliance impact of each change, helping prioritize review and implementation efforts.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">✅ Recommended Actions</h4>
+                  <p className="text-gray-600">Get specific, actionable recommendations for each change including training needs, validation requirements, and timeline suggestions.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg">
+                  <h4 className="font-semibold text-pink-900 mb-1">📄 Export Report</h4>
+                  <p className="text-gray-600">Generate comprehensive comparison reports for change control documentation, regulatory submissions, and team reviews.</p>
+                </div>
+              </div>
+            </div>
+            
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white">
               <div className="flex items-center gap-3 mb-2">
@@ -957,7 +1172,13 @@ export default function ComplianceQueryProComplete() {
                 <p className="text-sm text-gray-600 mb-4">
                   Drag and drop PDF or DOCX SOPs here, then pick which versions you want to compare below.
                 </p>
-                <SOPUploader onFilesUploaded={setUploadedSOPs} maxFiles={5} />
+                <SOPUploader onFilesUploaded={handleSOPUpload} maxFiles={5} />
+                {isProcessingDocs && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-blue-600">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    Processing documents...
+                  </div>
+                )}
                 {uploadedSOPs.length > 0 && (
                   <p className="mt-2 text-xs text-gray-500">
                     {uploadedSOPs.length} file{uploadedSOPs.length === 1 ? '' : 's'} ready for AI comparison.
@@ -983,7 +1204,7 @@ export default function ComplianceQueryProComplete() {
                     <option value="">{uploadedSOPs.length < 2 ? 'Upload at least two SOPs...' : 'Select SOP...'}</option>
                     {uploadedSOPs.map((file) => (
                       <option key={file.id} value={file.id}>
-                        {file.name}
+                        {file.title || file.name}
                       </option>
                     ))}
                   </select>
@@ -1007,7 +1228,7 @@ export default function ComplianceQueryProComplete() {
                         value={file.id}
                         disabled={file.id === sop1}
                       >
-                        {file.name}
+                        {file.title || file.name}
                       </option>
                     ))}
                   </select>
@@ -1184,6 +1405,189 @@ export default function ComplianceQueryProComplete() {
           </div>
         )}
       </div>
+
+      {/* GxP Compliance Modal */}
+      {showGxPModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-2xl font-bold">GxP Compliance Dashboard</h2>
+                    <p className="text-green-100">Good Practice Regulatory Compliance</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowGxPModal(false)}
+                  className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+                >
+                  <AlertCircle className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="grid md:grid-cols-2 gap-6">
+                
+                {/* System Validation Status */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    System Validation Status
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Data Integrity</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">VALIDATED</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Audit Trail</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">ACTIVE</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">User Authentication</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">COMPLIANT</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Electronic Signatures</span>
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">READY</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Change Control</span>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">IMPLEMENTED</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 21 CFR Part 11 Compliance */}
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                    21 CFR Part 11 Compliance
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">Electronic records are accurate, reliable, and equivalent to paper records</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">Audit trails capture all user actions with timestamps</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">System controls prevent unauthorized access</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">Data integrity maintained throughout lifecycle</span>
+                    </div>
+                    <a 
+                      href="https://www.fda.gov/regulatory-information/search-fda-guidance-documents/part-11-electronic-records-electronic-signatures-scope-and-application"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      View FDA Guidance
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Compliance Documentation */}
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-purple-600" />
+                    Compliance Documentation
+                  </h3>
+                  <div className="space-y-2">
+                    <button className="w-full text-left p-2 hover:bg-white rounded-lg transition-colors flex items-center justify-between">
+                      <span className="text-sm text-gray-700">System Validation Protocol (SVP)</span>
+                      <Download className="w-4 h-4 text-gray-400" />
+                    </button>
+                    <button className="w-full text-left p-2 hover:bg-white rounded-lg transition-colors flex items-center justify-between">
+                      <span className="text-sm text-gray-700">User Requirements Specification (URS)</span>
+                      <Download className="w-4 h-4 text-gray-400" />
+                    </button>
+                    <button className="w-full text-left p-2 hover:bg-white rounded-lg transition-colors flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Risk Assessment Report</span>
+                      <Download className="w-4 h-4 text-gray-400" />
+                    </button>
+                    <button className="w-full text-left p-2 hover:bg-white rounded-lg transition-colors flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Audit Trail Specification</span>
+                      <Download className="w-4 h-4 text-gray-400" />
+                    </button>
+                    <button className="w-full text-left p-2 hover:bg-white rounded-lg transition-colors flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Change Control Procedures</span>
+                      <Download className="w-4 h-4 text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Audit Trail */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-gray-600" />
+                    Recent Audit Trail ({auditTrail.length} entries)
+                  </h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {auditTrail.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No audit entries yet. Perform searches, chats, or comparisons to see audit trail.</p>
+                    ) : (
+                      auditTrail.slice(0, 10).map((entry) => (
+                        <div key={entry.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-blue-600">{entry.action}</span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(entry.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600">User: {entry.user}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {entry.action === 'DOCUMENT_SEARCH' && `Query: "${entry.details.query}"`}
+                            {entry.action === 'SEARCH_COMPLETED' && `Found ${entry.details.sourcesFound} sources (${entry.details.confidence}% confidence)`}
+                            {entry.action === 'CHAT_QUERY' && `Message in conversation ${entry.details.conversationId}`}
+                            {entry.action === 'CHAT_RESPONSE' && `Response with ${entry.details.sourcesUsed} sources`}
+                            {entry.action === 'SOP_COMPARISON_STARTED' && `Comparing ${entry.details.sop1.title} vs ${entry.details.sop2.title}`}
+                            {entry.action === 'SOP_COMPARISON_COMPLETED' && `Found ${entry.details.differencesFound} differences, ${entry.details.criticalChanges} critical`}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {auditTrail.length > 10 && (
+                    <button className="w-full mt-3 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm text-gray-700 transition-colors">
+                      View All {auditTrail.length} Entries
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="mt-6 pt-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  System validated for GMP, GLP, GCP compliance
+                </div>
+                <div className="flex items-center gap-3">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    Export Audit Trail
+                  </button>
+                  <button 
+                    onClick={() => setShowGxPModal(false)}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

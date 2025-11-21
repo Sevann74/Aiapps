@@ -32,18 +32,31 @@ const JOB_STATUSES = {
 // MAIN COMPONENT
 // ============================================
 const StreamlinedCourseBuilder = () => {
-  // Authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  // Authentication state - DISABLED FOR NOW (auto-login as client)
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [currentUser, setCurrentUser] = useState({
+    id: 'client-001',
+    email: 'john@abcpharma.com',
+    password: 'demo123',
+    name: 'John Doe',
+    role: 'client',
+    organization: 'ABC Pharma',
+    createdAt: new Date().toISOString()
+  });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
   // View state
-  const [currentView, setCurrentView] = useState('dashboard'); // dashboard, submit, job-detail, admin-dashboard, admin-job-detail
-  const [selectedJob, setSelectedJob] = useState(null);
+  const [currentView, setCurrentView] = useState('dashboard'); // dashboard, submit, job-detail, admin-dashboard, admin-job-detail, admin-onboard-client, admin-manage-clients
+  const [selectedJob, setSelectedJob] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [revisionComment, setRevisionComment] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [showRevisionBox, setShowRevisionBox] = useState(false);
+  const [selectedClientForEdit, setSelectedClientForEdit] = useState(null);
   
   // Client submission form
   const [clientForm, setClientForm] = useState({
@@ -60,9 +73,9 @@ const StreamlinedCourseBuilder = () => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileChecksum, setFileChecksum] = useState('');
   const [confirmCheckbox, setConfirmCheckbox] = useState(false);
-  const [manualQuestions, setManualQuestions] = useState([]);
+  const [manualQuestions, setManualQuestions] = useState<any[]>([]);
   const [showQuestionEditor, setShowQuestionEditor] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
   
   // Admin state
   const [adminNotes, setAdminNotes] = useState('');
@@ -70,22 +83,46 @@ const StreamlinedCourseBuilder = () => {
   const [finalScormFile, setFinalScormFile] = useState(null);
   const [auditLogFile, setAuditLogFile] = useState(null);
   
+  // New client onboarding
+  const [newClientForm, setNewClientForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    organization: ''
+  });
+  
   const fileInputRef = useRef(null);
   const previewInputRef = useRef(null);
   const scormInputRef = useRef(null);
   const auditInputRef = useRef(null);
   
-  // Mock users database
+  // Mock users database - load from localStorage
+  const [clients, setClients] = useState(() => {
+    const saved = localStorage.getItem('coursebuilder_clients');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: 'client-001',
+        email: 'john@abcpharma.com',
+        password: 'demo123',
+        name: 'John Doe',
+        role: 'client',
+        organization: 'ABC Pharma',
+        createdAt: new Date().toISOString()
+      }
+    ];
+  });
+  
+  // Save clients to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('coursebuilder_clients', JSON.stringify(clients));
+  }, [clients]);
+  
   const mockUsers = {
-    'john@abcpharma.com': {
-      id: 'client-001',
-      email: 'john@abcpharma.com',
-      password: 'demo123',
-      name: 'John Doe',
-      role: 'client',
-      organization: 'ABC Pharma'
-    },
-'admin@aicoursebuilder.com': {
+    ...clients.reduce((acc, client) => {
+      acc[client.email] = client;
+      return acc;
+    }, {}),
+    'admin@aicoursebuilder.com': {
       id: 'admin-001',
       email: 'admin@aicoursebuilder.com',
       password: 'admin123',
@@ -119,11 +156,106 @@ const StreamlinedCourseBuilder = () => {
         submittedAt: '2025-01-07T10:30:00Z',
         updatedAt: '2025-01-08T14:20:00Z',
         eta: '48 hours',
+        previewFileName: 'Client preview last.html',
+        previewContent: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab Safety Procedures - Course Preview</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    .header { background: linear-gradient(135deg, #2E3192, #00C5B8); color: white; padding: 30px; border-radius: 10px; margin-bottom: 20px; }
+    .content { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 2em; }
+    h2 { color: #2E3192; border-bottom: 2px solid #00C5B8; padding-bottom: 10px; }
+    .important { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
+    .quiz { background: #e7f3ff; padding: 20px; border-radius: 8px; margin-top: 20px; }
+    .option { background: white; padding: 10px; margin: 8px 0; border: 2px solid #ddd; border-radius: 5px; cursor: pointer; }
+    .option:hover { border-color: #2E3192; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔬 Lab Safety Procedures</h1>
+    <p>SOP-LAB-001 | Effective Date: January 15, 2025</p>
+  </div>
+  
+  <div class="content">
+    <h2>Module 1: Introduction to Lab Safety</h2>
+    <p>Welcome to the Lab Safety Procedures training course. This course covers essential safety protocols and procedures required for working in laboratory environments.</p>
+    
+    <div class="important">
+      <strong>⚠️ Important:</strong> All personnel must complete this training before entering laboratory facilities.
+    </div>
+    
+    <h3>Learning Objectives</h3>
+    <ul>
+      <li>Understand basic laboratory safety principles</li>
+      <li>Identify common laboratory hazards</li>
+      <li>Apply proper personal protective equipment (PPE) procedures</li>
+      <li>Follow emergency response protocols</li>
+    </ul>
+  </div>
+  
+  <div class="content">
+    <h2>Module 2: Personal Protective Equipment (PPE)</h2>
+    <p>Proper use of PPE is critical for laboratory safety. This section covers the selection, use, and maintenance of laboratory PPE.</p>
+    
+    <h3>Required PPE</h3>
+    <ul>
+      <li><strong>Lab Coat:</strong> Must be worn at all times in the laboratory</li>
+      <li><strong>Safety Glasses:</strong> Required when handling chemicals or biological materials</li>
+      <li><strong>Gloves:</strong> Select appropriate glove type based on hazard assessment</li>
+      <li><strong>Closed-toe Shoes:</strong> No sandals or open-toed footwear permitted</li>
+    </ul>
+    
+    <div class="important">
+      <strong>⚠️ Critical Safety Point:</strong> Never remove PPE until you have exited the laboratory area.
+    </div>
+  </div>
+  
+  <div class="content">
+    <h2>Module 3: Chemical Safety</h2>
+    <p>Proper handling and storage of chemicals is essential for maintaining a safe laboratory environment.</p>
+    
+    <h3>Key Principles</h3>
+    <ul>
+      <li>Always read Safety Data Sheets (SDS) before using chemicals</li>
+      <li>Store chemicals according to compatibility groups</li>
+      <li>Use fume hoods when working with volatile substances</li>
+      <li>Label all chemical containers clearly</li>
+      <li>Dispose of chemical waste according to institutional procedures</li>
+    </ul>
+  </div>
+  
+  <div class="content quiz">
+    <h2>📝 Knowledge Check</h2>
+    <p><strong>Question 1:</strong> Which of the following PPE items is required at all times in the laboratory?</p>
+    <div class="option">A) Safety goggles</div>
+    <div class="option" style="border-color: #28a745; background: #d4edda;"><strong>✓ B) Lab coat (Correct Answer)</strong></div>
+    <div class="option">C) Face shield</div>
+    <div class="option">D) Respirator</div>
+    
+    <p style="margin-top: 20px;"><strong>Question 2:</strong> What should you do before using any chemical in the laboratory?</p>
+    <div class="option">A) Ask a colleague</div>
+    <div class="option" style="border-color: #28a745; background: #d4edda;"><strong>✓ B) Read the Safety Data Sheet (Correct Answer)</strong></div>
+    <div class="option">C) Smell the chemical</div>
+    <div class="option">D) Test a small amount first</div>
+  </div>
+  
+  <div class="content">
+    <p style="text-align: center; color: #666; font-size: 0.9em;">
+      <strong>Course Preview</strong> | This is a demonstration of the actual course content that will be delivered to learners.
+    </p>
+  </div>
+</body>
+</html>`,
         auditLog: [
           { timestamp: '2025-01-07T10:30:00Z', action: 'Job submitted', actor: 'john@abcpharma.com', ip: '192.168.1.1' },
           { timestamp: '2025-01-07T10:30:05Z', action: 'Email notification sent', actor: 'system', details: 'Sent to david.dergazarian@navigantlearning.com' },
 { timestamp: '2025-01-08T09:15:00Z', action: 'Admin downloaded SOP', actor: 'admin@aicoursebuilder.com', ip: '10.0.0.1' },
-          { timestamp: '2025-01-08T14:20:00Z', action: 'Preview uploaded', actor: 'admin@aicoursebuilder.com', details: 'preview_v1.zip' }
+          { timestamp: '2025-01-08T14:20:00Z', action: 'Preview uploaded', actor: 'admin@aicoursebuilder.com', details: 'Client preview last.html' }
         ]
       }
     ];
@@ -255,8 +387,9 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
     // Add to jobs
     setJobs([newJob, ...jobs]);
     
-    // Send email notification (simulated)
-    sendEmailNotification(newJob);
+    // Send email notifications (simulated)
+    sendEmailNotification(newJob, 'admin');
+    sendEmailNotification(newJob, 'client');
     
     // Reset form
     setClientForm({
@@ -283,7 +416,15 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
   // EMAIL NOTIFICATION (Simulated)
   // ============================================
 
-  const sendEmailNotification = (job) => {
+  const sendEmailNotification = (job, recipient) => {
+    if (recipient === 'admin') {
+      sendAdminEmail(job);
+    } else if (recipient === 'client') {
+      sendClientEmail(job);
+    }
+  };
+  
+  const sendAdminEmail = (job) => {
     console.log(`
 📧 SENDING EMAIL NOTIFICATION
 ═══════════════════════════════════════════════════════════
@@ -362,8 +503,49 @@ NOTE: This email was sent from an automated system.
     // In production, add actual Microsoft Graph API call here:
     // await sendEmailViaGraphAPI({ ... });
 
-    console.log('✅ Email notification sent successfully');
-    alert('📧 Notification email sent to david.dergazarian@navigantlearning.com\n(Check console for email preview)');
+    console.log('✅ Admin email notification sent successfully');
+  };
+  
+  const sendClientEmail = (job) => {
+    console.log(`
+📧 SENDING CLIENT EMAIL NOTIFICATION
+═══════════════════════════════════════════════════════════
+To: ${job.clientEmail}
+From: AI Course Builder <noreply@navigantlearning.com>
+Subject: ✅ Course Request Received: ${job.courseTitle}
+
+═══════════════════════════════════════════════════════════
+🎉 THANK YOU FOR YOUR SUBMISSION
+═══════════════════════════════════════════════════════════
+
+Dear ${job.clientName},
+
+We've received your course development request and our team is
+reviewing it now.
+
+📋 YOUR REQUEST DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Job ID:              ${job.id}
+Course Title:        ${job.courseTitle}
+SOP Number:          ${job.sopNumber || 'N/A'}
+Quiz Mode:           ${job.quizMode.toUpperCase()}
+Estimated Seat Time: ${job.estimatedSeatTime} minutes
+
+⏰ WHAT HAPPENS NEXT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Our team will download and review your SOP
+2. We'll generate your course content
+3. You'll receive a preview for review (ETA: ${job.eta})
+4. Once approved, we'll deliver your final SCORM package
+
+📧 You'll receive email updates at each step.
+
+═══════════════════════════════════════════════════════════
+AI Course Builder | Navigant Learning
+© ${new Date().getFullYear()} All rights reserved.
+═══════════════════════════════════════════════════════════
+    `);
+    console.log('✅ Client email notification sent successfully');
   };
   
   // ============================================
@@ -371,21 +553,39 @@ NOTE: This email was sent from an automated system.
   // ============================================
   
   const addManualQuestion = () => {
-    setEditingQuestion({
+    console.log('🔵 Add Question button clicked');
+    const newQuestion = {
       id: `q-${Date.now()}`,
       question: '',
       options: ['', '', '', ''],
       correctAnswer: 0,
       explanation: ''
-    });
+    };
+    setEditingQuestion(newQuestion);
     setShowQuestionEditor(true);
+    console.log('✅ Question editor should now be visible', { showQuestionEditor: true, editingQuestion: newQuestion });
   };
   
   const saveManualQuestion = () => {
-    if (!editingQuestion.question || editingQuestion.options.some(opt => !opt)) {
-      alert('Please fill in all fields');
+    if (!editingQuestion.question || !editingQuestion.question.trim()) {
+      alert('Please enter a question');
       return;
     }
+    
+    // Filter out empty options
+    const filledOptions = editingQuestion.options.filter((opt: string) => opt && opt.trim());
+    
+    if (filledOptions.length < 2) {
+      alert('Please provide at least 2 answer options');
+      return;
+    }
+    
+    // Update the question with only filled options
+    const cleanedQuestion = {
+      ...editingQuestion,
+      options: filledOptions,
+      correctAnswer: editingQuestion.correctAnswer >= filledOptions.length ? 0 : editingQuestion.correctAnswer
+    };
     
     const existingIndex = manualQuestions.findIndex(q => q.id === editingQuestion.id);
     if (existingIndex >= 0) {
@@ -429,6 +629,19 @@ NOTE: This email was sent from an automated system.
     });
     setJobs(updatedJobs);
     
+    // Create a downloadable file (simulated)
+    const fileContent = `SOP Document: ${job.courseTitle}\n\nJob ID: ${job.id}\nSOP Number: ${job.sopNumber || 'N/A'}\nSubmitted: ${new Date(job.submittedAt).toLocaleString()}\nChecksum: ${job.fileChecksum}\n\nThis is a simulated SOP file download.\nIn production, this would download the actual uploaded PDF/DOCX file from cloud storage.`;
+    
+    const blob = new Blob([fileContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = job.fileName || `SOP_${job.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
     alert(`✅ SOP Downloaded\n\nFile: ${job.fileName}\nChecksum: ${job.fileChecksum}\n\nNext: Generate course using your CourseBuilder app, then upload preview or final SCORM.`);
   };
   
@@ -439,39 +652,46 @@ NOTE: This email was sent from an automated system.
       return;
     }
     
-    setPreviewFile(file);
+    // Read the HTML file content
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const htmlContent = e.target?.result as string;
+      
+      // Update job status and audit log with preview content
+      const updatedJobs = jobs.map(j => {
+        if (j.id === job.id) {
+          return {
+            ...j,
+            status: 'pending_review',
+            updatedAt: new Date().toISOString(),
+            previewFileName: file.name,
+            previewContent: htmlContent, // Store the actual HTML content
+            auditLog: [
+              ...j.auditLog,
+              {
+                timestamp: new Date().toISOString(),
+                action: 'Preview uploaded',
+                actor: currentUser.email,
+                details: `File: ${file.name}`
+              },
+              {
+                timestamp: new Date().toISOString(),
+                action: 'Client notification sent',
+                actor: 'system',
+                details: `Email sent to ${job.clientEmail}`
+              }
+            ]
+          };
+        }
+        return j;
+      });
+      setJobs(updatedJobs);
+      
+      alert(`✅ Preview Uploaded\n\nStatus changed to: Pending Client Review\nEmail sent to: ${job.clientEmail}`);
+      setPreviewFile(null);
+    };
     
-    // Update job status and audit log
-    const updatedJobs = jobs.map(j => {
-      if (j.id === job.id) {
-        return {
-          ...j,
-          status: 'pending_review',
-          updatedAt: new Date().toISOString(),
-          previewFileName: file.name,
-          auditLog: [
-            ...j.auditLog,
-            {
-              timestamp: new Date().toISOString(),
-              action: 'Preview uploaded',
-              actor: currentUser.email,
-              details: `File: ${file.name}`
-            },
-            {
-              timestamp: new Date().toISOString(),
-              action: 'Client notification sent',
-              actor: 'system',
-              details: `Email sent to ${job.clientEmail}`
-            }
-          ]
-        };
-      }
-      return j;
-    });
-    setJobs(updatedJobs);
-    
-    alert(`✅ Preview Uploaded\n\nStatus changed to: Pending Client Review\nEmail sent to: ${job.clientEmail}`);
-    setPreviewFile(null);
+    reader.readAsText(file);
   };
   
   const adminUploadFinalSCORM = (job) => {
@@ -558,7 +778,7 @@ NOTE: This email was sent from an automated system.
   };
   
   const clientRequestRevision = (job, comment) => {
-    if (!comment) {
+    if (!comment || comment.trim() === '') {
       alert('Please add a comment explaining the revision needed');
       return;
     }
@@ -640,6 +860,244 @@ NOTE: This email was sent from an automated system.
       </span>
     );
   };
+  
+  // ============================================
+  // MODALS - RENDER FIRST (OVERLAY ON TOP OF EVERYTHING)
+  // ============================================
+  
+  // Question Editor Modal
+  if (showQuestionEditor && editingQuestion) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-8 max-h-[90vh] overflow-y-auto">
+          <h3 className="text-2xl font-bold text-gray-900 mb-6">
+            {manualQuestions.find((q: any) => q.id === editingQuestion.id) ? 'Edit Question' : 'Add Question'}
+          </h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Question</label>
+              <input
+                type="text"
+                value={editingQuestion.question}
+                onChange={(e) => setEditingQuestion({...editingQuestion, question: e.target.value})}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                placeholder="Enter your question..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Answer Options (minimum 2)</label>
+              {editingQuestion.options.map((option: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-3 mb-2">
+                  <input
+                    type="radio"
+                    name="correct"
+                    checked={editingQuestion.correctAnswer === idx}
+                    onChange={() => setEditingQuestion({...editingQuestion, correctAnswer: idx})}
+                  />
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => {
+                      const newOptions = [...editingQuestion.options];
+                      newOptions[idx] = e.target.value;
+                      setEditingQuestion({...editingQuestion, options: newOptions});
+                    }}
+                    className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                    placeholder={`Option ${idx + 1}`}
+                  />
+                  {editingQuestion.options.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newOptions = editingQuestion.options.filter((_: any, i: number) => i !== idx);
+                        setEditingQuestion({
+                          ...editingQuestion,
+                          options: newOptions,
+                          correctAnswer: editingQuestion.correctAnswer === idx ? 0 : 
+                                        editingQuestion.correctAnswer > idx ? editingQuestion.correctAnswer - 1 : editingQuestion.correctAnswer
+                        });
+                      }}
+                      className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingQuestion({
+                    ...editingQuestion,
+                    options: [...editingQuestion.options, '']
+                  });
+                }}
+                className="mt-2 px-4 py-2 bg-green-100 text-green-700 font-semibold rounded-lg hover:bg-green-200 transition-all flex items-center gap-2"
+              >
+                + Add Option
+              </button>
+              <p className="text-sm text-gray-600 mt-2">Select the radio button for the correct answer. You can add as many options as needed.</p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-2">Explanation (Optional)</label>
+              <textarea
+                value={editingQuestion.explanation}
+                onChange={(e) => setEditingQuestion({...editingQuestion, explanation: e.target.value})}
+                rows={3}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                placeholder="Explain why this is the correct answer..."
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-4 mt-6">
+            <button
+              onClick={() => {
+                setShowQuestionEditor(false);
+                setEditingQuestion(null);
+              }}
+              className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveManualQuestion}
+              className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-all"
+            >
+              Save Question
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Preview Modal
+  if (showPreviewModal) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">Course Preview</h3>
+              <p className="text-sm text-gray-600">Review the HTML course file</p>
+            </div>
+            <button
+              onClick={() => {
+                setShowPreviewModal(false);
+                setPreviewUrl('');
+              }}
+              className="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+            >
+              Close Preview
+            </button>
+          </div>
+          
+          <div className="flex-1 p-6 overflow-hidden">
+            <div className="w-full h-full bg-white rounded-lg border-2 border-gray-300 overflow-hidden">
+              {(() => {
+                // Find the job with preview content
+                const jobWithPreview = jobs.find(j => j.previewFileName === previewUrl);
+                
+                if (jobWithPreview && jobWithPreview.previewContent) {
+                  // Display actual HTML content in iframe
+                  return (
+                    <iframe
+                      srcDoc={jobWithPreview.previewContent}
+                      className="w-full h-full border-0"
+                      title="Course Preview"
+                      sandbox="allow-scripts allow-same-origin"
+                    />
+                  );
+                } else {
+                  // Fallback message if no preview content available
+                  return (
+                    <div className="p-8 flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded inline-block">
+                          <p className="text-sm text-yellow-900">
+                            <strong>⚠️ No Preview Available:</strong> The preview file has not been uploaded yet or the content could not be loaded.
+                          </p>
+                        </div>
+                        <p className="text-gray-600 mt-4">
+                          Preview file: <strong>{previewUrl}</strong>
+                        </p>
+                        <p className="text-sm text-gray-500 mt-2">
+                          In production, this would load the actual HTML course file from secure cloud storage.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Revision Request Modal
+  if (showRevisionBox && selectedJob) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8">
+          <h3 className="text-2xl font-bold text-gray-900 mb-4">Request Revision</h3>
+          <p className="text-gray-600 mb-6">
+            Please explain what changes you need for: <strong>{selectedJob.courseTitle}</strong>
+          </p>
+          
+          <div className="mb-6">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
+              Revision Comments <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              value={revisionComment}
+              onChange={(e) => setRevisionComment(e.target.value)}
+              rows={6}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none"
+              placeholder="Please be specific about what needs to be changed..."
+            />
+            <p className="text-sm text-gray-600 mt-2">
+              The admin will see your comments and make the necessary changes.
+            </p>
+          </div>
+          
+          <div className="flex justify-end gap-4">
+            <button
+              onClick={() => {
+                setShowRevisionBox(false);
+                setRevisionComment('');
+                setSelectedJob(null);
+              }}
+              className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (revisionComment.trim()) {
+                  clientRequestRevision(selectedJob, revisionComment);
+                  setShowRevisionBox(false);
+                  setRevisionComment('');
+                  setSelectedJob(null);
+                } else {
+                  alert('Please enter revision comments');
+                }
+              }}
+              className="px-6 py-3 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 transition-all flex items-center gap-2"
+            >
+              <Icon name="send" />
+              Submit Revision Request
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   // ============================================
   // LOGIN SCREEN
@@ -818,6 +1276,18 @@ NOTE: This email was sent from an automated system.
                     {job.status === 'pending_review' && (
                       <>
                         <button
+                          onClick={() => {
+                            console.log('🔵 View Preview button clicked for job:', job.id);
+                            setPreviewUrl(job.previewFileName || 'preview.html');
+                            setShowPreviewModal(true);
+                            console.log('✅ Preview modal should now be visible', { showPreviewModal: true, previewUrl: job.previewFileName });
+                          }}
+                          className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2"
+                        >
+                          <Icon name="eye" />
+                          View Preview
+                        </button>
+                        <button
                           onClick={() => clientApprovePreview(job)}
                           className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all"
                         >
@@ -825,8 +1295,8 @@ NOTE: This email was sent from an automated system.
                         </button>
                         <button
                           onClick={() => {
-                            const comment = prompt('Please explain what changes you need:');
-                            if (comment) clientRequestRevision(job, comment);
+                            setSelectedJob(job);
+                            setShowRevisionBox(true);
                           }}
                           className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-all"
                         >
@@ -836,13 +1306,48 @@ NOTE: This email was sent from an automated system.
                     )}
                     
                     {job.status === 'delivered' && (
-                      <button
-                        onClick={() => alert(`Downloading: ${job.scormFileName}`)}
-                        className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2"
-                      >
-                        <Icon name="download" />
-                        Download SCORM
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            // Create downloadable SCORM file
+                            const scormContent = `SCORM Package: ${job.courseTitle}\n\nJob ID: ${job.id}\nPackage: ${job.scormFileName}\nDelivered: ${new Date(job.updatedAt).toLocaleString()}\n\nThis is a simulated SCORM package download.\nIn production, this would download the actual SCORM .zip file from cloud storage.`;
+                            const blob = new Blob([scormContent], { type: 'application/zip' });
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = job.scormFileName || `SCORM_${job.id}.zip`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                            alert(`✅ SCORM Package Downloaded\n\nFile: ${job.scormFileName}`);
+                          }}
+                          className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2"
+                        >
+                          <Icon name="download" />
+                          Download SCORM
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Create downloadable audit trail file
+                            const auditContent = `Audit Trail: ${job.courseTitle}\n\nJob ID: ${job.id}\nGenerated: ${new Date().toLocaleString()}\n\n${'='.repeat(60)}\nAUDIT LOG\n${'='.repeat(60)}\n\n${job.auditLog.map((entry: any) => `[${new Date(entry.timestamp).toLocaleString()}]\nAction: ${entry.action}\nActor: ${entry.actor}\nDetails: ${entry.details || 'N/A'}\n`).join('\n')}\n\nThis is a simulated audit trail download.\nIn production, this would be a formatted PDF or Excel file.`;
+                            const blob = new Blob([auditContent], { type: 'text/plain' });
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = job.auditFileName || `Audit_${job.id}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                            alert(`✅ Audit Trail Downloaded\n\nFile: ${job.auditFileName}`);
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
+                        >
+                          <Icon name="file" />
+                          Download Audit
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1000,7 +1505,7 @@ NOTE: This email was sent from an automated system.
                     <p className="text-sm text-gray-600 italic">No questions added yet. Click "Add Question" to get started.</p>
                   ) : (
                     <div className="space-y-3">
-                      {manualQuestions.map((q, idx) => (
+                      {manualQuestions.map((q: any, idx: number) => (
                         <div key={q.id} className="bg-white rounded-lg p-4 border-2 border-gray-200">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
@@ -1174,13 +1679,29 @@ NOTE: This email was sent from an automated system.
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
                 <p className="text-gray-600">{currentUser.name} • All Client Jobs</p>
               </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all flex items-center gap-2"
-              >
-                <Icon name="logout" />
-                Logout
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setCurrentView('admin-manage-clients')}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                >
+                  <Icon name="user" />
+                  Manage Clients
+                </button>
+                <button
+                  onClick={() => setCurrentView('admin-onboard-client')}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                >
+                  <Icon name="plus" />
+                  Onboard Client
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all flex items-center gap-2"
+                >
+                  <Icon name="logout" />
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
           
@@ -1370,6 +1891,13 @@ NOTE: This email was sent from an automated system.
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <label className="text-sm font-semibold text-gray-600">Client Comments</label>
                 <p className="text-gray-900 mt-2 bg-gray-50 p-4 rounded-lg">{selectedJob.comments}</p>
+              </div>
+            )}
+            
+            {selectedJob.revisionComment && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <label className="text-sm font-semibold text-red-600">⚠️ Revision Requested</label>
+                <p className="text-gray-900 mt-2 bg-red-50 p-4 rounded-lg border-2 border-red-200">{selectedJob.revisionComment}</p>
               </div>
             )}
           </div>
@@ -1572,7 +2100,10 @@ NOTE: This email was sent from an automated system.
               
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => alert(`Opening preview: ${selectedJob.previewFileName}`)}
+                  onClick={() => {
+                    setPreviewUrl(selectedJob.previewFileName || 'preview.html');
+                    setShowPreviewModal(true);
+                  }}
                   className="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2"
                 >
                   <Icon name="eye" />
@@ -1585,16 +2116,29 @@ NOTE: This email was sent from an automated system.
                   <Icon name="check" />
                   Approve Preview
                 </button>
-                <button
-                  onClick={() => {
-                    const comment = prompt('Please explain what changes you need:');
-                    if (comment) clientRequestRevision(selectedJob, comment);
-                  }}
-                  className="px-6 py-3 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 transition-all flex items-center gap-2"
-                >
-                  <Icon name="edit" />
-                  Request Revision
-                </button>
+                <div className="flex-1">
+                  <textarea
+                    value={revisionComment}
+                    onChange={(e) => setRevisionComment(e.target.value)}
+                    placeholder="Explain what changes you need..."
+                    rows={2}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none mb-2"
+                  />
+                  <button
+                    onClick={() => {
+                      if (revisionComment.trim()) {
+                        clientRequestRevision(selectedJob, revisionComment);
+                        setRevisionComment('');
+                      } else {
+                        alert('Please enter revision comments');
+                      }
+                    }}
+                    className="px-6 py-3 bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 transition-all flex items-center gap-2"
+                  >
+                    <Icon name="edit" />
+                    Request Revision
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1616,7 +2160,20 @@ NOTE: This email was sent from an automated system.
                     <p className="text-sm text-gray-600">SCORM Package</p>
                   </div>
                   <button
-                    onClick={() => alert(`Downloading: ${selectedJob.scormFileName}`)}
+                    onClick={() => {
+                      // Create downloadable SCORM file
+                      const scormContent = `SCORM Package: ${selectedJob.courseTitle}\n\nJob ID: ${selectedJob.id}\nPackage: ${selectedJob.scormFileName}\nDelivered: ${new Date(selectedJob.updatedAt).toLocaleString()}\n\nThis is a simulated SCORM package download.\nIn production, this would download the actual SCORM .zip file from cloud storage.`;
+                      const blob = new Blob([scormContent], { type: 'application/zip' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = selectedJob.scormFileName || `SCORM_${selectedJob.id}.zip`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
+                      alert(`✅ SCORM Package Downloaded\n\nFile: ${selectedJob.scormFileName}`);
+                    }}
                     className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
                   >
                     <Icon name="download" />
@@ -1630,7 +2187,20 @@ NOTE: This email was sent from an automated system.
                     <p className="text-sm text-gray-600">Audit Trail</p>
                   </div>
                   <button
-                    onClick={() => alert(`Downloading: ${selectedJob.auditFileName}`)}
+                    onClick={() => {
+                      // Create downloadable audit trail file
+                      const auditContent = `Audit Trail: ${selectedJob.courseTitle}\n\nJob ID: ${selectedJob.id}\nGenerated: ${new Date().toLocaleString()}\n\n${'='.repeat(60)}\nAUDIT LOG\n${'='.repeat(60)}\n\n${selectedJob.auditLog.map((entry: any) => `[${new Date(entry.timestamp).toLocaleString()}]\nAction: ${entry.action}\nActor: ${entry.actor}\nDetails: ${entry.details || 'N/A'}\n`).join('\n')}\n\nThis is a simulated audit trail download.\nIn production, this would be a formatted PDF or Excel file.`;
+                      const blob = new Blob([auditContent], { type: 'text/plain' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = selectedJob.auditFileName || `Audit_${selectedJob.id}.txt`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
+                      alert(`✅ Audit Trail Downloaded\n\nFile: ${selectedJob.auditFileName}`);
+                    }}
                     className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
                   >
                     <Icon name="download" />
@@ -1691,83 +2261,311 @@ NOTE: This email was sent from an automated system.
   }
   
   // ============================================
-  // QUESTION EDITOR MODAL
+  // ADMIN ONBOARD CLIENT VIEW
   // ============================================
   
-  if (showQuestionEditor && editingQuestion) {
+  if (currentView === 'admin-onboard-client' && currentUser.role === 'admin') {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-8 max-h-[90vh] overflow-y-auto">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6">
-            {manualQuestions.find(q => q.id === editingQuestion.id) ? 'Edit Question' : 'Add Question'}
-          </h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2">Question</label>
-              <input
-                type="text"
-                value={editingQuestion.question}
-                onChange={(e) => setEditingQuestion({...editingQuestion, question: e.target.value})}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                placeholder="Enter your question..."
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2">Answer Options</label>
-              {editingQuestion.options.map((option, idx) => (
-                <div key={idx} className="flex items-center gap-3 mb-2">
-                  <input
-                    type="radio"
-                    name="correct"
-                    checked={editingQuestion.correctAnswer === idx}
-                    onChange={() => setEditingQuestion({...editingQuestion, correctAnswer: idx})}
-                  />
-                  <input
-                    type="text"
-                    value={option}
-                    onChange={(e) => {
-                      const newOptions = [...editingQuestion.options];
-                      newOptions[idx] = e.target.value;
-                      setEditingQuestion({...editingQuestion, options: newOptions});
-                    }}
-                    className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                    placeholder={`Option ${idx + 1}`}
-                  />
-                </div>
-              ))}
-              <p className="text-sm text-gray-600 mt-2">Select the radio button for the correct answer</p>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2">Explanation (Optional)</label>
-              <textarea
-                value={editingQuestion.explanation}
-                onChange={(e) => setEditingQuestion({...editingQuestion, explanation: e.target.value})}
-                rows={3}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                placeholder="Explain why this is the correct answer..."
-              />
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <button
+                onClick={() => setCurrentView('admin-dashboard')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <Icon name="arrow" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Onboard New Client</h2>
+                <p className="text-gray-600">Create a new client account</p>
+              </div>
             </div>
           </div>
           
-          <div className="flex justify-end gap-4 mt-6">
-            <button
-              onClick={() => {
-                setShowQuestionEditor(false);
-                setEditingQuestion(null);
-              }}
-              className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={saveManualQuestion}
-              className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-all"
-            >
-              Save Question
-            </button>
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Client Name <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newClientForm.name}
+                  onChange={(e) => setNewClientForm({...newClientForm, name: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  placeholder="e.g., John Doe"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Email <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={newClientForm.email}
+                  onChange={(e) => setNewClientForm({...newClientForm, email: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  placeholder="client@company.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Organization <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newClientForm.organization}
+                  onChange={(e) => setNewClientForm({...newClientForm, organization: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  placeholder="e.g., ABC Pharma"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Temporary Password <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newClientForm.password}
+                  onChange={(e) => setNewClientForm({...newClientForm, password: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  placeholder="Temporary password for client"
+                />
+                <p className="text-sm text-gray-600 mt-1">Client should change this on first login</p>
+              </div>
+              
+              <div className="p-4 bg-purple-50 border-2 border-purple-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <Icon name="mail" className="w-5 h-5 text-purple-600 mt-1" />
+                  <div>
+                    <p className="text-sm font-semibold text-purple-900 mb-1">Welcome Email</p>
+                    <p className="text-sm text-gray-700">
+                      A welcome email with login credentials will be sent to the client's email address.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-4 pt-4">
+                <button
+                  onClick={() => setCurrentView('admin-dashboard')}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (!newClientForm.name || !newClientForm.email || !newClientForm.organization || !newClientForm.password) {
+                      alert('Please fill in all required fields');
+                      return;
+                    }
+                    
+                    // Add client to database
+                    const newClient = {
+                      id: `client-${Date.now()}`,
+                      email: newClientForm.email,
+                      password: newClientForm.password,
+                      name: newClientForm.name,
+                      role: 'client',
+                      organization: newClientForm.organization,
+                      createdAt: new Date().toISOString()
+                    };
+                    setClients([...clients, newClient]);
+                    
+                    console.log(`
+📧 SENDING WELCOME EMAIL
+═══════════════════════════════════════════════════════════
+To: ${newClientForm.email}
+From: AI Course Builder <noreply@navigantlearning.com>
+Subject: Welcome to AI Course Builder
+
+═══════════════════════════════════════════════════════════
+🎉 WELCOME TO AI COURSE BUILDER
+═══════════════════════════════════════════════════════════
+
+Dear ${newClientForm.name},
+
+Your account has been created! You can now submit course
+development requests through our portal.
+
+🔐 YOUR LOGIN CREDENTIALS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Email:    ${newClientForm.email}
+Password: ${newClientForm.password}
+
+⚠️ Please change your password after first login.
+
+🔗 LOGIN URL:
+https://aicoursebuilder.navigantlearning.com/login
+
+═══════════════════════════════════════════════════════════
+AI Course Builder | Navigant Learning
+© ${new Date().getFullYear()} All rights reserved.
+═══════════════════════════════════════════════════════════
+                    `);
+                    
+                    alert(`✅ Client Onboarded Successfully!\n\nName: ${newClientForm.name}\nEmail: ${newClientForm.email}\nOrganization: ${newClientForm.organization}\n\nWelcome email sent to client.\n\n(In production, this would create a real user account)`);
+                    
+                    setNewClientForm({ name: '', email: '', password: '', organization: '' });
+                    setCurrentView('admin-dashboard');
+                  }}
+                  className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                >
+                  <Icon name="plus" />
+                  Create Client Account
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // ============================================
+  // ADMIN CLIENT MANAGEMENT VIEW
+  // ============================================
+  
+  if (currentView === 'admin-manage-clients' && currentUser.role === 'admin') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <button
+                onClick={() => setCurrentView('admin-dashboard')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <Icon name="arrow" />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Manage Clients</h2>
+                <p className="text-gray-600">View and manage all onboarded clients</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">Client Accounts ({clients.length})</h3>
+              <button
+                onClick={() => setCurrentView('admin-onboard-client')}
+                className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2"
+              >
+                <Icon name="plus" />
+                Add New Client
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {clients.map(client => (
+                <div key={client.id} className="border-2 border-gray-200 rounded-lg p-6 hover:border-purple-300 transition-all">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="text-lg font-bold text-gray-900">{client.name}</h4>
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+                          {client.role}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Email:</span>
+                          <span className="ml-2 font-semibold text-gray-900">{client.email}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Organization:</span>
+                          <span className="ml-2 font-semibold text-gray-900">{client.organization}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Created:</span>
+                          <span className="ml-2 font-semibold text-gray-900">
+                            {new Date(client.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Jobs:</span>
+                          <span className="ml-2 font-semibold text-gray-900">
+                            {jobs.filter(j => j.clientEmail === client.email).length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 ml-4">
+                      <button
+                        onClick={() => {
+                          setSelectedClientForEdit(client);
+                          const newName = prompt('Edit Client Name:', client.name);
+                          if (newName && newName !== client.name) {
+                            setClients(clients.map(c => 
+                              c.id === client.id ? {...c, name: newName} : c
+                            ));
+                            alert(`✅ Client name updated to: ${newName}`);
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all text-sm"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newPassword = prompt('Enter new temporary password for ' + client.name + ':');
+                          if (newPassword) {
+                            setClients(clients.map(c => 
+                              c.id === client.id ? {...c, password: newPassword} : c
+                            ));
+                            console.log(`
+📧 PASSWORD RESET EMAIL
+═══════════════════════════════════════════════════════════
+To: ${client.email}
+Subject: Password Reset - AI Course Builder
+
+Dear ${client.name},
+
+Your password has been reset by an administrator.
+
+New Password: ${newPassword}
+
+Please log in and change your password immediately.
+
+═══════════════════════════════════════════════════════════
+                            `);
+                            alert(`✅ Password reset for ${client.name}\n\nNew password: ${newPassword}\n\nPassword reset email sent to ${client.email}`);
+                          }
+                        }}
+                        className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-all text-sm"
+                      >
+                        Reset Password
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete ${client.name}? This action cannot be undone.`)) {
+                            setClients(clients.filter(c => c.id !== client.id));
+                            alert(`✅ Client ${client.name} has been deleted`);
+                          }
+                        }}
+                        className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-all text-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {clients.length === 0 && (
+                <div className="text-center py-12">
+                  <Icon name="user" className="w-16 h-16 mx-auto mb-4 text-gray-400" style={{fontSize: '64px'}} />
+                  <p className="text-gray-600 font-semibold mb-2">No clients yet</p>
+                  <p className="text-sm text-gray-500">Click "Add New Client" to onboard your first client</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

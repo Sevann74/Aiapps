@@ -102,11 +102,7 @@ function App() {
             {/* 🆕 Course Builder Route */}
             <Route
               path="/apps/course-builder"
-              element={
-                <ProtectedRoute>
-                  <CourseBuilder />
-                </ProtectedRoute>
-              }
+              element={<CourseBuilder />}
             />
             {/* 🆕 AI Course Builder Portal Route (has its own auth) */}
             <Route

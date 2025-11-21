@@ -203,7 +203,34 @@ const EnhancedCourseBuilder = () => {
       </section>`;
     }).join('\n');
 
-    const totalSlides = courseData.modules.length + (config.includeQuiz ? 1 : 0);
+    const hasQuiz = config.includeQuiz && courseData.quiz && courseData.quiz.questions && courseData.quiz.questions.length > 0;
+
+    // Build quiz HTML (single slide at the end)
+    const quizHTML = hasQuiz
+      ? `
+      <section class="slide quiz-slide" id="slide-${courseData.modules.length}" style="display: none;">
+        ${courseData.logo ? `<img src="${courseData.logo}" alt="Logo" class="module-logo" />` : ''}
+        <h2><span class="section-icon">📝</span> Final Assessment</h2>
+        <p class="duration"><span class="duration-icon">ℹ️</span> Passing Score: ${config.passingScore}% | Maximum Attempts: ${config.maxAttempts}</p>
+
+        <div class="module-content">
+          <div class="content-section section-quiz">
+            ${courseData.quiz.questions.map((q, qIndex) => `
+              <div class="quiz-question">
+                <h3>Question ${qIndex + 1} of ${courseData.quiz.questions.length}</h3>
+                <p class="question-text">${escapeHtml(q.question)}</p>
+                ${q.sourceReference ? `<p class="source-reference">📌 Source: ${escapeHtml(q.sourceReference)}</p>` : ''}
+                <ul class="quiz-options">
+                  ${q.options.map((opt, optIndex: number) => `<li class="quiz-option${optIndex === q.correctAnswer ? ' correct-answer' : ''}">${escapeHtml(opt)}</li>`).join('')}
+                </ul>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </section>`
+      : '';
+
+    const totalSlides = courseData.modules.length + (hasQuiz ? 1 : 0);
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -248,6 +275,10 @@ const EnhancedCourseBuilder = () => {
     .section-callout-key { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 5px solid #f59e0b; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
     .section-callout-key h3, .section-callout-key h4 { color: #92400e; font-weight: 700; }
     .section-callout-key p { color: #78350f; font-weight: 500; }
+    .quiz-options { list-style-type: none; padding-left: 0; margin-top: 0.75rem; }
+    .quiz-option { margin-bottom: 0.5rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: #f3f4f6; color: #374151; }
+    .quiz-option.correct-answer { border-left: 4px solid #16a34a; background: #ecfdf3; font-weight: 600; color: #166534; position: relative; padding-left: 2.2rem; }
+    .quiz-option.correct-answer::before { content: '✓'; position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: #16a34a; font-weight: 900; }
     .slide-navigation { max-width: 900px; margin: 2rem auto; padding: 0 2rem; display: flex; justify-content: space-between; gap: 1rem; }
     .btn { padding: 1rem 2rem; border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: var(--shadow-sm); }
     .btn-primary { background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan)); color: white; }
@@ -286,6 +317,7 @@ const EnhancedCourseBuilder = () => {
 
   <main class="course-content">
     ${modulesHTML}
+    ${quizHTML}
   </main>
 
   <nav class="slide-navigation">
