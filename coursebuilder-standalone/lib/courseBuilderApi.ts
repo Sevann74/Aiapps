@@ -151,8 +151,29 @@ export async function generateQuestionsFromFacts(
       throw new Error('No questions were generated. Please try again or adjust your document.');
     }
 
-    console.log(`Successfully generated ${result.questions.length} questions`);
-    return result;
+    // Shuffle answer options so correct answer isn't always first
+    const shuffledQuestions = result.questions.map(q => {
+      const options = [...q.options];
+      const correctAnswerText = options[q.correctAnswer];
+      
+      // Fisher-Yates shuffle
+      for (let i = options.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [options[i], options[j]] = [options[j], options[i]];
+      }
+      
+      // Find new position of correct answer
+      const newCorrectAnswer = options.indexOf(correctAnswerText);
+      
+      return {
+        ...q,
+        options,
+        correctAnswer: newCorrectAnswer
+      };
+    });
+
+    console.log(`Successfully generated ${shuffledQuestions.length} questions with shuffled answers`);
+    return { questions: shuffledQuestions };
   } catch (error) {
     console.error('Error generating questions:', error);
     throw new Error(`Failed to generate questions: ${error instanceof Error ? error.message : 'Unknown error'}`);

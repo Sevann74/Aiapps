@@ -156,7 +156,6 @@ export function generateSingleSCOHTML(
               <span class="question-number">❓ Question ${qIndex + 1} of ${quiz.questions.length}</span>
             </div>
             <p class="question-text">${escapeHtml(q.question)}</p>
-            ${q.sourceReference ? `<p class="source-reference">📌 Source: ${escapeHtml(q.sourceReference)}</p>` : ''}
             <div class="options">
               ${q.options.map((opt, optIndex) => `
                 <label class="option-label">
