@@ -25,7 +25,8 @@ const EnhancedCourseBuilder = () => {
     brandingLogo: null,
     generationMode: 'strict', // strict = 100% accuracy
     questionMode: 'ai', // 'ai' or 'manual' or 'hybrid'
-    includeQuiz: true // true = include quiz, false = acknowledgment only
+    includeQuiz: true, // true = include quiz, false = acknowledgment only
+    questionCount: 5 // number of questions to include (1-10)
   });
   const [manualQuestions, setManualQuestions] = useState([]);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -578,7 +579,7 @@ const EnhancedCourseBuilder = () => {
     setEditingQuestion({
       id: `manual_q${Date.now()}`,
       question: '',
-      options: ['', '', '', ''],
+      options: ['', ''],  // Start with minimum 2 options, user can add up to 10
       correctAnswer: 0,
       explanation: '',
       isManual: true
@@ -1509,7 +1510,24 @@ const EnhancedCourseBuilder = () => {
               Quiz Settings
             </h3>
           
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Questions</label>
+              <select
+                value={config.questionCount}
+                onChange={(e) => setConfig({...config, questionCount: parseInt(e.target.value)})}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+              >
+                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                  <option key={n} value={n}>{n} question{n > 1 ? 's' : ''}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {config.questionMode === 'ai' ? 'AI will generate this many questions' : 
+                 config.questionMode === 'manual' ? 'Add at least this many questions' : 
+                 'Combined AI + manual questions'}
+              </p>
+            </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Passing Score (%)</label>
               <input
@@ -1964,9 +1982,12 @@ const EnhancedCourseBuilder = () => {
 
               {/* Answer Options */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Answer Options <span className="text-red-600">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Answer Options (minimum 2, maximum 10) <span className="text-red-600">*</span>
+                  </label>
+                  <span className="text-sm text-gray-500">{editingQuestion.options.length} options</span>
+                </div>
                 <div className="space-y-3">
                   {editingQuestion.options.map((option, idx) => (
                     <div key={idx} className="flex items-center gap-3">
@@ -1988,11 +2009,35 @@ const EnhancedCourseBuilder = () => {
                         placeholder={`Option ${idx + 1} ${idx === editingQuestion.correctAnswer ? '(Correct Answer)' : ''}`}
                         className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                       />
+                      {editingQuestion.options.length > 2 && (
+                        <button
+                          onClick={() => {
+                            const newOptions = editingQuestion.options.filter((_, i) => i !== idx);
+                            const newCorrectAnswer = editingQuestion.correctAnswer >= newOptions.length 
+                              ? newOptions.length - 1 
+                              : editingQuestion.correctAnswer > idx 
+                                ? editingQuestion.correctAnswer - 1 
+                                : editingQuestion.correctAnswer;
+                            setEditingQuestion({...editingQuestion, options: newOptions, correctAnswer: newCorrectAnswer});
+                          }}
+                          className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
+                {editingQuestion.options.length < 10 && (
+                  <button
+                    onClick={() => setEditingQuestion({...editingQuestion, options: [...editingQuestion.options, '']})}
+                    className="mt-3 px-4 py-2 bg-green-100 text-green-700 font-semibold rounded-lg hover:bg-green-200 transition-all flex items-center gap-2"
+                  >
+                    + Add Option
+                  </button>
+                )}
                 <p className="text-xs text-gray-500 mt-2">
-                  ✓ Click the radio button to mark the correct answer
+                  ✓ Click the radio button to mark the correct answer. You can add up to 10 options.
                 </p>
               </div>
 
