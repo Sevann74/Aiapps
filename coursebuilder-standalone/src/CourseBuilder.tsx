@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Image, Percent, Activity, FileDown, Edit2, Save, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Image, Percent, Activity, FileDown, Edit2, Save, X, FolderOpen, Trash2, RefreshCw, Users, Clock, CheckSquare } from 'lucide-react';
 import * as courseApi from '../lib/courseBuilderApi';
 import { generateSCORMPackage } from '../lib/scormGenerator';
 import { validateSCORMStructure, getSCORMCompatibilityInfo } from '../lib/scormValidator';
@@ -7,6 +7,8 @@ import { extractTextFromPDF, validateDocumentText, getTextPreview, PDFExtraction
 import { parseAPIError, ErrorDetails } from '../lib/errorHandler';
 import { testEdgeFunctionConnection, APITestResult } from '../lib/apiTester';
 import * as auditTrail from '../lib/auditTrail';
+import * as courseStorage from '../lib/courseStorage';
+import { StoredCourse } from '../lib/courseStorage';
 import ErrorModal from '../components/ErrorModal';
 
 const EnhancedCourseBuilder = () => {
@@ -61,9 +63,110 @@ const EnhancedCourseBuilder = () => {
   const [showContentEditor, setShowContentEditor] = useState(false);
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
 
+  // SAVED COURSES STATE
+  const [showSavedCourses, setShowSavedCourses] = useState(false);
+  const [savedCourses, setSavedCourses] = useState<StoredCourse[]>([]);
+  const [clientFilter, setClientFilter] = useState('');
+  const [uniqueClients, setUniqueClients] = useState<string[]>([]);
+  const [currentSavedCourseId, setCurrentSavedCourseId] = useState<string | null>(null);
+  const [clientName, setClientName] = useState('');
+
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const logoInputRef = useRef(null);
+
+  // ============================================
+  // SAVED COURSES FUNCTIONS
+  // ============================================
+
+  // Load saved courses on mount
+  useEffect(() => {
+    refreshSavedCourses();
+  }, []);
+
+  const refreshSavedCourses = () => {
+    const courses = clientFilter 
+      ? courseStorage.getCoursesByClient(clientFilter)
+      : courseStorage.getAllCourses();
+    setSavedCourses(courses);
+    setUniqueClients(courseStorage.getUniqueClients());
+  };
+
+  const handleSaveCourse = (status: StoredCourse['status'] = 'draft') => {
+    if (!clientName.trim()) {
+      alert('Please enter a client name before saving.');
+      return;
+    }
+
+    const savedCourse = courseStorage.saveCourse({
+      id: currentSavedCourseId || undefined,
+      clientName: clientName.trim(),
+      courseTitle: courseTitle || 'Untitled Course',
+      documentText,
+      courseData,
+      config: config as any,
+      gxpFields,
+      documentVersion,
+      verificationReport,
+      status,
+      sopContentCleared: false
+    });
+
+    setCurrentSavedCourseId(savedCourse.id);
+    refreshSavedCourses();
+    alert(`✓ Course saved successfully!`);
+  };
+
+  const handleLoadCourse = (course: StoredCourse) => {
+    if (course.sopContentCleared) {
+      alert('⚠️ This course has been completed and SOP content was cleared. You can view quiz questions but cannot regenerate the course.');
+    }
+
+    setClientName(course.clientName);
+    setCourseTitle(course.courseTitle);
+    setDocumentText(course.documentText);
+    setCourseData(course.courseData);
+    setConfig(course.config as any);
+    setGxpFields(course.gxpFields);
+    setDocumentVersion(course.documentVersion);
+    setVerificationReport(course.verificationReport);
+    setCurrentSavedCourseId(course.id);
+    setShowSavedCourses(false);
+
+    // Navigate to appropriate step
+    if (course.courseData) {
+      setStep('review');
+    } else if (course.documentText) {
+      setStep('configure');
+    } else {
+      setStep('upload');
+    }
+  };
+
+  const handleDeleteCourse = (id: string) => {
+    if (confirm('Are you sure you want to delete this saved course? This cannot be undone.')) {
+      courseStorage.deleteCourse(id);
+      refreshSavedCourses();
+      if (currentSavedCourseId === id) {
+        setCurrentSavedCourseId(null);
+      }
+    }
+  };
+
+  const handleCompleteAndCleanup = (id: string) => {
+    if (confirm(
+      '⚠️ Complete & Cleanup\n\n' +
+      'This will:\n' +
+      '• Mark the course as completed\n' +
+      '• Delete the SOP document content\n' +
+      '• Keep quiz questions and metadata for reference\n\n' +
+      'This action cannot be undone. Continue?'
+    )) {
+      courseStorage.completeAndCleanup(id);
+      refreshSavedCourses();
+      alert('✓ Course completed and SOP content cleared.');
+    }
+  };
 
   const renderFormattedContent = (text: string, colorClass: string = 'text-gray-700') => {
     const lines = text.split('\n').filter(line => line.trim());
@@ -1043,11 +1146,38 @@ const EnhancedCourseBuilder = () => {
 
   const renderUploadStep = () => (
     <div className="max-w-4xl mx-auto">
+      {/* Saved Courses Button */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() => { refreshSavedCourses(); setShowSavedCourses(true); }}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all font-semibold"
+        >
+          <FolderOpen className="w-5 h-5" />
+          Saved Courses ({savedCourses.length})
+        </button>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-xl p-8">
         <div className="text-center mb-8">
           <FileText className="w-16 h-16 text-blue-600 mx-auto mb-4" />
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Upload Training Document</h2>
           <p className="text-gray-600">Upload a PDF containing your training content (SOP, policy, procedure)</p>
+        </div>
+
+        {/* Client Name Field */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <Users className="w-4 h-4 inline mr-2" />
+            Client Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+            placeholder="Enter client/company name for this course"
+          />
+          <p className="text-xs text-gray-500 mt-1">Required for saving and organizing courses</p>
         </div>
 
         <div className="border-4 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 transition-all cursor-pointer"
@@ -1929,6 +2059,18 @@ const EnhancedCourseBuilder = () => {
             )}
           </button>
         </div>
+
+        {/* Save Course Button */}
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={() => handleSaveCourse('generated')}
+            className="px-6 py-3 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 transition-all flex items-center gap-2"
+          >
+            <Save className="w-5 h-5" />
+            Save Course for Later
+            {currentSavedCourseId && <span className="text-xs bg-indigo-200 px-2 py-0.5 rounded-full">Saved</span>}
+          </button>
+        </div>
       </div>
     );
   };
@@ -2521,6 +2663,156 @@ const EnhancedCourseBuilder = () => {
             }
           }}
         />
+      )}
+
+      {/* Saved Courses Modal */}
+      {showSavedCourses && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FolderOpen className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Saved Courses</h2>
+                    <p className="text-indigo-200 text-sm">Load, edit, or manage your saved courses</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSavedCourses(false)}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-all"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Client Filter */}
+              <div className="mt-4 flex gap-4">
+                <select
+                  value={clientFilter}
+                  onChange={(e) => { setClientFilter(e.target.value); refreshSavedCourses(); }}
+                  className="flex-1 px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/50"
+                >
+                  <option value="" className="text-gray-900">All Clients</option>
+                  {uniqueClients.map(client => (
+                    <option key={client} value={client} className="text-gray-900">{client}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={refreshSavedCourses}
+                  className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Course List */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {savedCourses.length === 0 ? (
+                <div className="text-center py-12">
+                  <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">No saved courses found</p>
+                  <p className="text-gray-400 text-sm mt-2">Courses will appear here after you save them</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {savedCourses.map(course => (
+                    <div
+                      key={course.id}
+                      className={`border-2 rounded-xl p-4 transition-all hover:shadow-md ${
+                        course.status === 'completed' ? 'border-green-200 bg-green-50' :
+                        course.status === 'exported' ? 'border-blue-200 bg-blue-50' :
+                        course.status === 'generated' ? 'border-purple-200 bg-purple-50' :
+                        'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              course.status === 'completed' ? 'bg-green-200 text-green-800' :
+                              course.status === 'exported' ? 'bg-blue-200 text-blue-800' :
+                              course.status === 'generated' ? 'bg-purple-200 text-purple-800' :
+                              'bg-gray-200 text-gray-800'
+                            }`}>
+                              {course.status.toUpperCase()}
+                            </span>
+                            {course.sopContentCleared && (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-200 text-yellow-800">
+                                SOP CLEARED
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-bold text-gray-900 text-lg">{course.courseTitle}</h3>
+                          <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                            <span className="flex items-center gap-1">
+                              <Users className="w-4 h-4" />
+                              {course.clientName}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              {new Date(course.updatedAt).toLocaleDateString()}
+                            </span>
+                            {course.gxpFields?.sopNumber && (
+                              <span className="flex items-center gap-1">
+                                <FileText className="w-4 h-4" />
+                                {course.gxpFields.sopNumber}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleLoadCourse(course)}
+                            className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-all font-semibold text-sm flex items-center gap-2"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Load
+                          </button>
+                          {course.status !== 'completed' && (
+                            <button
+                              onClick={() => handleCompleteAndCleanup(course.id)}
+                              className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all font-semibold text-sm flex items-center gap-2"
+                              title="Complete & Cleanup - Clears SOP content"
+                            >
+                              <CheckSquare className="w-4 h-4" />
+                              Complete
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteCourse(course.id)}
+                            className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all"
+                            title="Delete course"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 border-t-2 border-gray-200 p-4 flex justify-between items-center">
+              <p className="text-sm text-gray-500">
+                {savedCourses.length} course{savedCourses.length !== 1 ? 's' : ''} saved
+              </p>
+              <button
+                onClick={() => setShowSavedCourses(false)}
+                className="px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
