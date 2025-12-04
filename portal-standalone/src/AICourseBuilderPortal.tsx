@@ -723,28 +723,99 @@ AI Course Builder | Navigant Learning
   // CLIENT ACTIONS
   // ============================================
   
+  // Generate Audit Trail content for download
+  const generateAuditTrail = (job) => {
+    const formatDate = (d) => d ? new Date(d).toLocaleString() : 'N/A';
+    const previewEntry = job.auditLog?.find(e => e.action === 'Preview uploaded');
+    
+    return `════════════════════════════════════════════════════════════════════════════════
+                         COURSE DEVELOPMENT AUDIT TRAIL
+                              GxP Compliance Record
+════════════════════════════════════════════════════════════════════════════════
+
+Generated: ${new Date().toLocaleString()}
+Document ID: AUDIT-${job.id}-${Date.now()}
+
+────────────────────────────────────────────────────────────────────────────────
+1. SOP METADATA
+────────────────────────────────────────────────────────────────────────────────
+   SOP Title:           ${job.courseTitle}
+   SOP Number:          ${job.sopNumber || 'N/A'}
+   Document Version:    ${job.documentVersion || 'N/A'}
+   SOP File Name:       ${job.fileName}
+   File Checksum:       ${job.fileChecksum}
+   Effective Date:      ${job.effectiveDate || 'Not specified'}
+   Regulatory Status:   ${job.regulatoryStatus || 'N/A'}
+
+────────────────────────────────────────────────────────────────────────────────
+2. PROCESS LOG (Timestamps)
+────────────────────────────────────────────────────────────────────────────────
+   SOP Uploaded:        ${formatDate(job.submittedAt)}
+   Preview Delivered:   ${formatDate(previewEntry?.timestamp)}
+   Client Approved:     ${formatDate(job.approvedAt)}
+   SCORM Delivered:     ${formatDate(job.updatedAt)}
+
+────────────────────────────────────────────────────────────────────────────────
+3. USER TRACE
+────────────────────────────────────────────────────────────────────────────────
+   Uploaded By:         ${job.clientEmail} (${job.clientName})
+   Organization:        ${job.organization}
+   Approved By:         ${job.approvedBy || job.clientEmail}
+
+────────────────────────────────────────────────────────────────────────────────
+4. SCORM METADATA
+────────────────────────────────────────────────────────────────────────────────
+   SCORM Version:       SCORM 1.2
+   Course Title:        ${job.courseTitle}
+   Export Date:         ${new Date().toLocaleString()}
+   Package File:        ${job.scormFileName || 'SCORM_' + job.id + '.zip'}
+
+────────────────────────────────────────────────────────────────────────────────
+5. COMPLETE AUDIT LOG
+────────────────────────────────────────────────────────────────────────────────
+${job.auditLog?.map((e, i) => `   [${i + 1}] ${formatDate(e.timestamp)}
+       Action:  ${e.action}
+       Actor:   ${e.actor}
+       Details: ${e.details || 'N/A'}
+`).join('\n') || '   No entries.'}
+
+════════════════════════════════════════════════════════════════════════════════
+                              END OF AUDIT TRAIL
+════════════════════════════════════════════════════════════════════════════════
+Auto-generated by AI Course Builder | Navigant Learning
+════════════════════════════════════════════════════════════════════════════════`;
+  };
+
+  // Download audit trail for any job
+  const downloadAuditTrail = (job) => {
+    const content = generateAuditTrail(job);
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AuditTrail_${job.id}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   const clientApprovePreview = (job) => {
+    const now = new Date().toISOString();
     const updatedJobs = jobs.map(j => {
       if (j.id === job.id) {
         return {
           ...j,
           status: 'delivered',
-          updatedAt: new Date().toISOString(),
-          downloadExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(), // 72 hours
+          updatedAt: now,
+          approvedAt: now,
+          approvedBy: currentUser.email,
+          downloadExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
           auditLog: [
             ...j.auditLog,
-            {
-              timestamp: new Date().toISOString(),
-              action: 'Job approved by client',
-              actor: currentUser.email,
-              details: 'Client approved preview and SCORM package'
-            },
-            {
-              timestamp: new Date().toISOString(),
-              action: 'Job delivered',
-              actor: 'system',
-              details: 'SCORM package and audit trail now available for download'
-            }
+            { timestamp: now, action: 'Job approved by client', actor: currentUser.email, details: 'Client approved preview and SCORM package' },
+            { timestamp: now, action: 'Audit trail auto-generated', actor: 'system', details: 'GxP compliance audit trail created' },
+            { timestamp: now, action: 'Job delivered', actor: 'system', details: 'SCORM package and audit trail now available' }
           ]
         };
       }
@@ -752,7 +823,11 @@ AI Course Builder | Navigant Learning
     });
     setJobs(updatedJobs);
     
-    alert(' Job Approved!\n\nYour SCORM package and audit trail are now available for download.');
+    // Auto-download audit trail
+    const updatedJob = updatedJobs.find(j => j.id === job.id);
+    if (updatedJob) downloadAuditTrail(updatedJob);
+    
+    alert('✅ Job Approved!\n\n📋 Audit Trail has been automatically downloaded.\n\nYour SCORM package is ready in the dashboard.');
   };
   
   const clientRequestRevision = (job, comment) => {
@@ -1914,13 +1989,22 @@ AI Course Builder | Navigant Learning
                 <p className="text-sm text-gray-600">Checksum: {selectedJob.fileChecksum}</p>
                 <p className="text-sm text-gray-600">Submitted: {new Date(selectedJob.submittedAt).toLocaleString()}</p>
               </div>
-              <button
-                onClick={() => adminDownloadSOP(selectedJob)}
-                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
-              >
-                <Icon name="download" />
-                Download
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => adminDownloadSOP(selectedJob)}
+                  className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all flex items-center gap-2"
+                >
+                  <Icon name="download" />
+                  Download SOP
+                </button>
+                <button
+                  onClick={() => downloadAuditTrail(selectedJob)}
+                  className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2"
+                >
+                  <Icon name="file" />
+                  Download Audit Trail
+                </button>
+              </div>
             </div>
             
             <div className="p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
