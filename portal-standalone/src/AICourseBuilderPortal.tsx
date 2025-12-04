@@ -55,6 +55,7 @@ const StreamlinedCourseBuilder = () => {
     courseTitle: '',
     contactEmail: '',
     quizMode: 'ai', // ai, manual, hybrid, none
+    questionCount: 5, // Number of quiz questions (max 10)
     sopNumber: '',
     effectiveDate: '',
     estimatedSeatTime: 30,
@@ -328,10 +329,6 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       alert('Please enter your contact email');
       return;
     }
-    if (!confirmCheckbox) {
-      alert('Please confirm the document is approved for conversion');
-      return;
-    }
     
     // Validate manual questions if hybrid/manual mode
     if ((clientForm.quizMode === 'manual' || clientForm.quizMode === 'hybrid') && manualQuestions.length === 0) {
@@ -353,6 +350,7 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       estimatedSeatTime: clientForm.estimatedSeatTime,
       regulatoryStatus: clientForm.regulatoryStatus,
       quizMode: clientForm.quizMode,
+      questionCount: clientForm.questionCount,
       comments: clientForm.comments,
       fileName: uploadedFile.name,
       fileChecksum: fileChecksum,
@@ -388,6 +386,7 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       courseTitle: '',
       contactEmail: '',
       quizMode: 'ai',
+      questionCount: 5,
       sopNumber: '',
       effectiveDate: '',
       estimatedSeatTime: 30,
@@ -1475,21 +1474,44 @@ AI Course Builder | Navigant Learning
                 </div>
               </div>
               
+              {/* Number of Questions - Show for ai, manual, hybrid */}
+              {clientForm.quizMode !== 'none' && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Number of Questions <span className="text-red-600">*</span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <select
+                      value={clientForm.questionCount}
+                      onChange={(e) => setClientForm({...clientForm, questionCount: parseInt(e.target.value)})}
+                      className="px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none font-semibold"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                        <option key={num} value={num}>{num}</option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-gray-600">Maximum 10 questions per course</span>
+                  </div>
+                </div>
+              )}
+              
               {/* Manual Questions - if manual or hybrid */}
               {(clientForm.quizMode === 'manual' || clientForm.quizMode === 'hybrid') && (
                 <div className="p-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h4 className="font-bold text-gray-900 mb-1">Custom Quiz Questions</h4>
-                      <p className="text-sm text-gray-600">Add your own assessment questions</p>
+                      <h4 className="font-bold text-gray-900 mb-1">Custom Quiz Questions ({manualQuestions.length}/{clientForm.questionCount})</h4>
+                      <p className="text-sm text-gray-600">Add your own assessment questions (max {clientForm.questionCount})</p>
                     </div>
-                    <button
-                      onClick={addManualQuestion}
-                      className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
-                    >
-                      <Icon name="plus" />
-                      Add Question
-                    </button>
+                    {manualQuestions.length < clientForm.questionCount && (
+                      <button
+                        onClick={addManualQuestion}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+                      >
+                        <Icon name="plus" />
+                        Add Question
+                      </button>
+                    )}
                   </div>
                   
                   {manualQuestions.length === 0 ? (
@@ -1527,21 +1549,6 @@ AI Course Builder | Navigant Learning
                   )}
                 </div>
               )}
-              
-              {/* Confirmation Checkbox - REQUIRED */}
-              <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={confirmCheckbox}
-                    onChange={(e) => setConfirmCheckbox(e.target.checked)}
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-900">
-                    <strong className="text-red-600">*</strong> I confirm that this document is approved for conversion to a SCORM course package.
-                  </span>
-                </label>
-              </div>
               
               {/* Submit Buttons */}
               <div className="flex justify-end gap-4 pt-4">
