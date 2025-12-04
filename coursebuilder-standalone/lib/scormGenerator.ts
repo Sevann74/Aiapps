@@ -122,13 +122,27 @@ export function generateSingleSCOHTML(
     }
   }
 
+  // Track checkboxes per slide for interaction requirement
+  let checkboxCounter = 0;
+  
   const moduleSlidesHTML = modules.map((module, index) => {
-    const sectionsHTML = module.content.map((section) => `
-      <div class="content-section section-${section.type || 'text'}">
+    const sectionsHTML = module.content.map((section) => {
+      const isInteractive = section.type === 'callout-important' || section.type === 'callout-key';
+      const checkboxId = isInteractive ? `checkbox-${index}-${checkboxCounter++}` : null;
+      
+      return `
+      <div class="content-section section-${section.type || 'text'}" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
         ${section.heading ? `<h3>${escapeHtml(section.heading)}</h3>` : ''}
         ${formatContent(section.body)}
+        ${isInteractive ? `
+        <label class="acknowledge-checkbox" for="${checkboxId}">
+          <input type="checkbox" id="${checkboxId}" onchange="markAcknowledged('${checkboxId}', ${index})">
+          <span class="checkbox-label">I have read and understood this ${section.type === 'callout-important' ? 'important information' : 'key point'}</span>
+        </label>
+        ` : ''}
       </div>
-    `).join('\n');
+    `;
+    }).join('\n');
 
     return `
       <section class="slide" id="slide-${index}" style="${index === 0 ? 'display: block;' : 'display: none;'}">
@@ -697,6 +711,55 @@ export function generateSingleSCOHTML(
       font-weight: 500;
     }
 
+    /* Acknowledgment Checkbox Styles */
+    .acknowledge-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 1rem;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 2px solid #d1d5db;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      user-select: none;
+    }
+
+    .acknowledge-checkbox:hover {
+      border-color: var(--brand-cyan);
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    .acknowledge-checkbox input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--brand-cyan);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .acknowledge-checkbox .checkbox-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .acknowledge-checkbox:has(input:checked) {
+      border-color: #10b981;
+      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    }
+
+    .acknowledge-checkbox:has(input:checked) .checkbox-label {
+      color: #065f46;
+    }
+
+    .acknowledge-checkbox:has(input:checked)::after {
+      content: ' ✓';
+      color: #10b981;
+      font-weight: bold;
+    }
+
     .slide-navigation {
       max-width: 900px;
       margin: 2rem auto;
@@ -1091,6 +1154,30 @@ export function generateSingleSCOHTML(
     let quizAnswers = [];
     let quizAttempts = 0;
     const correctAnswers = ${includeQuiz ? JSON.stringify(quiz.questions.map(q => q.correctAnswer)) : '[]'};
+    
+    // Track acknowledged checkboxes per slide
+    const acknowledgedItems = {};
+    
+    function markAcknowledged(checkboxId, slideIndex) {
+      if (!acknowledgedItems[slideIndex]) {
+        acknowledgedItems[slideIndex] = new Set();
+      }
+      const checkbox = document.getElementById(checkboxId);
+      if (checkbox && checkbox.checked) {
+        acknowledgedItems[slideIndex].add(checkboxId);
+      } else {
+        acknowledgedItems[slideIndex].delete(checkboxId);
+      }
+      updateNavigation();
+    }
+    
+    function areAllCheckboxesAcknowledged(slideIndex) {
+      const slide = document.getElementById('slide-' + slideIndex);
+      if (!slide) return true;
+      const checkboxes = slide.querySelectorAll('.acknowledge-checkbox input[type="checkbox"]');
+      if (checkboxes.length === 0) return true;
+      return Array.from(checkboxes).every(cb => cb.checked);
+    }
 
     window.onload = function() {
       initializeSCORM();
@@ -1115,6 +1202,11 @@ export function generateSingleSCOHTML(
     }
 
     function nextSlide() {
+      // Check if all checkboxes on current slide are acknowledged
+      if (!areAllCheckboxesAcknowledged(currentSlide)) {
+        alert('Please acknowledge all important points before continuing.');
+        return;
+      }
       if (currentSlide < TOTAL_SLIDES - 1) {
         goToSlide(currentSlide + 1);
       }
