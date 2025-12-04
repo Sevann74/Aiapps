@@ -983,13 +983,42 @@ AI Course Builder | Navigant Learning
                 const jobWithPreview = jobs.find(j => j.previewFileName === previewUrl);
                 
                 if (jobWithPreview && jobWithPreview.previewContent) {
+                  // Check if content looks like valid HTML
+                  const content = jobWithPreview.previewContent;
+                  const looksLikeHTML = content.trim().startsWith('<!DOCTYPE') || 
+                                        content.trim().startsWith('<html') || 
+                                        content.trim().startsWith('<HTML') ||
+                                        content.trim().startsWith('<!doctype');
+                  
+                  if (!looksLikeHTML) {
+                    // Show error for non-HTML content (like ZIP files read as text)
+                    return (
+                      <div className="p-8 flex items-center justify-center h-full">
+                        <div className="text-center max-w-lg">
+                          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                            <p className="text-sm text-red-900">
+                              <strong>⚠️ Invalid Preview File:</strong> The uploaded file does not appear to be a valid HTML file. 
+                              It may be a ZIP/SCORM package instead of an HTML preview.
+                            </p>
+                          </div>
+                          <p className="text-gray-600 mt-4">
+                            Please upload an <strong>.html</strong> file for the preview.
+                          </p>
+                          <p className="text-sm text-gray-500 mt-2">
+                            File: <strong>{jobWithPreview.previewFileName}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
                   // Display actual HTML content in iframe
                   return (
                     <iframe
-                      srcDoc={jobWithPreview.previewContent}
+                      srcDoc={content}
                       className="w-full h-full border-0"
                       title="Course Preview"
-                      sandbox="allow-scripts allow-same-origin"
+                      sandbox="allow-scripts allow-same-origin allow-forms"
                     />
                   );
                 } else {
