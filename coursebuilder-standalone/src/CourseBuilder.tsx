@@ -1180,13 +1180,24 @@ const EnhancedCourseBuilder = () => {
           <p className="text-xs text-gray-500 mt-1">Required for saving and organizing courses</p>
         </div>
 
+        {/* Document Guidelines */}
+        <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+          <h4 className="font-semibold text-blue-900 mb-2">📄 Document Guidelines</h4>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>• <strong>Maximum:</strong> 30 pages or 75,000 characters</li>
+            <li>• <strong>Optimal:</strong> 10-25 pages for best results</li>
+            <li>• <strong>Format:</strong> PDF with selectable text (not scanned images)</li>
+            <li>• <strong>Content:</strong> SOPs, policies, procedures, training materials</li>
+          </ul>
+        </div>
+
         <div className="border-4 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 transition-all cursor-pointer"
              onClick={() => fileInputRef.current?.click()}>
           <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-lg font-semibold text-gray-700 mb-2">
             {uploadedFile ? uploadedFile.name : 'Click to upload or drag and drop'}
           </p>
-          <p className="text-sm text-gray-500">PDF files only • Max 10MB</p>
+          <p className="text-sm text-gray-500">PDF files only • Max 10MB • Up to 30 pages</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -1198,6 +1209,25 @@ const EnhancedCourseBuilder = () => {
 
         {documentText && (
           <div className="mt-8">
+            {/* Document Size Warning */}
+            {pdfExtractionResult && (pdfExtractionResult.pageCount > 30 || pdfExtractionResult.characterCount > 75000) && (
+              <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-orange-900"> Large Document Warning</p>
+                    <p className="text-sm text-orange-800 mt-1">
+                      Your document has <strong>{pdfExtractionResult.pageCount} pages</strong> and <strong>{pdfExtractionResult.characterCount.toLocaleString()} characters</strong>.
+                    </p>
+                    <p className="text-sm text-orange-700 mt-1">
+                      The system will process the first ~30 pages (75,000 characters) for optimal performance. 
+                      Content beyond this limit may not be included in the generated course.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
               <div className="flex items-center gap-3">
                 <CheckCircle className="w-6 h-6 text-green-600" />
@@ -1205,7 +1235,10 @@ const EnhancedCourseBuilder = () => {
                   <p className="font-semibold text-green-900">Document loaded successfully</p>
                   {pdfExtractionResult && (
                     <p className="text-sm text-green-700">
-                      {pdfExtractionResult.pageCount} pages • {pdfExtractionResult.wordCount} words • {pdfExtractionResult.characterCount} characters
+                      {pdfExtractionResult.pageCount} pages • {pdfExtractionResult.wordCount} words • {pdfExtractionResult.characterCount.toLocaleString()} characters
+                      {pdfExtractionResult.characterCount <= 75000 && (
+                        <span className="ml-2 text-green-600"> Within limits</span>
+                      )}
                     </p>
                   )}
                   {currentDocumentId && (
