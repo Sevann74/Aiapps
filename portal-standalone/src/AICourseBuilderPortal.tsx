@@ -43,8 +43,8 @@ const StreamlinedCourseBuilder = () => {
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [revisionComment, setRevisionComment] = useState('');
+  const [submissionSuccess, setSubmissionSuccess] = useState<{jobId: string; eta: string} | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [showRevisionBox, setShowRevisionBox] = useState(false);
@@ -399,9 +399,8 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
     setConfirmCheckbox(false);
     setManualQuestions([]);
     
-    // Show success and redirect
-    alert(`✅ Submission successful!\n\nJob ID: ${newJob.id}\nETA: ${newJob.eta}\n\nYou'll receive an email notification when your course is ready for review.`);
-    setCurrentView('dashboard');
+    // Show success message inline
+    setSubmissionSuccess({ jobId: newJob.id, eta: newJob.eta });
   };
   
   // ============================================
@@ -1529,80 +1528,6 @@ AI Course Builder | Navigant Learning
                 </div>
               )}
               
-              {/* Advanced Settings - OPTIONAL */}
-              <div className="border-t-2 border-gray-200 pt-6">
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all"
-                >
-                  <span className="font-bold text-gray-900">Advanced Settings (Optional)</span>
-                  <span className="text-gray-600">{showAdvanced ? '▲' : '▼'}</span>
-                </button>
-                
-                {showAdvanced && (
-                  <div className="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">SOP Number</label>
-                        <input
-                          type="text"
-                          value={clientForm.sopNumber}
-                          onChange={(e) => setClientForm({...clientForm, sopNumber: e.target.value})}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                          placeholder="e.g., SOP-LAB-001"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Effective Date</label>
-                        <input
-                          type="date"
-                          value={clientForm.effectiveDate}
-                          onChange={(e) => setClientForm({...clientForm, effectiveDate: e.target.value})}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Estimated Seat Time (minutes)</label>
-                        <input
-                          type="number"
-                          value={clientForm.estimatedSeatTime}
-                          onChange={(e) => setClientForm({...clientForm, estimatedSeatTime: parseInt(e.target.value)})}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Regulatory Status</label>
-                        <select
-                          value={clientForm.regulatoryStatus}
-                          onChange={(e) => setClientForm({...clientForm, regulatoryStatus: e.target.value})}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                        >
-                          <option value="Draft">Draft</option>
-                          <option value="Approved">Approved</option>
-                          <option value="Under Review">Under Review</option>
-                        </select>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Comments / Special Instructions</label>
-                      <textarea
-                        value={clientForm.comments}
-                        onChange={(e) => setClientForm({...clientForm, comments: e.target.value})}
-                        rows={3}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                        placeholder="Any specific requirements or instructions for the course..."
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              
               {/* Confirmation Checkbox - REQUIRED */}
               <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -1613,28 +1538,18 @@ AI Course Builder | Navigant Learning
                     className="mt-1"
                   />
                   <span className="text-sm text-gray-900">
-                    <strong className="text-red-600">*</strong> I confirm that this document is approved for conversion to a SCORM course package and contains no confidential information that should not be processed.
+                    <strong className="text-red-600">*</strong> I confirm that this document is approved for conversion to a SCORM course package.
                   </span>
                 </label>
-              </div>
-              
-              {/* Email Notification Info */}
-              <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Icon name="mail" className="w-5 h-5 text-green-600 mt-1" />
-                  <div>
-                    <p className="text-sm font-semibold text-green-900 mb-1">Email Notification</p>
-                    <p className="text-sm text-gray-700">
-                      When you submit, a notification will be sent to <strong>david.dergazarian@navigantlearning.com</strong> with your course details and attachment. You'll receive updates at <strong>{clientForm.contactEmail || currentUser.email}</strong>.
-                    </p>
-                  </div>
-                </div>
               </div>
               
               {/* Submit Buttons */}
               <div className="flex justify-end gap-4 pt-4">
                 <button
-                  onClick={() => setCurrentView('dashboard')}
+                  onClick={() => {
+                    setCurrentView('dashboard');
+                    setSubmissionSuccess(null);
+                  }}
                   className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-all"
                 >
                   Cancel
@@ -1647,6 +1562,36 @@ AI Course Builder | Navigant Learning
                   Submit Request
                 </button>
               </div>
+              
+              {/* Success Message - Inline */}
+              {submissionSuccess && (
+                <div className="mt-6 p-6 bg-green-50 border-2 border-green-500 rounded-lg">
+                  <div className="flex items-start gap-4">
+                    <div className="text-4xl">✅</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-green-900 mb-2">Submission Successful!</h3>
+                      <p className="text-green-800 mb-2">
+                        <strong>Job ID:</strong> {submissionSuccess.jobId}
+                      </p>
+                      <p className="text-green-800 mb-4">
+                        <strong>ETA:</strong> {submissionSuccess.eta}
+                      </p>
+                      <p className="text-green-700">
+                        You will receive an email notification when your course is ready for review.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setSubmissionSuccess(null);
+                          setCurrentView('dashboard');
+                        }}
+                        className="mt-4 px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all"
+                      >
+                        Go to Dashboard
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
