@@ -135,7 +135,7 @@ const EnhancedCourseBuilder = () => {
 
     // Navigate to appropriate step
     if (course.courseData) {
-      setStep('review');
+      setStep('preview');
     } else if (course.documentText) {
       setStep('configure');
     } else {
