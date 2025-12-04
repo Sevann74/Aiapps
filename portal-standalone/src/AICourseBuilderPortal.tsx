@@ -148,7 +148,7 @@ const StreamlinedCourseBuilder = () => {
         fileChecksum: 'abc123def456...',
         submittedAt: '2025-01-07T10:30:00Z',
         updatedAt: '2025-01-08T14:20:00Z',
-        eta: '48 hours',
+        eta: '24 hours',
         previewFileName: 'Client preview last.html',
         previewContent: `<!DOCTYPE html>
 <html lang="en">
@@ -357,7 +357,7 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       manualQuestions: clientForm.quizMode === 'manual' || clientForm.quizMode === 'hybrid' ? manualQuestions : [],
       submittedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      eta: '48-72 hours',
+      eta: '24 hours',
       auditLog: [
         {
           timestamp: new Date().toISOString(),
@@ -445,8 +445,7 @@ Organization:        ${job.organization}
 ⚙️ COURSE SPECIFICATIONS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Quiz Mode:           ${job.quizMode.toUpperCase()}
-Estimated Seat Time: ${job.estimatedSeatTime} minutes
-Effective Date:      ${job.effectiveDate || 'Not specified'}
+Number of Questions: ${job.questionCount || 5}
 
 📎 SOURCE DOCUMENT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -519,14 +518,13 @@ Job ID:              ${job.id}
 Course Title:        ${job.courseTitle}
 SOP Number:          ${job.sopNumber || 'N/A'}
 Quiz Mode:           ${job.quizMode.toUpperCase()}
-Estimated Seat Time: ${job.estimatedSeatTime} minutes
 
 ⏰ WHAT HAPPENS NEXT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Our team will download and review your SOP
+1. Our team will review your SOP
 2. We'll generate your course content
-3. You'll receive a preview for review (ETA: ${job.eta})
-4. Once approved, we'll deliver your final SCORM package
+3. You'll receive preview + SCORM files (ETA: ${job.eta})
+4. Review and approve, or request revisions
 
 📧 You'll receive email updates at each step.
 
