@@ -220,6 +220,7 @@ const EnhancedCourseBuilder = () => {
               <div class="quiz-question">
                 <h3>Question ${qIndex + 1} of ${courseData.quiz.questions.length}</h3>
                 <p class="question-text">${escapeHtml(q.question)}</p>
+                ${q.sourceReference ? `<p class="source-reference">📌 Source: ${escapeHtml(q.sourceReference)}</p>` : ''}
                 <ul class="quiz-options">
                   ${q.options.map((opt, optIndex: number) => `<li class="quiz-option${optIndex === q.correctAnswer ? ' correct-answer' : ''}">${escapeHtml(opt)}</li>`).join('')}
                 </ul>
