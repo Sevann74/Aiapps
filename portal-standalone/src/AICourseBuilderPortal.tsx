@@ -49,6 +49,7 @@ const StreamlinedCourseBuilder = () => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [showRevisionBox, setShowRevisionBox] = useState(false);
   const [selectedClientForEdit, setSelectedClientForEdit] = useState(null);
+  const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info'; message: string; details?: string} | null>(null);
   
   // Client submission form
   const [clientForm, setClientForm] = useState({
@@ -84,10 +85,10 @@ const StreamlinedCourseBuilder = () => {
     organization: ''
   });
   
-  const fileInputRef = useRef(null);
-  const previewInputRef = useRef(null);
-  const scormInputRef = useRef(null);
-  const auditInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewInputRef = useRef<HTMLInputElement>(null);
+  const scormInputRef = useRef<HTMLInputElement>(null);
+  const auditInputRef = useRef<HTMLInputElement>(null);
   
   // Mock users database - load from localStorage
   const [clients, setClients] = useState(() => {
@@ -630,103 +631,94 @@ AI Course Builder | Navigant Learning
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
     
-    alert(`✅ SOP Downloaded\n\nFile: ${job.fileName}\nChecksum: ${job.fileChecksum}\n\nNext: Generate course using your CourseBuilder app, then upload preview or final SCORM.`);
+    alert(` SOP Downloaded\n\nFile: ${job.fileName}\nChecksum: ${job.fileChecksum}\n\nNext: Generate course using your CourseBuilder app, then upload preview or final SCORM.`);
   };
   
-  const adminUploadPreview = (job) => {
-    const file = previewInputRef.current?.files?.[0];
-    if (!file) {
-      alert('Please select a preview file');
+  // Show in-app notification
+  const showNotification = (type: 'success' | 'error' | 'info', message: string, details?: string) => {
+    setNotification({ type, message, details });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const adminUploadFiles = (job) => {
+    const previewFile = previewInputRef.current?.files?.[0];
+    const scormFile = scormInputRef.current?.files?.[0];
+    const auditFile = auditInputRef.current?.files?.[0];
+    
+    // Validate: at minimum need preview file
+    if (!previewFile) {
+      showNotification('error', 'Preview Required', 'Please select an HTML preview file.');
       return;
     }
     
-    // Read the HTML file content
+    // If SCORM is provided, audit must also be provided
+    if (scormFile && !auditFile) {
+      showNotification('error', 'Audit Trail Required', 'Please also select an audit trail file when uploading SCORM.');
+      return;
+    }
+    
+    // Read the HTML preview file content
     const reader = new FileReader();
     reader.onload = (e) => {
       const htmlContent = e.target?.result as string;
       
-      // Update job status and audit log with preview content
+      // Build audit log entries
+      const auditEntries = [
+        {
+          timestamp: new Date().toISOString(),
+          action: 'Preview uploaded',
+          actor: currentUser.email,
+          details: `File: ${previewFile.name}`
+        }
+      ];
+      
+      if (scormFile) {
+        auditEntries.push({
+          timestamp: new Date().toISOString(),
+          action: 'SCORM package uploaded',
+          actor: currentUser.email,
+          details: `SCORM: ${scormFile.name}, Audit: ${auditFile.name}`
+        });
+      }
+      
+      auditEntries.push({
+        timestamp: new Date().toISOString(),
+        action: 'Client notification sent',
+        actor: 'system',
+        details: `Email sent to ${job.clientEmail}`
+      });
+      
+      // Update job
       const updatedJobs = jobs.map(j => {
         if (j.id === job.id) {
           return {
             ...j,
             status: 'pending_review',
             updatedAt: new Date().toISOString(),
-            previewFileName: file.name,
-            previewContent: htmlContent, // Store the actual HTML content
-            auditLog: [
-              ...j.auditLog,
-              {
-                timestamp: new Date().toISOString(),
-                action: 'Preview uploaded',
-                actor: currentUser.email,
-                details: `File: ${file.name}`
-              },
-              {
-                timestamp: new Date().toISOString(),
-                action: 'Client notification sent',
-                actor: 'system',
-                details: `Email sent to ${job.clientEmail}`
-              }
-            ]
+            previewFileName: previewFile.name,
+            previewContent: htmlContent,
+            ...(scormFile && { scormFileName: scormFile.name }),
+            ...(auditFile && { auditFileName: auditFile.name }),
+            auditLog: [...j.auditLog, ...auditEntries]
           };
         }
         return j;
       });
       setJobs(updatedJobs);
       
-      alert(`✅ Preview Uploaded\n\nStatus changed to: Pending Client Review\nEmail sent to: ${job.clientEmail}`);
-      setPreviewFile(null);
+      // Show in-app notification
+      const details = scormFile 
+        ? `Preview: ${previewFile.name}\nSCORM: ${scormFile.name}\nAudit: ${auditFile.name}`
+        : `Preview: ${previewFile.name}`;
+      showNotification('success', 'Files Uploaded Successfully', `${details}\n\nClient notified at ${job.clientEmail}`);
+      
+      // Clear file inputs
+      if (previewInputRef.current) previewInputRef.current.value = '';
+      if (scormInputRef.current) scormInputRef.current.value = '';
+      if (auditInputRef.current) auditInputRef.current.value = '';
     };
     
-    reader.readAsText(file);
-  };
-  
-  const adminUploadFinalSCORM = (job) => {
-    const scormFile = scormInputRef.current?.files?.[0];
-    const auditFile = auditInputRef.current?.files?.[0];
-    
-    if (!scormFile || !auditFile) {
-      alert('Please select both SCORM package and audit log file');
-      return;
-    }
-    
-    setFinalScormFile(scormFile);
-    setAuditLogFile(auditFile);
-    
-    // Update job status to pending_review (client needs to approve before delivered)
-    const updatedJobs = jobs.map(j => {
-      if (j.id === job.id) {
-        return {
-          ...j,
-          status: 'pending_review',
-          updatedAt: new Date().toISOString(),
-          scormFileName: scormFile.name,
-          auditFileName: auditFile.name,
-          auditLog: [
-            ...j.auditLog,
-            {
-              timestamp: new Date().toISOString(),
-              action: 'SCORM package uploaded',
-              actor: currentUser.email,
-              details: `SCORM: ${scormFile.name}, Audit: ${auditFile.name}`
-            },
-            {
-              timestamp: new Date().toISOString(),
-              action: 'Review notification sent',
-              actor: 'system',
-              details: `Preview + SCORM ready for client review: ${job.clientEmail}`
-            }
-          ]
-        };
-      }
-      return j;
-    });
-    setJobs(updatedJobs);
-    
-    alert(`✅ Files Ready for Client Review\n\nSCORM: ${scormFile.name}\nAudit Log: ${auditFile.name}\n\nClient will review preview + SCORM and approve or request revision.`);
-    setFinalScormFile(null);
-    setAuditLogFile(null);
+    reader.readAsText(previewFile);
   };
   
   // ============================================
@@ -1921,57 +1913,68 @@ AI Course Builder | Navigant Learning
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Admin Actions</h3>
             
-            {/* Upload Preview */}
-            <div className="mb-6 p-6 bg-blue-50 border-2 border-blue-200 rounded-lg">
-              <h4 className="font-bold text-gray-900 mb-3">Upload Preview (Optional)</h4>
-              <p className="text-sm text-gray-700 mb-4">Upload a preview version for client review before finalizing</p>
-              <div className="flex items-center gap-4">
-                <input
-                  ref={previewInputRef}
-                  type="file"
-                  accept=".zip"
-                  className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg"
-                />
-                <button
-                  onClick={() => adminUploadPreview(selectedJob)}
-                  className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all"
-                >
-                  Upload Preview
-                </button>
+            {/* In-App Notification */}
+            {notification && (
+              <div className={`mb-6 p-4 rounded-lg border-2 ${
+                notification.type === 'success' ? 'bg-green-50 border-green-500 text-green-800' :
+                notification.type === 'error' ? 'bg-red-50 border-red-500 text-red-800' :
+                'bg-blue-50 border-blue-500 text-blue-800'
+              }`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-bold text-lg">{notification.type === 'success' ? '✅' : notification.type === 'error' ? '❌' : 'ℹ️'} {notification.message}</p>
+                    {notification.details && (
+                      <p className="mt-2 whitespace-pre-line text-sm">{notification.details}</p>
+                    )}
+                  </div>
+                  <button onClick={() => setNotification(null)} className="text-xl font-bold hover:opacity-70">×</button>
+                </div>
               </div>
-            </div>
+            )}
             
-            {/* Upload Final SCORM */}
-            <div className="p-6 bg-green-50 border-2 border-green-200 rounded-lg">
-              <h4 className="font-bold text-gray-900 mb-3">Upload Final SCORM Package</h4>
-              <p className="text-sm text-gray-700 mb-4">Upload the final SCORM package and audit trail to complete delivery</p>
+            {/* Combined Upload Form */}
+            <div className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-purple-200 rounded-lg">
+              <h4 className="font-bold text-gray-900 mb-2">Upload Files for Client Review</h4>
+              <p className="text-sm text-gray-700 mb-4">Upload HTML preview (required). Optionally include SCORM package and audit trail.</p>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">SCORM Package (.zip)</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    HTML Preview <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    ref={previewInputRef}
+                    type="file"
+                    accept=".html,.htm"
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-white"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">SCORM Package (.zip) - Optional</label>
                   <input
                     ref={scormInputRef}
                     type="file"
                     accept=".zip"
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-white"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Audit Trail (.xlsx)</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Audit Trail (.xlsx) - Required if SCORM provided</label>
                   <input
                     ref={auditInputRef}
                     type="file"
                     accept=".xlsx,.xls"
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-white"
                   />
                 </div>
                 
                 <button
-                  onClick={() => adminUploadFinalSCORM(selectedJob)}
-                  className="px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-all"
+                  onClick={() => adminUploadFiles(selectedJob)}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all"
                 >
-                  Upload Final Package & Deliver
+                  Upload Files & Notify Client
                 </button>
               </div>
             </div>
