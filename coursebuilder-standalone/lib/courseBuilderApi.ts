@@ -151,8 +151,11 @@ export async function generateQuestionsFromFacts(
       throw new Error('No questions were generated. Please try again or adjust your document.');
     }
 
+    // Limit to requested question count (edge function may return more)
+    const limitedQuestions = result.questions.slice(0, questionCount);
+
     // Shuffle answer options so correct answer isn't always first
-    const shuffledQuestions = result.questions.map(q => {
+    const shuffledQuestions = limitedQuestions.map(q => {
       const options = [...q.options];
       const correctAnswerText = options[q.correctAnswer];
       

@@ -1228,14 +1228,19 @@ export function generateSingleSCOHTML(
     function updateNavigation() {
       const prevBtn = document.getElementById('prevBtn');
       const nextBtn = document.getElementById('nextBtn');
+      const navContainer = document.querySelector('.slide-navigation');
 
       prevBtn.disabled = (currentSlide === 0);
 
-      if (currentSlide === TOTAL_SLIDES - 1) {
-        nextBtn.style.display = 'none';
-      } else if (currentSlide === NUM_MODULES && HAS_QUIZ && quizAttempts >= MAX_ATTEMPTS && !checkQuizPassed()) {
+      // Hide entire navigation on quiz slide - user must use quiz buttons to proceed
+      if (currentSlide === NUM_MODULES && HAS_QUIZ) {
+        navContainer.style.display = 'none';
+      } else if (currentSlide === TOTAL_SLIDES - 1) {
+        // Last slide (acknowledgment) - hide next, show prev
+        navContainer.style.display = 'flex';
         nextBtn.style.display = 'none';
       } else {
+        navContainer.style.display = 'flex';
         nextBtn.style.display = 'block';
       }
     }
