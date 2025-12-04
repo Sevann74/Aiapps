@@ -32,17 +32,9 @@ const JOB_STATUSES = {
 // MAIN COMPONENT
 // ============================================
 const StreamlinedCourseBuilder = () => {
-  // Authentication state - DISABLED FOR NOW (auto-login as client)
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [currentUser, setCurrentUser] = useState({
-    id: 'client-001',
-    email: 'john@abcpharma.com',
-    password: 'demo123',
-    name: 'John Doe',
-    role: 'client',
-    organization: 'ABC Pharma',
-    createdAt: new Date().toISOString()
-  });
+  // Authentication state - Login required
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
