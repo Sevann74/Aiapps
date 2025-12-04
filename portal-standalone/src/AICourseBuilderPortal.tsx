@@ -1231,14 +1231,10 @@ AI Course Builder | Navigant Learning
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-4 gap-4 mb-4">
+                  <div className="grid grid-cols-3 gap-4 mb-4">
                     <div className="bg-gray-50 rounded-lg p-3">
                       <div className="text-xs text-gray-600 mb-1">Quiz Mode</div>
                       <div className="font-semibold text-gray-900 capitalize">{job.quizMode}</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="text-xs text-gray-600 mb-1">Seat Time</div>
-                      <div className="font-semibold text-gray-900">{job.estimatedSeatTime} min</div>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-3">
                       <div className="text-xs text-gray-600 mb-1">ETA</div>
@@ -1276,10 +1272,28 @@ AI Course Builder | Navigant Learning
                           View Preview
                         </button>
                         <button
+                          onClick={() => {
+                            const scormContent = `SCORM Package: ${job.courseTitle}\n\nJob ID: ${job.id}\nPackage: ${job.scormFileName || 'SCORM_' + job.id + '.zip'}\n\nThis is a simulated SCORM package download.`;
+                            const blob = new Blob([scormContent], { type: 'application/zip' });
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = job.scormFileName || `SCORM_${job.id}.zip`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            window.URL.revokeObjectURL(url);
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
+                        >
+                          <Icon name="download" />
+                          Download SCORM
+                        </button>
+                        <button
                           onClick={() => clientApprovePreview(job)}
                           className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-all"
                         >
-                          Approve Preview
+                          Approve
                         </button>
                         <button
                           onClick={() => {
