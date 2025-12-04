@@ -694,29 +694,28 @@ AI Course Builder | Navigant Learning
     setFinalScormFile(scormFile);
     setAuditLogFile(auditFile);
     
-    // Update job status
+    // Update job status to pending_review (client needs to approve before delivered)
     const updatedJobs = jobs.map(j => {
       if (j.id === job.id) {
         return {
           ...j,
-          status: 'delivered',
+          status: 'pending_review',
           updatedAt: new Date().toISOString(),
           scormFileName: scormFile.name,
           auditFileName: auditFile.name,
-          downloadExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(), // 72 hours
           auditLog: [
             ...j.auditLog,
             {
               timestamp: new Date().toISOString(),
-              action: 'Final SCORM uploaded',
+              action: 'SCORM package uploaded',
               actor: currentUser.email,
               details: `SCORM: ${scormFile.name}, Audit: ${auditFile.name}`
             },
             {
               timestamp: new Date().toISOString(),
-              action: 'Delivery notification sent',
+              action: 'Review notification sent',
               actor: 'system',
-              details: `Secure download link sent to ${job.clientEmail}`
+              details: `Preview + SCORM ready for client review: ${job.clientEmail}`
             }
           ]
         };
@@ -725,7 +724,7 @@ AI Course Builder | Navigant Learning
     });
     setJobs(updatedJobs);
     
-    alert(`✅ Final Package Delivered\n\nSCORM: ${scormFile.name}\nAudit Log: ${auditFile.name}\n\nSecure download link sent to client (expires in 72 hours)`);
+    alert(`✅ Files Ready for Client Review\n\nSCORM: ${scormFile.name}\nAudit Log: ${auditFile.name}\n\nClient will review preview + SCORM and approve or request revision.`);
     setFinalScormFile(null);
     setAuditLogFile(null);
   };
@@ -739,21 +738,22 @@ AI Course Builder | Navigant Learning
       if (j.id === job.id) {
         return {
           ...j,
-          status: 'approved',
+          status: 'delivered',
           updatedAt: new Date().toISOString(),
+          downloadExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(), // 72 hours
           auditLog: [
             ...j.auditLog,
             {
               timestamp: new Date().toISOString(),
-              action: 'Preview approved by client',
+              action: 'Job approved by client',
               actor: currentUser.email,
-              details: 'Client approved preview'
+              details: 'Client approved preview and SCORM package'
             },
             {
               timestamp: new Date().toISOString(),
-              action: 'Admin notification sent',
+              action: 'Job delivered',
               actor: 'system',
-              details: 'Email sent to admin to finalize'
+              details: 'SCORM package and audit trail now available for download'
             }
           ]
         };
@@ -762,7 +762,7 @@ AI Course Builder | Navigant Learning
     });
     setJobs(updatedJobs);
     
-    alert('✅ Preview Approved\n\nThe admin will now finalize your SCORM package.');
+    alert(' Job Approved!\n\nYour SCORM package and audit trail are now available for download.');
   };
   
   const clientRequestRevision = (job, comment) => {
