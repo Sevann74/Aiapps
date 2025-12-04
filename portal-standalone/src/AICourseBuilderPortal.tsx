@@ -58,8 +58,8 @@ const StreamlinedCourseBuilder = () => {
     quizMode: 'ai', // ai, manual, hybrid, none
     questionCount: 5, // Number of quiz questions (max 10)
     sopNumber: '',
+    documentVersion: '', // Document Version Number (mandatory)
     effectiveDate: '',
-    estimatedSeatTime: 30,
     regulatoryStatus: 'Draft',
     comments: ''
   });
@@ -330,6 +330,10 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       alert('Please enter your contact email');
       return;
     }
+    if (!clientForm.documentVersion) {
+      alert('Please enter the Document Version Number');
+      return;
+    }
     
     // Validate manual questions if hybrid/manual mode
     if ((clientForm.quizMode === 'manual' || clientForm.quizMode === 'hybrid') && manualQuestions.length === 0) {
@@ -347,8 +351,8 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       status: 'submitted',
       courseTitle: clientForm.courseTitle,
       sopNumber: clientForm.sopNumber,
+      documentVersion: clientForm.documentVersion,
       effectiveDate: clientForm.effectiveDate,
-      estimatedSeatTime: clientForm.estimatedSeatTime,
       regulatoryStatus: clientForm.regulatoryStatus,
       quizMode: clientForm.quizMode,
       questionCount: clientForm.questionCount,
@@ -389,8 +393,8 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       quizMode: 'ai',
       questionCount: 5,
       sopNumber: '',
+      documentVersion: '',
       effectiveDate: '',
-      estimatedSeatTime: 30,
       regulatoryStatus: 'Draft',
       comments: ''
     });
@@ -651,12 +655,6 @@ AI Course Builder | Navigant Learning
       return;
     }
     
-    // If SCORM is provided, audit must also be provided
-    if (scormFile && !auditFile) {
-      showNotification('error', 'Audit Trail Required', 'Please also select an audit trail file when uploading SCORM.');
-      return;
-    }
-    
     // Read the HTML preview file content
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -677,7 +675,7 @@ AI Course Builder | Navigant Learning
           timestamp: new Date().toISOString(),
           action: 'SCORM package uploaded',
           actor: currentUser.email,
-          details: `SCORM: ${scormFile.name}, Audit: ${auditFile.name}`
+          details: `SCORM: ${scormFile.name}${auditFile ? `, Audit: ${auditFile.name}` : ''}`
         });
       }
       
@@ -707,9 +705,9 @@ AI Course Builder | Navigant Learning
       setJobs(updatedJobs);
       
       // Show in-app notification
-      const details = scormFile 
-        ? `Preview: ${previewFile.name}\nSCORM: ${scormFile.name}\nAudit: ${auditFile.name}`
-        : `Preview: ${previewFile.name}`;
+      let details = `Preview: ${previewFile.name}`;
+      if (scormFile) details += `\nSCORM: ${scormFile.name}`;
+      if (auditFile) details += `\nAudit: ${auditFile.name}`;
       showNotification('success', 'Files Uploaded Successfully', `${details}\n\nClient notified at ${job.clientEmail}`);
       
       // Clear file inputs
@@ -1583,6 +1581,33 @@ AI Course Builder | Navigant Learning
                 </div>
               )}
               
+              {/* Document Version Number - REQUIRED */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Document Version Number <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={clientForm.documentVersion}
+                  onChange={(e) => setClientForm({...clientForm, documentVersion: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., 1.0, 2.1, Rev A"
+                />
+              </div>
+              
+              {/* Effective Date - OPTIONAL */}
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-2">
+                  Effective Date <span className="text-gray-500 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={clientForm.effectiveDate}
+                  onChange={(e) => setClientForm({...clientForm, effectiveDate: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              
               {/* Submit Buttons */}
               <div className="flex justify-end gap-4 pt-4">
                 <button
@@ -1851,12 +1876,12 @@ AI Course Builder | Navigant Learning
                 <p className="text-lg text-gray-900">{selectedJob.sopNumber || 'Not provided'}</p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-600">Effective Date</label>
-                <p className="text-lg text-gray-900">{selectedJob.effectiveDate ? new Date(selectedJob.effectiveDate).toLocaleDateString() : 'Not provided'}</p>
+                <label className="text-sm font-semibold text-gray-600">Document Version</label>
+                <p className="text-lg text-gray-900">{selectedJob.documentVersion || 'Not provided'}</p>
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-600">Estimated Seat Time</label>
-                <p className="text-lg text-gray-900">{selectedJob.estimatedSeatTime} minutes</p>
+                <label className="text-sm font-semibold text-gray-600">Effective Date</label>
+                <p className="text-lg text-gray-900">{selectedJob.effectiveDate ? new Date(selectedJob.effectiveDate).toLocaleDateString() : 'Not specified'}</p>
               </div>
               <div>
                 <label className="text-sm font-semibold text-gray-600">Quiz Mode</label>
@@ -1990,7 +2015,7 @@ AI Course Builder | Navigant Learning
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Audit Trail (.xlsx) - Required if SCORM provided</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Audit Trail (.xlsx) - Optional</label>
                   <input
                     ref={auditInputRef}
                     type="file"
@@ -2204,8 +2229,8 @@ AI Course Builder | Navigant Learning
             <h3 className="text-xl font-bold text-gray-900 mb-4">Course Details</h3>
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <label className="text-sm font-semibold text-gray-600">Estimated Seat Time</label>
-                <p className="text-lg text-gray-900">{selectedJob.estimatedSeatTime} minutes</p>
+                <label className="text-sm font-semibold text-gray-600">Document Version</label>
+                <p className="text-lg text-gray-900">{selectedJob.documentVersion || 'N/A'}</p>
               </div>
               <div>
                 <label className="text-sm font-semibold text-gray-600">Quiz Mode</label>
