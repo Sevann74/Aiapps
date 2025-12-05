@@ -120,89 +120,56 @@ DO NOT include any text before or after the JSON.`;
         break;
 
       case 'generate-modules':
-        prompt = `Create a professional e-learning course from this SOP/document. You MUST include ALL content while applying instructional design principles.
+        prompt = `Convert this SOP document into an e-learning course. Your task is to PRESERVE ALL CONTENT while adding minimal instructional structure.
 
-CRITICAL CONTENT RULES - MANDATORY:
-1. Include 100% of the document content - NOTHING can be skipped or omitted
-2. Every section, procedure, requirement, and detail MUST appear in the course
-3. Use the EXACT facts, figures, numbers, and requirements from the document
-4. Include ALL steps in procedures - do not combine or skip steps
-5. Include ALL safety warnings, notes, and important callouts
+ABSOLUTE REQUIREMENT - READ CAREFULLY:
+You must include EVERY SINGLE piece of content from the document. This is compliance training - missing content is a legal liability. Count the sections in the document and ensure your output has the same number of sections.
 
-INSTRUCTIONAL DESIGN RULES:
-1. Transform dense text into learner-friendly formats (bullet points, numbered steps)
-2. Add clear learning objectives at the start of each module
-3. Use callout boxes for important/critical information
-4. Add brief summaries at the end of each module
-5. Break long sections into digestible content blocks
-6. Use clear headings that help learners navigate
-7. Format procedures as numbered step-by-step instructions
-8. Highlight key terms and critical requirements
+CONVERSION RULES:
+1. Each major section (1.0, 2.0, 3.0, etc.) becomes a MODULE
+2. Each subsection (1.1, 1.2, 2.1, etc.) becomes a CONTENT BLOCK within that module
+3. Copy ALL text from each section - do not summarize or paraphrase
+4. Keep ALL numbered steps exactly as written
+5. Keep ALL bullet points exactly as written
+6. Keep ALL warnings, notes, and important information
+7. Add ONLY: learning objectives at module start, brief summary at module end
 
-FORMATTING GUIDELINES:
-- Convert paragraphs into bullet points where appropriate for readability
-- Keep the meaning and ALL details intact while improving clarity
-- Use "•" for bullet points and "1. 2. 3." for sequential steps
-- Add "Important:", "Note:", or "Warning:" prefixes for callouts
-- Create logical flow from introduction → content → summary
+WHAT TO ADD (minimal):
+- Learning objectives based on the section content
+- A 2-3 sentence summary at the end of each module
 
-DOCUMENT TEXT:
+WHAT NOT TO DO:
+- Do NOT summarize paragraphs
+- Do NOT combine steps
+- Do NOT skip any content
+- Do NOT paraphrase - use original wording
+- Do NOT reduce the number of bullet points
+
+DOCUMENT TO CONVERT:
 ${text}
 
-Create modules covering 100% of the document. Respond with ONLY valid JSON:
-
+OUTPUT FORMAT - Respond with ONLY valid JSON:
 {
   "modules": [
     {
       "id": "module_1",
-      "title": "Clear module title based on document section",
+      "title": "Section title from document",
       "duration": "5-10 mins",
       "content": [
-        {
-          "type": "objectives",
-          "heading": "Learning Objectives",
-          "body": "After completing this module, you will be able to:\\n• [Specific learning outcome]\\n• [Specific learning outcome]\\n• [Specific learning outcome]"
-        },
-        {
-          "type": "text",
-          "heading": "Introduction/Overview",
-          "body": "Brief introduction to this section's purpose and scope."
-        },
-        {
-          "type": "text",
-          "heading": "Section heading from document",
-          "body": "Content formatted for learning - use bullet points for lists:\\n• Point 1 with full detail\\n• Point 2 with full detail\\n• Point 3 with full detail"
-        },
-        {
-          "type": "procedure",
-          "heading": "Procedure: [Name]",
-          "body": "Follow these steps:\\n1. First step with complete instructions\\n2. Second step with complete instructions\\n3. Third step with complete instructions"
-        },
-        {
-          "type": "callout-warning",
-          "heading": "⚠️ Important",
-          "body": "Critical safety or compliance information that learners must remember."
-        },
-        {
-          "type": "callout-info",
-          "heading": "💡 Key Point",
-          "body": "Important concept or requirement to highlight."
-        },
-        {
-          "type": "summary",
-          "heading": "Module Summary",
-          "body": "Key takeaways from this module:\\n• Main point 1\\n• Main point 2\\n• Main point 3"
-        }
+        {"type": "objectives", "heading": "Learning Objectives", "body": "After this module you will understand:\\n• Objective 1\\n• Objective 2"},
+        {"type": "text", "heading": "Subsection Title", "body": "FULL content from this subsection - copy everything"},
+        {"type": "text", "heading": "Next Subsection", "body": "FULL content from next subsection"},
+        {"type": "procedure", "heading": "Procedure Name", "body": "1. Step one exactly as written\\n2. Step two exactly as written\\n3. All remaining steps"},
+        {"type": "callout-warning", "heading": "Warning/Note Title", "body": "Full warning or note text"},
+        {"type": "summary", "heading": "Summary", "body": "Brief 2-3 sentence summary"}
       ],
-      "relatedFacts": ["fact_1"]
+      "relatedFacts": []
     }
   ]
 }
 
-REMEMBER: Include ALL document content. Transform for learning but never remove information. Create as many modules and content sections as needed.
-
-CRITICAL: Do NOT condense, summarize, or shorten any content. Every paragraph, every bullet point, every step from the original document MUST appear in the output. If the document has 50 items, the course must have 50 items. If a section has 10 steps, include all 10 steps.`;
-        maxTokens = 16000;
+VERIFICATION: Before responding, count the major sections in the document. Your response MUST have that many modules. If the document has 8 sections, output 8 modules.`;
+        maxTokens = 32000;
         break;
 
       default:
