@@ -129,7 +129,14 @@ const StreamlinedCourseBuilder = () => {
   // Jobs state - load from localStorage
   const [jobs, setJobs] = useState(() => {
     const savedJobs = localStorage.getItem('streamlinedCourseJobs');
-    if (savedJobs) return JSON.parse(savedJobs);
+    if (savedJobs) {
+      // Migrate old ETA values to new 24 hours standard
+      const parsedJobs = JSON.parse(savedJobs);
+      return parsedJobs.map((job: any) => ({
+        ...job,
+        eta: 'Up to 24 hours' // Standardize all ETAs
+      }));
+    }
     
     return [
       {
@@ -362,7 +369,7 @@ alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: a
       manualQuestions: clientForm.quizMode === 'manual' || clientForm.quizMode === 'hybrid' ? manualQuestions : [],
       submittedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      eta: '24 hours',
+      eta: 'Up to 24 hours',
       auditLog: [
         {
           timestamp: new Date().toISOString(),
