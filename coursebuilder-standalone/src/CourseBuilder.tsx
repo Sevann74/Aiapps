@@ -868,15 +868,23 @@ const EnhancedCourseBuilder = () => {
 
         } else if (config.questionMode === 'hybrid') {
           // Combine AI + manual questions
-          setProcessingStage('Extracting facts from document...');
-          const facts = await extractVerifiableFacts(documentText);
+          // Calculate how many AI questions we need (total - manual)
+          const aiQuestionCount = Math.max(0, config.questionCount - manualQuestions.length);
+          
+          if (aiQuestionCount > 0) {
+            setProcessingStage('Extracting facts from document...');
+            const facts = await extractVerifiableFacts(documentText);
 
-          setProcessingStage('Generating AI questions...');
-          const aiQuestions = await generateQuestionsFromFacts(facts, documentText);
+            setProcessingStage(`Generating ${aiQuestionCount} AI questions...`);
+            const aiQuestions = await generateQuestionsFromFacts(facts, documentText, aiQuestionCount);
 
-          questions = {
-            questions: [...aiQuestions.questions, ...manualQuestions]
-          };
+            questions = {
+              questions: [...aiQuestions.questions, ...manualQuestions]
+            };
+          } else {
+            // All questions are manual
+            questions = { questions: manualQuestions };
+          }
 
         } else {
           // AI-only mode (original flow)
@@ -887,9 +895,19 @@ const EnhancedCourseBuilder = () => {
           questions = await generateQuestionsFromFacts(facts, documentText);
         }
 
-        // STEP 3: Verify 100% accuracy
-        setProcessingStage('Verifying accuracy...');
-        verification = await verifyQuestions(questions, documentText);
+        // STEP 3: Verify 100% accuracy (only for AI-generated questions)
+        if (config.questionMode === 'ai') {
+          setProcessingStage('Verifying accuracy...');
+          verification = await verifyQuestions(questions, documentText);
+        } else if (config.questionMode === 'hybrid') {
+          // Only verify AI-generated questions, not manual ones
+          const aiOnlyQuestions = questions.questions.filter(q => !manualQuestions.some(mq => mq.id === q.id));
+          if (aiOnlyQuestions.length > 0) {
+            setProcessingStage('Verifying AI-generated questions...');
+            verification = await verifyQuestions({ questions: aiOnlyQuestions }, documentText);
+          }
+        }
+        // Skip verification for manual-only mode (custom questions don't have exactQuote)
       } else {
         setProcessingStage('Skipping quiz generation...');
       }
@@ -975,8 +993,8 @@ const EnhancedCourseBuilder = () => {
   // STEP 2: GENERATE QUESTIONS FROM VERIFIED FACTS
   // ============================================
 
-  const generateQuestionsFromFacts = async (facts, sourceText) => {
-    return await courseApi.generateQuestionsFromFacts(facts, sourceText, 5);
+  const generateQuestionsFromFacts = async (facts, sourceText, questionCount = 5) => {
+    return await courseApi.generateQuestionsFromFacts(facts, sourceText, questionCount);
   };
 
   // ============================================
