@@ -727,6 +727,11 @@ const EnhancedCourseBuilder = () => {
     setManualQuestions(updatedQuestions);
     setShowQuestionEditor(false);
     setEditingQuestion(null);
+    
+    // Auto-switch to hybrid mode if adding manual questions while in AI mode
+    if (config.questionMode === 'ai' && updatedQuestions.length > 0) {
+      setConfig({...config, questionMode: 'hybrid'});
+    }
   };
 
   const editGeneratedQuestion = (questionIndex: number) => {
