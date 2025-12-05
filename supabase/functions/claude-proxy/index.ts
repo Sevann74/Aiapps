@@ -199,8 +199,10 @@ Create modules covering 100% of the document. Respond with ONLY valid JSON:
   ]
 }
 
-REMEMBER: Include ALL document content. Transform for learning but never remove information. Create as many modules and content sections as needed.`;
-        maxTokens = 8192;
+REMEMBER: Include ALL document content. Transform for learning but never remove information. Create as many modules and content sections as needed.
+
+CRITICAL: Do NOT condense, summarize, or shorten any content. Every paragraph, every bullet point, every step from the original document MUST appear in the output. If the document has 50 items, the course must have 50 items. If a section has 10 steps, include all 10 steps.`;
+        maxTokens = 16000;
         break;
 
       default:
