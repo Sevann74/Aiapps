@@ -1414,20 +1414,25 @@ const EnhancedCourseBuilder = () => {
                 setIsProcessing(true);
                 setProcessingStage('Creating document record...');
 
-                const document = await auditTrail.createDocument(
-                  uploadedFile,
-                  {
-                    text: documentText,
-                    pageCount: pdfExtractionResult.pageCount,
-                    wordCount: pdfExtractionResult.wordCount
-                  },
-                  documentVersion,
-                  gxpFields
-                );
+                try {
+                  const document = await auditTrail.createDocument(
+                    uploadedFile,
+                    {
+                      text: documentText,
+                      pageCount: pdfExtractionResult.pageCount,
+                      wordCount: pdfExtractionResult.wordCount
+                    },
+                    documentVersion,
+                    gxpFields
+                  );
 
-                if (document) {
-                  setCurrentDocumentId(document.id);
-                  console.log('Document tracked:', document.id, 'with GxP fields');
+                  if (document) {
+                    setCurrentDocumentId(document.id);
+                    console.log('Document tracked:', document.id, 'with GxP fields');
+                  }
+                } catch (err) {
+                  console.warn('Audit trail not available (not authenticated):', err.message);
+                  // Continue without audit trail - it's optional
                 }
 
                 setIsProcessing(false);
