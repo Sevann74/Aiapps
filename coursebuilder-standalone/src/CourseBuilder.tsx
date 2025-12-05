@@ -715,6 +715,8 @@ const EnhancedCourseBuilder = () => {
   };
 
   const saveManualQuestion = () => {
+    console.log('saveManualQuestion called', editingQuestion);
+    
     if (!editingQuestion.question.trim() || !editingQuestion.options.every(opt => opt.trim())) {
       alert('Please fill in the question and all answer options');
       return;
@@ -724,12 +726,15 @@ const EnhancedCourseBuilder = () => {
       ? manualQuestions.map((q, idx) => idx === editingQuestion.existingIndex ? editingQuestion : q)
       : [...manualQuestions, editingQuestion];
 
+    console.log('Saving manual questions:', updatedQuestions.length, updatedQuestions);
+    
     setManualQuestions(updatedQuestions);
     setShowQuestionEditor(false);
     setEditingQuestion(null);
     
     // Auto-switch to hybrid mode if adding manual questions while in AI mode
     if (config.questionMode === 'ai' && updatedQuestions.length > 0) {
+      console.log('Auto-switching to hybrid mode');
       setConfig({...config, questionMode: 'hybrid'});
     }
   };
