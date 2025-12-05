@@ -120,49 +120,78 @@ DO NOT include any text before or after the JSON.`;
         break;
 
       case 'generate-modules':
-        prompt = `Create a concise course outline with modules from this document. Keep content brief and focused.
+        prompt = `Create a professional e-learning course from this SOP/document. You MUST include ALL content while applying instructional design principles.
 
-CRITICAL RULES:
-1. Extract content EXACTLY as written - NEVER add information
-2. Keep content CONCISE - summarize lengthy paragraphs into key points
-3. Use bullet points (•) instead of long paragraphs where possible
-4. Limit each content section to 2-3 sentences or 3-5 bullet points maximum
-5. Focus on the most important information only
+CRITICAL CONTENT RULES - MANDATORY:
+1. Include 100% of the document content - NOTHING can be skipped or omitted
+2. Every section, procedure, requirement, and detail MUST appear in the course
+3. Use the EXACT facts, figures, numbers, and requirements from the document
+4. Include ALL steps in procedures - do not combine or skip steps
+5. Include ALL safety warnings, notes, and important callouts
 
-DOCUMENT (first portion):
-${text.substring(0, 20000)}
+INSTRUCTIONAL DESIGN RULES:
+1. Transform dense text into learner-friendly formats (bullet points, numbered steps)
+2. Add clear learning objectives at the start of each module
+3. Use callout boxes for important/critical information
+4. Add brief summaries at the end of each module
+5. Break long sections into digestible content blocks
+6. Use clear headings that help learners navigate
+7. Format procedures as numbered step-by-step instructions
+8. Highlight key terms and critical requirements
 
-VERIFIED FACTS:
-${JSON.stringify((facts || []).slice(0, 10), null, 2)}
+FORMATTING GUIDELINES:
+- Convert paragraphs into bullet points where appropriate for readability
+- Keep the meaning and ALL details intact while improving clarity
+- Use "•" for bullet points and "1. 2. 3." for sequential steps
+- Add "Important:", "Note:", or "Warning:" prefixes for callouts
+- Create logical flow from introduction → content → summary
 
-Create 3-4 SHORT modules. Each module should have 3-5 content sections maximum. Keep all text BRIEF. Respond with ONLY valid JSON:
+DOCUMENT TEXT:
+${text}
+
+Create modules covering 100% of the document. Respond with ONLY valid JSON:
 
 {
   "modules": [
     {
       "id": "module_1",
-      "title": "Brief module title from document",
-      "duration": "3-5 mins",
+      "title": "Clear module title based on document section",
+      "duration": "5-10 mins",
       "content": [
         {
           "type": "objectives",
           "heading": "Learning Objectives",
-          "body": "By the end of this module, you will be able to:\\n• Identify key concepts\\n• Understand main procedures"
+          "body": "After completing this module, you will be able to:\\n• [Specific learning outcome]\\n• [Specific learning outcome]\\n• [Specific learning outcome]"
         },
         {
           "type": "text",
-          "heading": "Section heading",
-          "body": "Brief summary in 2-3 sentences or bullet points:\\n• Key point 1\\n• Key point 2\\n• Key point 3"
+          "heading": "Introduction/Overview",
+          "body": "Brief introduction to this section's purpose and scope."
         },
         {
-          "type": "callout-important",
-          "heading": "Important",
-          "body": "Critical info in 1-2 sentences"
+          "type": "text",
+          "heading": "Section heading from document",
+          "body": "Content formatted for learning - use bullet points for lists:\\n• Point 1 with full detail\\n• Point 2 with full detail\\n• Point 3 with full detail"
+        },
+        {
+          "type": "procedure",
+          "heading": "Procedure: [Name]",
+          "body": "Follow these steps:\\n1. First step with complete instructions\\n2. Second step with complete instructions\\n3. Third step with complete instructions"
+        },
+        {
+          "type": "callout-warning",
+          "heading": "⚠️ Important",
+          "body": "Critical safety or compliance information that learners must remember."
+        },
+        {
+          "type": "callout-info",
+          "heading": "💡 Key Point",
+          "body": "Important concept or requirement to highlight."
         },
         {
           "type": "summary",
-          "heading": "Summary",
-          "body": "• Main point 1\\n• Main point 2\\n• Main point 3"
+          "heading": "Module Summary",
+          "body": "Key takeaways from this module:\\n• Main point 1\\n• Main point 2\\n• Main point 3"
         }
       ],
       "relatedFacts": ["fact_1"]
@@ -170,8 +199,8 @@ Create 3-4 SHORT modules. Each module should have 3-5 content sections maximum. 
   ]
 }
 
-KEEP IT CONCISE: Each body text should be 1-3 sentences or 3-5 bullet points MAX. Focus on key information only. Set module duration to 3-5 mins since content is brief.`;
-        maxTokens = 4096;
+REMEMBER: Include ALL document content. Transform for learning but never remove information. Create as many modules and content sections as needed.`;
+        maxTokens = 8192;
         break;
 
       default:
