@@ -312,7 +312,6 @@ const EnhancedCourseBuilder = () => {
       <section class="slide" id="slide-${idx}" style="${idx === 0 ? 'display: block;' : 'display: none;'}">
         ${courseData.logo ? `<img src="${courseData.logo}" alt="Logo" class="module-logo" />` : ''}
         <h2>${escapeHtml(module.title)}</h2>
-        <p class="duration"><span class="duration-icon">📚</span> Duration: ${escapeHtml(module.duration || '10-15 mins')}</p>
         <div class="module-content">
           ${sectionsHTML}
         </div>
