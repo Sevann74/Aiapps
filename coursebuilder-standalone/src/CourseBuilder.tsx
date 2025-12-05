@@ -871,10 +871,12 @@ const EnhancedCourseBuilder = () => {
           setProcessingStage('Using your custom questions...');
           questions = { questions: manualQuestions };
 
-        } else if (config.questionMode === 'hybrid') {
-          // Combine AI + manual questions
+        } else if (config.questionMode === 'hybrid' || manualQuestions.length > 0) {
+          // Combine AI + manual questions (also trigger if manual questions exist even in AI mode)
           // Calculate how many AI questions we need (total - manual)
           const aiQuestionCount = Math.max(0, config.questionCount - manualQuestions.length);
+          
+          console.log('Hybrid mode - Manual questions:', manualQuestions.length, 'AI questions to generate:', aiQuestionCount);
           
           if (aiQuestionCount > 0) {
             setProcessingStage('Extracting facts from document...');
@@ -883,9 +885,13 @@ const EnhancedCourseBuilder = () => {
             setProcessingStage(`Generating ${aiQuestionCount} AI questions...`);
             const aiQuestions = await generateQuestionsFromFacts(facts, documentText, aiQuestionCount);
 
+            console.log('AI questions generated:', aiQuestions.questions.length);
+            
             questions = {
               questions: [...aiQuestions.questions, ...manualQuestions]
             };
+            
+            console.log('Total questions:', questions.questions.length);
           } else {
             // All questions are manual
             questions = { questions: manualQuestions };
