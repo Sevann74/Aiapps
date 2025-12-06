@@ -353,9 +353,20 @@ const EnhancedCourseBuilder = () => {
       }
     };
 
+    // Get icon badge color class based on section type
+    const getIconBadgeClass = (type: string): string => {
+      switch (type) {
+        case 'procedure': return 'icon-badge-green';
+        case 'callout-important': return 'icon-badge-red';
+        case 'table': return 'icon-badge-blue';
+        case 'definition': return 'icon-badge-yellow';
+        case 'note': return 'icon-badge-purple';
+        default: return 'icon-badge-gray';
+      }
+    };
+
     // Build modules HTML with visual enhancements
     let procedureCounter = 0;
-    let sectionCounter = 0;
     const modulesHTML = courseData.modules.map((module, idx) => {
       const sectionsHTML = module.content.map((section, sectionIdx) => {
         const isProcedure = section.type === 'procedure';
@@ -364,16 +375,15 @@ const EnhancedCourseBuilder = () => {
         const shouldExpand = isProcedure && stepCount >= 5;
         const procedureId = shouldExpand ? `procedure-${idx}-${procedureCounter++}` : null;
         const isAlternate = sectionIdx % 2 === 1;
-        const sectionNum = ++sectionCounter;
         const icon = getSectionIcon(section.type || 'text');
+        const badgeClass = getIconBadgeClass(section.type || 'text');
         
         // Long procedures (5+ steps) are expandable
         if (shouldExpand) {
           return `
       <div class="content-section section-procedure ${isAlternate ? 'alternate' : ''}">
-        <span class="section-number">${sectionNum}</span>
         <div class="procedure-header" onclick="toggleProcedure('${procedureId}')">
-          <h3><span class="section-icon">${icon}</span> ${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
+          <h3><span class="icon-badge ${badgeClass}">${icon}</span> ${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
           <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view ${stepCount} steps</span>
         </div>
         <div class="procedure-content" id="${procedureId}" style="display: none;">
@@ -387,8 +397,7 @@ const EnhancedCourseBuilder = () => {
         if (isTable) {
           return `
       <div class="content-section section-table ${isAlternate ? 'alternate' : ''}">
-        <span class="section-number">${sectionNum}</span>
-        ${section.heading ? `<h3><span class="section-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
+        ${section.heading ? `<h3><span class="icon-badge ${badgeClass}">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
         <div class="table-content">
           ${formatContent(section.body)}
         </div>
@@ -399,21 +408,16 @@ const EnhancedCourseBuilder = () => {
         // Short procedures or regular content - show directly with visual enhancements
         return `
       <div class="content-section section-${section.type || 'text'} ${isAlternate ? 'alternate' : ''}">
-        <span class="section-number">${sectionNum}</span>
-        ${section.heading ? `<h3><span class="section-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
+        ${section.heading ? `<h3><span class="icon-badge ${badgeClass}">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
         ${formatContent(section.body)}
       </div>
     `;
       }).join('\n');
 
-      // Reset section counter for each slide
-      sectionCounter = 0;
-
       return `
       <section class="slide" id="slide-${idx}" style="${idx === 0 ? 'display: block;' : 'display: none;'}">
         ${courseData.logo ? `<img src="${courseData.logo}" alt="Logo" class="module-logo" />` : ''}
         <div class="slide-header">
-          <span class="slide-number">Section ${idx + 1}</span>
           <h2>${escapeHtml(module.title)}</h2>
         </div>
         <div class="module-content">
@@ -479,13 +483,15 @@ const EnhancedCourseBuilder = () => {
     .module-content { margin-top: 2rem; }
     /* Slide header with section number */
     .slide-header { position: relative; z-index: 1; margin-bottom: 1rem; }
-    .slide-number { display: inline-block; background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan)); color: white; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    /* Content sections with visual hierarchy */
-    .content-section { margin-bottom: 1.5rem; position: relative; z-index: 1; padding: 1.5rem; padding-left: 3.5rem; border-radius: 12px; transition: all 0.2s ease; }
-    .content-section:hover { transform: translateX(4px); }
-    /* Section numbers */
-    .section-number { position: absolute; left: 0.75rem; top: 1.5rem; width: 28px; height: 28px; background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; box-shadow: var(--shadow-sm); }
-    .section-icon { margin-right: 0.5rem; }
+    /* Icon badges - colored squares with icons */
+    .icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; margin-right: 12px; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0; }
+    .icon-badge-gray { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); }
+    .icon-badge-green { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
+    .icon-badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); }
+    .icon-badge-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+    .icon-badge-yellow { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+    .icon-badge-purple { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); }
+    .content-section h3 { display: flex; align-items: center; }
     /* Alternating backgrounds for visual variety */
     .section-text { background: #ffffff; border-left: 4px solid #e5e7eb; }
     .section-text.alternate { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); }
