@@ -309,32 +309,43 @@ export function generateSingleSCOHTML(
       const isInteractive = section.type === 'callout-important' || section.type === 'callout-key';
       const checkboxId = isInteractive ? `checkbox-${index}-${checkboxCounter++}` : null;
       const isTable = section.type === 'table' || isTableContent(section.body);
-      const { icon, colorClass } = getSectionStyle(section.type || 'text', section.heading || '');
+      const { icon } = getSectionStyle(section.type || 'text', section.heading || '');
 
-      // Use table-specific wrapper if content is a table
+      // Tables get special styling
       if (isTable) {
         return `
-      <div class="content-card card-table">
-        ${section.heading ? `<h3 class="card-title"><span class="card-icon icon-blue">📊</span> ${escapeHtml(section.heading)}</h3>` : ''}
+      <div class="content-section">
+        ${section.heading ? `<h3 class="section-heading"><span class="heading-icon">📊</span> ${escapeHtml(section.heading)}</h3>` : ''}
         <div class="table-wrapper">
           ${formatContent(section.body)}
         </div>
       </div>
         `;
       }
-      
-      return `
-      <div class="content-card ${colorClass}" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
-        ${section.heading ? `<h3 class="card-title"><span class="card-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
-        <div class="card-content">
+
+      // Important callouts get highlighted
+      if (isInteractive) {
+        return `
+      <div class="content-section callout-section" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
+        ${section.heading ? `<h3 class="section-heading callout-heading"><span class="heading-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
+        <div class="section-body">
           ${formatContent(section.body)}
         </div>
-        ${isInteractive ? `
         <label class="acknowledge-checkbox" for="${checkboxId}">
           <input type="checkbox" id="${checkboxId}" onchange="markAcknowledged('${checkboxId}', ${index})">
           <span class="checkbox-label">I have read and understood this ${section.type === 'callout-important' ? 'important information' : 'key point'}</span>
         </label>
-        ` : ''}
+      </div>
+        `;
+      }
+      
+      // Regular sections - clean and simple
+      return `
+      <div class="content-section">
+        ${section.heading ? `<h3 class="section-heading"><span class="heading-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
+        <div class="section-body">
+          ${formatContent(section.body)}
+        </div>
       </div>
     `;
     }).join('\n');
@@ -951,173 +962,71 @@ export function generateSingleSCOHTML(
       border-bottom: none;
     }
 
-    /* Content Card Base Styles */
-    .content-card {
-      background: white;
-      border-radius: 16px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-      position: relative;
-      overflow: hidden;
-      border-left: 5px solid #6366f1;
+    /* Clean Section Styles */
+    .content-section {
+      margin-bottom: 2rem;
     }
 
-    .card-title {
+    .section-heading {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      font-size: 1.25rem;
+      font-size: 1.3rem;
       font-weight: 700;
-      color: #1f2937;
+      color: #1e3a5f;
       margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #e5e7eb;
     }
 
-    .card-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
+    .heading-icon {
       font-size: 1.25rem;
-      background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
     }
 
-    .card-content {
-      color: #4b5563;
+    .section-body {
+      color: #374151;
       line-height: 1.8;
+      padding-left: 0.5rem;
     }
 
-    /* Card Color Themes */
-    .card-documents {
-      border-left-color: #8b5cf6;
-      background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
-    }
-    .card-documents .card-icon {
-      background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%);
+    .section-body p {
+      margin-bottom: 0.75rem;
     }
 
-    .card-definition {
-      border-left-color: #f59e0b;
-      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-    }
-    .card-definition .card-icon {
-      background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
+    .section-body ul {
+      margin: 0.75rem 0;
+      padding-left: 1.5rem;
     }
 
-    .card-procedure {
-      border-left-color: #10b981;
-      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-    }
-    .card-procedure .card-icon {
-      background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
+    .section-body li {
+      margin-bottom: 0.5rem;
+      color: #4b5563;
     }
 
-    .card-objectives {
-      border-left-color: #3b82f6;
-      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-    }
-    .card-objectives .card-icon {
-      background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
-    }
-
-    .card-note {
-      border-left-color: #eab308;
-      background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
-    }
-    .card-note .card-icon {
-      background: linear-gradient(135deg, #fef08a 0%, #fde047 100%);
-    }
-
-    .card-warning {
-      border-left-color: #f97316;
-      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-    }
-    .card-warning .card-icon {
-      background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
-    }
-
-    .card-important {
-      border-left-color: #ef4444;
+    /* Callout sections - only these get special styling */
+    .callout-section {
       background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-    }
-    .card-important .card-icon {
-      background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
-    }
-
-    .card-summary {
-      border-left-color: #6b7280;
-      background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-    }
-    .card-summary .card-icon {
-      background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+      border-left: 4px solid #ef4444;
+      padding: 1.25rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
     }
 
-    .card-roles {
-      border-left-color: #06b6d4;
-      background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
-    }
-    .card-roles .card-icon {
-      background: linear-gradient(135deg, #a5f3fc 0%, #67e8f9 100%);
+    .callout-heading {
+      color: #991b1b;
+      border-bottom-color: #fecaca;
     }
 
-    .card-table {
-      border-left-color: #0284c7;
-      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-    }
-    .card-table .card-icon, .icon-blue {
-      background: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%);
+    .callout-section .section-body {
+      color: #7f1d1d;
     }
 
-    .card-text {
-      border-left-color: #6366f1;
-      background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-    }
-    .card-text .card-icon {
-      background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
-    }
-
-    /* Table Section Styles */
-    .section-table {
-      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-      border-left: 5px solid #0284c7;
-      padding: 1.5rem;
-      border-radius: 16px;
-      box-shadow: var(--shadow-md);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .section-table::before {
-      content: '📊';
-      position: absolute;
-      right: 20px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 80px;
-      opacity: 0.08;
-    }
-
-    .table-heading {
-      color: #0369a1;
-      font-weight: 700;
-      margin-bottom: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
+    /* Table wrapper */
     .table-wrapper {
       overflow-x: auto;
       margin: 0.5rem 0;
       border-radius: 8px;
     }
-
-    .section-icon {
-      font-size: 1.2rem;
-    }
-
     /* Acknowledgment Checkbox Styles */
     .acknowledge-checkbox {
       display: flex;
