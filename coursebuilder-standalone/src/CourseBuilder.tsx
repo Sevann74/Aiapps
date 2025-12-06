@@ -240,6 +240,69 @@ const EnhancedCourseBuilder = () => {
         .filter(line => !line.trim().match(/^-{2,}$/));  // Remove --- separators
       const bulletPattern = /^[•\-\*]\s*/;
 
+      // Detect repeating record format (like Audit ID:, Department:, etc.)
+      const isRepeatingRecordFormat = (recordLines: string[]): boolean => {
+        const kvPattern = /^([^:]+):\s*(.+)$/;
+        const kvMatches = recordLines.filter(line => kvPattern.test(line.trim()));
+        if (kvMatches.length < 4) return false;
+        
+        const firstMatch = recordLines[0]?.trim().match(kvPattern);
+        if (!firstMatch) return false;
+        const firstKey = firstMatch[1].trim().toLowerCase();
+        const repeatCount = recordLines.filter(line => {
+          const m = line.trim().match(kvPattern);
+          return m && m[1].trim().toLowerCase() === firstKey;
+        }).length;
+        return repeatCount >= 2;
+      };
+
+      // Format repeating records as cards
+      const formatAsRecordCards = (recordLines: string[]): string => {
+        const kvPattern = /^([^:]+):\s*(.+)$/;
+        const records: Array<Array<{key: string, value: string}>> = [];
+        let currentRecord: Array<{key: string, value: string}> = [];
+        let firstKey = '';
+        
+        for (const line of recordLines) {
+          const match = line.trim().match(kvPattern);
+          if (match) {
+            const key = match[1].trim();
+            const value = match[2].trim();
+            
+            if (!firstKey) firstKey = key.toLowerCase();
+            
+            if (key.toLowerCase() === firstKey && currentRecord.length > 0) {
+              records.push(currentRecord);
+              currentRecord = [];
+            }
+            currentRecord.push({ key, value });
+          }
+        }
+        if (currentRecord.length > 0) records.push(currentRecord);
+        
+        if (records.length === 0) return '';
+        
+        let html = '<div class="record-cards">';
+        records.forEach((record) => {
+          html += '<div class="record-card">';
+          record.forEach((field, idx) => {
+            if (idx === 0) {
+              html += `<div class="record-title">${escapeHtml(field.value)}</div>`;
+            } else {
+              html += `<div class="record-field"><span class="field-label">${escapeHtml(field.key)}:</span> ${escapeHtml(field.value)}</div>`;
+            }
+          });
+          html += '</div>';
+        });
+        html += '</div>';
+        return html;
+      };
+
+      // Check for repeating record format first
+      if (isRepeatingRecordFormat(lines)) {
+        return formatAsRecordCards(lines);
+      }
+
       // Detect pipe-separated table format: lines with | separators (at least 2 columns)
       const isTableFormat = (tableLines: string[]): boolean => {
         const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);

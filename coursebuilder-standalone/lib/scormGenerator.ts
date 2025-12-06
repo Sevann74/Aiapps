@@ -72,6 +72,69 @@ export function generateSingleSCOHTML(
       .filter(line => !line.trim().match(/^-{2,}$/));  // Remove --- separators
     const bulletPattern = /^[•\-\*]\s*/;
 
+    // Detect repeating record format (like Audit ID:, Department:, etc.)
+    const isRepeatingRecordFormat = (recordLines: string[]): boolean => {
+      const kvPattern = /^([^:]+):\s*(.+)$/;
+      const kvMatches = recordLines.filter(line => kvPattern.test(line.trim()));
+      if (kvMatches.length < 4) return false;
+      
+      const firstMatch = recordLines[0]?.trim().match(kvPattern);
+      if (!firstMatch) return false;
+      const firstKey = firstMatch[1].trim().toLowerCase();
+      const repeatCount = recordLines.filter(line => {
+        const m = line.trim().match(kvPattern);
+        return m && m[1].trim().toLowerCase() === firstKey;
+      }).length;
+      return repeatCount >= 2;
+    };
+
+    // Format repeating records as cards
+    const formatAsRecordCards = (recordLines: string[]): string => {
+      const kvPattern = /^([^:]+):\s*(.+)$/;
+      const records: Array<Array<{key: string, value: string}>> = [];
+      let currentRecord: Array<{key: string, value: string}> = [];
+      let firstKey = '';
+      
+      for (const line of recordLines) {
+        const match = line.trim().match(kvPattern);
+        if (match) {
+          const key = match[1].trim();
+          const value = match[2].trim();
+          
+          if (!firstKey) firstKey = key.toLowerCase();
+          
+          if (key.toLowerCase() === firstKey && currentRecord.length > 0) {
+            records.push(currentRecord);
+            currentRecord = [];
+          }
+          currentRecord.push({ key, value });
+        }
+      }
+      if (currentRecord.length > 0) records.push(currentRecord);
+      
+      if (records.length === 0) return '';
+      
+      let html = '<div class="record-cards">';
+      records.forEach((record) => {
+        html += '<div class="record-card">';
+        record.forEach((field, idx) => {
+          if (idx === 0) {
+            html += `<div class="record-title">${escapeHtml(field.value)}</div>`;
+          } else {
+            html += `<div class="record-field"><span class="field-label">${escapeHtml(field.key)}:</span> ${escapeHtml(field.value)}</div>`;
+          }
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    };
+
+    // Check for repeating record format first
+    if (isRepeatingRecordFormat(lines)) {
+      return formatAsRecordCards(lines);
+    }
+
     // Detect pipe-separated table format: lines with | separators (at least 2 columns)
     const isTableFormat = (tableLines: string[]): boolean => {
       const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);
@@ -1031,6 +1094,39 @@ export function generateSingleSCOHTML(
     .section-body li {
       margin-bottom: 0.5rem;
       color: #4b5563;
+    }
+
+    /* Record Cards - for table data displayed as cards */
+    .record-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .record-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #3b82f6;
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .record-title {
+      font-weight: 700;
+      color: #1e40af;
+      font-size: 1.05rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .record-field {
+      margin: 0.4rem 0;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+    .field-label {
+      color: #64748b;
+      font-weight: 600;
     }
 
     /* Callout sections - only these get special styling */
