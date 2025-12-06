@@ -246,17 +246,64 @@ export function generateSingleSCOHTML(
     return pipeLines.length >= 2;
   };
   
+  // Get icon and color theme based on section type and heading
+  const getSectionStyle = (type: string, heading: string): { icon: string; colorClass: string } => {
+    const headingLower = (heading || '').toLowerCase();
+    
+    // Check heading keywords first for more specific icons
+    if (headingLower.includes('related') || headingLower.includes('document') || headingLower.includes('reference')) {
+      return { icon: '📄', colorClass: 'card-documents' };
+    }
+    if (headingLower.includes('definition') || headingLower.includes('glossary') || headingLower.includes('term')) {
+      return { icon: '📚', colorClass: 'card-definition' };
+    }
+    if (headingLower.includes('procedure') || headingLower.includes('step') || headingLower.includes('process')) {
+      return { icon: '📋', colorClass: 'card-procedure' };
+    }
+    if (headingLower.includes('scope') || headingLower.includes('objective') || headingLower.includes('purpose')) {
+      return { icon: '🎯', colorClass: 'card-objectives' };
+    }
+    if (headingLower.includes('note') || headingLower.includes('tip') || headingLower.includes('hint')) {
+      return { icon: '💡', colorClass: 'card-note' };
+    }
+    if (headingLower.includes('warning') || headingLower.includes('caution') || headingLower.includes('alert')) {
+      return { icon: '⚠️', colorClass: 'card-warning' };
+    }
+    if (headingLower.includes('important') || headingLower.includes('critical') || headingLower.includes('key')) {
+      return { icon: '❗', colorClass: 'card-important' };
+    }
+    if (headingLower.includes('summary') || headingLower.includes('overview') || headingLower.includes('conclusion')) {
+      return { icon: '📝', colorClass: 'card-summary' };
+    }
+    if (headingLower.includes('responsibility') || headingLower.includes('role') || headingLower.includes('accountab')) {
+      return { icon: '👥', colorClass: 'card-roles' };
+    }
+    
+    // Fall back to type-based styling
+    switch (type) {
+      case 'procedure': return { icon: '📋', colorClass: 'card-procedure' };
+      case 'callout-important': return { icon: '❗', colorClass: 'card-important' };
+      case 'callout-key': return { icon: '💡', colorClass: 'card-note' };
+      case 'definition': return { icon: '📚', colorClass: 'card-definition' };
+      case 'note': return { icon: '💡', colorClass: 'card-note' };
+      case 'warning': return { icon: '⚠️', colorClass: 'card-warning' };
+      case 'table': return { icon: '📊', colorClass: 'card-table' };
+      default: return { icon: '📄', colorClass: 'card-text' };
+    }
+  };
+
   const moduleSlidesHTML = modules.map((module, index) => {
     const sectionsHTML = module.content.map((section) => {
       const isInteractive = section.type === 'callout-important' || section.type === 'callout-key';
       const checkboxId = isInteractive ? `checkbox-${index}-${checkboxCounter++}` : null;
       const isTable = section.type === 'table' || isTableContent(section.body);
+      const { icon, colorClass } = getSectionStyle(section.type || 'text', section.heading || '');
 
       // Use table-specific wrapper if content is a table
       if (isTable) {
         return `
-      <div class="content-section section-table">
-        ${section.heading ? `<h3 class="table-heading"><span class="section-icon">📊</span> ${escapeHtml(section.heading)}</h3>` : ''}
+      <div class="content-card card-table">
+        ${section.heading ? `<h3 class="card-title"><span class="card-icon icon-blue">📊</span> ${escapeHtml(section.heading)}</h3>` : ''}
         <div class="table-wrapper">
           ${formatContent(section.body)}
         </div>
@@ -265,9 +312,11 @@ export function generateSingleSCOHTML(
       }
       
       return `
-      <div class="content-section section-${section.type || 'text'}" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
-        ${section.heading ? `<h3>${escapeHtml(section.heading)}</h3>` : ''}
-        ${formatContent(section.body)}
+      <div class="content-card ${colorClass}" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
+        ${section.heading ? `<h3 class="card-title"><span class="card-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
+        <div class="card-content">
+          ${formatContent(section.body)}
+        </div>
         ${isInteractive ? `
         <label class="acknowledge-checkbox" for="${checkboxId}">
           <input type="checkbox" id="${checkboxId}" onchange="markAcknowledged('${checkboxId}', ${index})">
@@ -888,6 +937,133 @@ export function generateSingleSCOHTML(
 
     .content-table tbody tr:last-child td {
       border-bottom: none;
+    }
+
+    /* Content Card Base Styles */
+    .content-card {
+      background: white;
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      position: relative;
+      overflow: hidden;
+      border-left: 5px solid #6366f1;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 1rem;
+    }
+
+    .card-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      font-size: 1.25rem;
+      background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    }
+
+    .card-content {
+      color: #4b5563;
+      line-height: 1.8;
+    }
+
+    /* Card Color Themes */
+    .card-documents {
+      border-left-color: #8b5cf6;
+      background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    }
+    .card-documents .card-icon {
+      background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%);
+    }
+
+    .card-definition {
+      border-left-color: #f59e0b;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    }
+    .card-definition .card-icon {
+      background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
+    }
+
+    .card-procedure {
+      border-left-color: #10b981;
+      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    }
+    .card-procedure .card-icon {
+      background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
+    }
+
+    .card-objectives {
+      border-left-color: #3b82f6;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+    .card-objectives .card-icon {
+      background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+    }
+
+    .card-note {
+      border-left-color: #eab308;
+      background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+    }
+    .card-note .card-icon {
+      background: linear-gradient(135deg, #fef08a 0%, #fde047 100%);
+    }
+
+    .card-warning {
+      border-left-color: #f97316;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    }
+    .card-warning .card-icon {
+      background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+    }
+
+    .card-important {
+      border-left-color: #ef4444;
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    }
+    .card-important .card-icon {
+      background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+    }
+
+    .card-summary {
+      border-left-color: #6b7280;
+      background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    }
+    .card-summary .card-icon {
+      background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+    }
+
+    .card-roles {
+      border-left-color: #06b6d4;
+      background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);
+    }
+    .card-roles .card-icon {
+      background: linear-gradient(135deg, #a5f3fc 0%, #67e8f9 100%);
+    }
+
+    .card-table {
+      border-left-color: #0284c7;
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    }
+    .card-table .card-icon, .icon-blue {
+      background: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%);
+    }
+
+    .card-text {
+      border-left-color: #6366f1;
+      background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+    }
+    .card-text .card-icon {
+      background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
     }
 
     /* Table Section Styles */
