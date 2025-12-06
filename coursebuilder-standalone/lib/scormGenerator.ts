@@ -66,7 +66,10 @@ export function generateSingleSCOHTML(
   const totalSlides = modules.length + (includeQuiz ? 1 : 0) + 1;
 
   function formatContent(text: string): string {
-    const lines = text.split(/\\n|\n/).filter(line => line.trim());
+    // Filter out separator lines (---, --, etc.) and empty lines
+    const lines = text.split(/\\n|\n/)
+      .filter(line => line.trim())
+      .filter(line => !line.trim().match(/^-{2,}$/));  // Remove --- separators
     const bulletPattern = /^[•\-\*]\s*/;
 
     // Detect pipe-separated table format: lines with | separators (at least 2 columns)
