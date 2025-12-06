@@ -236,6 +236,46 @@ const EnhancedCourseBuilder = () => {
     const formatContent = (text: string): string => {
       const lines = text.split(/\\n|\n/).filter(line => line.trim());
       const bulletPattern = /^[•\-\*]\s*/;
+
+      // Detect table format: lines with | separators (at least 2 columns)
+      const isTableFormat = (tableLines: string[]): boolean => {
+        const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);
+        return pipeLines.length >= 2;
+      };
+
+      // Format table content into HTML table
+      const formatTable = (tableLines: string[]): string => {
+        const pipedLines = tableLines.filter(line => line.includes('|'));
+        if (pipedLines.length === 0) return '';
+
+        const headerLine = pipedLines[0];
+        const headers = headerLine.split('|').map(h => h.trim()).filter(h => h && !h.match(/^[\-\*]+$/));
+
+        const dataRows = pipedLines.slice(1)
+          .filter(line => !line.match(/^\|?[\s\-\*\|]+\|?$/))
+          .map(line => line.split('|').map(cell => cell.trim()).filter(c => c));
+
+        let tableHtml = '<table class="content-table"><thead><tr>';
+        headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
+        tableHtml += '</tr></thead><tbody>';
+
+        dataRows.forEach(row => {
+          tableHtml += '<tr>';
+          for (let i = 0; i < headers.length; i++) {
+            tableHtml += `<td>${escapeHtml(row[i] || '')}</td>`;
+          }
+          tableHtml += '</tr>';
+        });
+
+        tableHtml += '</tbody></table>';
+        return tableHtml;
+      };
+
+      // Check for table format first
+      if (isTableFormat(lines)) {
+        return formatTable(lines);
+      }
+
       const hasListItems = lines.some(line => bulletPattern.test(line.trim()));
 
       if (hasListItems) {
@@ -256,8 +296,8 @@ const EnhancedCourseBuilder = () => {
         const hasNonListContent = listItems.some(item => !item.startsWith('<li>'));
 
         if (hasNonListContent) {
-          const formatted = [];
-          let currentList = [];
+          const formatted: string[] = [];
+          let currentList: string[] = [];
 
           for (const item of listItems) {
             if (item.startsWith('<li>')) {
@@ -490,9 +530,17 @@ const EnhancedCourseBuilder = () => {
     .section-procedure li { margin-bottom: 0.75rem; line-height: 1.7; }
     .section-table { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 5px solid #0284c7; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
     .section-table h3 { color: #0369a1; font-weight: 700; }
-    .section-table .table-content { background: white; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+    .section-table .table-content { background: white; padding: 1rem; border-radius: 8px; margin-top: 1rem; overflow-x: auto; }
     .section-table p { color: #0c4a6e; }
     .section-table li { color: #0c4a6e; border-bottom: 1px solid #e0f2fe; padding-bottom: 0.5rem; }
+    /* HTML Table styling */
+    .content-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95rem; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .content-table thead { background: linear-gradient(135deg, #0284c7, #0369a1); }
+    .content-table th { color: white; padding: 14px 16px; text-align: left; font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.03em; border: none; }
+    .content-table td { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; vertical-align: top; color: #374151; }
+    .content-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .content-table tbody tr:hover { background: #eff6ff; }
+    .content-table tbody tr:last-child td { border-bottom: none; }
     .quiz-options { list-style-type: none; padding-left: 0; margin-top: 0.75rem; }
     .quiz-option { margin-bottom: 0.5rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: #f3f4f6; color: #374151; }
     .quiz-option.correct-answer { border-left: 4px solid #16a34a; background: #ecfdf3; font-weight: 600; color: #166534; position: relative; padding-left: 2.2rem; }
