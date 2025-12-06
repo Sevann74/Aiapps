@@ -99,7 +99,7 @@ export async function extractVerifiableFacts(text: string): Promise<Fact[]> {
       throw new Error('Document text is too short. Please ensure the PDF contains sufficient text content.');
     }
 
-    const MAX_TEXT_LENGTH = 60000; // ~25 pages per API call - safe for timeout
+    const MAX_TEXT_LENGTH = 40000; // ~15 pages per API call - safe for timeout
     let processText = text;
 
     // For fact extraction, we use the first portion of the document
@@ -235,7 +235,7 @@ export async function generateModulesFromDocument(
   onProgress?: (message: string) => void
 ): Promise<Module[]> {
   try {
-    const CHUNK_SIZE = 60000; // ~25 pages per chunk - safe for API timeout
+    const CHUNK_SIZE = 40000; // ~15 pages per chunk - safe for API timeout
     const MAX_TOTAL_SIZE = 200000; // ~80 pages max total
     
     let processText = text;
