@@ -238,11 +238,31 @@ export function generateSingleSCOHTML(
 
   // Track checkboxes per slide for interaction requirement
   let checkboxCounter = 0;
+
+  // Check if content looks like a table (has pipe separators)
+  const isTableContent = (text: string): boolean => {
+    const lines = text.split(/\\n|\n/).filter(line => line.trim());
+    const pipeLines = lines.filter(line => line.includes('|') && line.split('|').length >= 2);
+    return pipeLines.length >= 2;
+  };
   
   const moduleSlidesHTML = modules.map((module, index) => {
     const sectionsHTML = module.content.map((section) => {
       const isInteractive = section.type === 'callout-important' || section.type === 'callout-key';
       const checkboxId = isInteractive ? `checkbox-${index}-${checkboxCounter++}` : null;
+      const isTable = section.type === 'table' || isTableContent(section.body);
+
+      // Use table-specific wrapper if content is a table
+      if (isTable) {
+        return `
+      <div class="content-section section-table">
+        ${section.heading ? `<h3 class="table-heading"><span class="section-icon">📊</span> ${escapeHtml(section.heading)}</h3>` : ''}
+        <div class="table-wrapper">
+          ${formatContent(section.body)}
+        </div>
+      </div>
+        `;
+      }
       
       return `
       <div class="content-section section-${section.type || 'text'}" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
@@ -868,6 +888,46 @@ export function generateSingleSCOHTML(
 
     .content-table tbody tr:last-child td {
       border-bottom: none;
+    }
+
+    /* Table Section Styles */
+    .section-table {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-left: 5px solid #0284c7;
+      padding: 1.5rem;
+      border-radius: 16px;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section-table::before {
+      content: '📊';
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 80px;
+      opacity: 0.08;
+    }
+
+    .table-heading {
+      color: #0369a1;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      border-radius: 8px;
+    }
+
+    .section-icon {
+      font-size: 1.2rem;
     }
 
     /* Acknowledgment Checkbox Styles */
