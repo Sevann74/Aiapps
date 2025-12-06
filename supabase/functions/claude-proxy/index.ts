@@ -144,15 +144,32 @@ CONTENT TYPE RULES:
 
 3. Use "callout-important" ONLY for actual warnings, safety alerts, or critical deadlines
 
-4. Use "table" type for table data - convert to structured format:
+4. Use "table" type for table data - convert to PLAIN TEXT format (NOT pipe-separated):
    - Include table title as heading
-   - Convert rows to readable format with bullet points
-   - Preserve all data from the table
+   - Convert EACH ROW to a clearly labeled text block with line breaks
+   - Use this EXACT format for each row:
+     ---
+     [First Column Header]: [Value]
+     [Second Column Header]: [Value]
+     [Third Column Header]: [Value]
+     ---
+   - Example for a table with Month, Sales, Region columns:
+     ---
+     Month: January 2025
+     Sales: $50,000
+     Region: North
+     ---
+     Month: February 2025
+     Sales: $62,000
+     Region: South
+     ---
+   - NEVER use pipe (|) separators - they cause parsing issues
+   - Preserve ALL data from every row and column
 
 IMPORTANT DISTINCTIONS:
 - "5.1.1 Case Intake and Triage" = section heading, use "text" type
 - "1. Review the document 2. Verify the data 3. Submit" = procedure steps, use "procedure" type
-- Tables with columns and rows = use "table" type, format as structured list
+- Tables with columns and rows = use "table" type, format as PLAIN TEXT blocks (not pipes)
 
 CONTENT RULES:
 - Include ALL text exactly as written
@@ -174,7 +191,7 @@ OUTPUT FORMAT - Respond with ONLY valid JSON:
         {"type": "text", "heading": "5.1.1 Subsection Title", "body": "Content for this subsection exactly as written"},
         {"type": "text", "heading": "Description", "body": "Regular content with bullets:\\n• Point 1\\n• Point 2"},
         {"type": "procedure", "heading": "How to Process a Case", "body": "1. Open the system\\n2. Enter the data\\n3. Click submit"},
-        {"type": "table", "heading": "Requirements Matrix", "body": "**Column Headers:** Type A | Type B | Type C\\n\\n• Requirement 1: ✓ | ✓ | ✗\\n• Requirement 2: ✓ | ✗ | ✓"},
+        {"type": "table", "heading": "Requirements Matrix", "body": "---\\nRequirement: Requirement 1\\nType A: ✓\\nType B: ✓\\nType C: ✗\\n---\\nRequirement: Requirement 2\\nType A: ✓\\nType B: ✗\\nType C: ✓\\n---"},
         {"type": "callout-important", "heading": "⚠️ Warning", "body": "Only for actual warnings from the document"}
       ],
       "relatedFacts": []
