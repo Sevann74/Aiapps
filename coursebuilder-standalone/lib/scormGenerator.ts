@@ -158,24 +158,44 @@ export function generateSingleSCOHTML(
           .trim();
       };
 
-      // Parse cells from a pipe-separated line, preserving empty cells
+      // Parse cells from a pipe-separated line, preserving ALL cells including empty ones
       const parseCells = (line: string): string[] => {
         const cleaned = cleanLine(line);
-        // Remove leading/trailing pipes and split
-        const trimmed = cleaned.replace(/^\|/, '').replace(/\|$/, '');
-        return trimmed.split('|').map(cell => cell.trim());
+        // Split by pipe - keep all cells
+        const cells = cleaned.split('|');
+        // Remove first empty cell if line starts with |
+        if (cells.length > 0 && cells[0].trim() === '') {
+          cells.shift();
+        }
+        // Remove last empty cell if line ends with |
+        if (cells.length > 0 && cells[cells.length - 1].trim() === '') {
+          cells.pop();
+        }
+        return cells.map(cell => cell.trim());
       };
 
       const headerCells = parseCells(pipedLines[0]);
       const headers = headerCells
         .map(h => cleanHeaderCell(h))
-        .filter(h => h && !h.match(/^[\-\s]+$/));
+        .filter(h => !h.match(/^[\-\s]*$/));  // Only filter separator-only cells
+
+      const numColumns = headers.length;
 
       // Skip separator lines (like |---|---|---|)
       const dataRows = pipedLines.slice(1)
-        .filter(line => !line.match(/^\|?[\s\-:]+\|[\s\-:|]+$/))
-        .map(line => parseCells(line))
-        .filter(row => row.some(cell => cell.length > 0 && !cell.match(/^[\-]+$/)));
+        .filter(line => {
+          // Skip lines that are ONLY separators
+          const cells = line.split('|').map(c => c.trim());
+          return !cells.every(c => c === '' || /^[\-:]+$/.test(c));
+        })
+        .map(line => {
+          const cells = parseCells(line);
+          // Pad row to match header count if needed
+          while (cells.length < numColumns) {
+            cells.push('');
+          }
+          return cells;
+        });
 
       let tableHtml = '<table class="content-table"><thead><tr>';
       headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
@@ -183,7 +203,7 @@ export function generateSingleSCOHTML(
 
       dataRows.forEach(row => {
         tableHtml += '<tr>';
-        for (let i = 0; i < headers.length; i++) {
+        for (let i = 0; i < numColumns; i++) {
           tableHtml += `<td>${escapeHtml(row[i] || '')}</td>`;
         }
         tableHtml += '</tr>';
