@@ -365,6 +365,18 @@ const EnhancedCourseBuilder = () => {
       }
     };
 
+    // Get section type label
+    const getSectionLabel = (type: string): string => {
+      switch (type) {
+        case 'procedure': return 'Procedure';
+        case 'callout-important': return 'Important';
+        case 'table': return 'Reference';
+        case 'definition': return 'Definition';
+        case 'note': return 'Note';
+        default: return '';
+      }
+    };
+
     // Build modules HTML with visual enhancements
     let procedureCounter = 0;
     const modulesHTML = courseData.modules.map((module, idx) => {
@@ -377,13 +389,18 @@ const EnhancedCourseBuilder = () => {
         const isAlternate = sectionIdx % 2 === 1;
         const icon = getSectionIcon(section.type || 'text');
         const badgeClass = getIconBadgeClass(section.type || 'text');
-        
+        const sectionLabel = getSectionLabel(section.type || 'text');
+
         // Long procedures (5+ steps) are expandable
         if (shouldExpand) {
           return `
       <div class="content-section section-procedure ${isAlternate ? 'alternate' : ''}">
+        <div class="section-header-bar section-header-green">
+          <span class="icon-badge ${badgeClass}">${icon}</span>
+          <span class="section-type-label label-green">${sectionLabel}</span>
+        </div>
         <div class="procedure-header" onclick="toggleProcedure('${procedureId}')">
-          <h3><span class="icon-badge ${badgeClass}">${icon}</span> ${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
           <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view ${stepCount} steps</span>
         </div>
         <div class="procedure-content" id="${procedureId}" style="display: none;">
@@ -483,14 +500,26 @@ const EnhancedCourseBuilder = () => {
     .module-content { margin-top: 2rem; }
     /* Slide header with section number */
     .slide-header { position: relative; z-index: 1; margin-bottom: 1rem; }
-    /* Icon badges - colored squares with icons */
-    .icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; margin-right: 12px; font-size: 1.1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex-shrink: 0; }
-    .icon-badge-gray { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); }
-    .icon-badge-green { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
-    .icon-badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); }
-    .icon-badge-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
-    .icon-badge-yellow { background: linear-gradient(135deg, #fef3c7, #fde68a); }
-    .icon-badge-purple { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); }
+    /* Icon badges - larger colored squares with icons */
+    .icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 12px; margin-right: 14px; font-size: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); flex-shrink: 0; transition: transform 0.2s ease; }
+    .icon-badge:hover { transform: scale(1.05); }
+    .icon-badge-gray { background: linear-gradient(135deg, #6b7280, #4b5563); }
+    .icon-badge-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+    .icon-badge-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .icon-badge-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .icon-badge-yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .icon-badge-purple { background: linear-gradient(135deg, #a855f7, #9333ea); }
+    /* Section header bar with icon and label */
+    .section-header-bar { display: flex; align-items: center; padding: 12px 16px; border-radius: 12px 12px 0 0; margin: -1.5rem -1.5rem 1rem -1.5rem; }
+    .section-header-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
+    .section-header-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .section-header-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .section-header-yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .section-header-purple { background: linear-gradient(135deg, #a855f7, #9333ea); }
+    .section-header-gray { background: linear-gradient(135deg, #6b7280, #4b5563); }
+    .section-header-bar .icon-badge { background: rgba(255,255,255,0.2); box-shadow: none; width: 40px; height: 40px; font-size: 1.3rem; }
+    /* Section type labels */
+    .section-type-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 20px; background: rgba(255,255,255,0.2); color: white; }
     .content-section h3 { display: flex; align-items: center; }
     /* Alternating backgrounds for visual variety */
     .section-text { background: #ffffff; border-left: 4px solid #e5e7eb; }
