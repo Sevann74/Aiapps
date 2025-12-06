@@ -145,11 +145,23 @@ export function generateSingleSCOHTML(
       const cleanLine = (line: string): string => {
         return line.trim()
           .replace(/^[•·●○\-\*]\s*/, '')  // Remove bullet prefix
-          .replace(/\*\*/g, '');           // Remove markdown bold **
+          .replace(/\*\*/g, '')            // Remove markdown bold **
+          .replace(/^\*/, '');             // Remove leading single asterisk
+      };
+
+      // Clean header cell: remove prefixes like "COLUMN HEADERS:" or "Column Headers:"
+      const cleanHeaderCell = (cell: string): string => {
+        return cell.trim()
+          .replace(/^\*?column\s*headers?\s*:?\s*/i, '')  // Remove "COLUMN HEADERS:" prefix
+          .replace(/^\*+\s*/, '')                          // Remove leading asterisks
+          .replace(/\*+$/, '')                             // Remove trailing asterisks
+          .trim();
       };
 
       const headerLine = cleanLine(pipedLines[0]);
-      const headers = headerLine.split('|').map(h => h.trim()).filter(h => h && !h.match(/^[\-]+$/));
+      const headers = headerLine.split('|')
+        .map(h => cleanHeaderCell(h))
+        .filter(h => h && !h.match(/^[\-]+$/));
 
       const dataRows = pipedLines.slice(1)
         .filter(line => !line.match(/^\|?[\s\-\*\|]+\|?$/))
