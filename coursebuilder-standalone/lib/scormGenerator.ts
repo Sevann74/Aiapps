@@ -158,17 +158,24 @@ export function generateSingleSCOHTML(
           .trim();
       };
 
-      const headerLine = cleanLine(pipedLines[0]);
-      const headers = headerLine.split('|')
-        .map(h => cleanHeaderCell(h))
-        .filter(h => h && !h.match(/^[\-]+$/));
+      // Parse cells from a pipe-separated line, preserving empty cells
+      const parseCells = (line: string): string[] => {
+        const cleaned = cleanLine(line);
+        // Remove leading/trailing pipes and split
+        const trimmed = cleaned.replace(/^\|/, '').replace(/\|$/, '');
+        return trimmed.split('|').map(cell => cell.trim());
+      };
 
+      const headerCells = parseCells(pipedLines[0]);
+      const headers = headerCells
+        .map(h => cleanHeaderCell(h))
+        .filter(h => h && !h.match(/^[\-\s]+$/));
+
+      // Skip separator lines (like |---|---|---|)
       const dataRows = pipedLines.slice(1)
-        .filter(line => !line.match(/^\|?[\s\-\*\|]+\|?$/))
-        .map(line => {
-          const cleaned = cleanLine(line);
-          return cleaned.split('|').map(cell => cell.trim()).filter(c => c);
-        });
+        .filter(line => !line.match(/^\|?[\s\-:]+\|[\s\-:|]+$/))
+        .map(line => parseCells(line))
+        .filter(row => row.some(cell => cell.length > 0 && !cell.match(/^[\-]+$/)));
 
       let tableHtml = '<table class="content-table"><thead><tr>';
       headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
