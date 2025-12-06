@@ -301,22 +301,39 @@ const EnhancedCourseBuilder = () => {
       return stepCount;
     };
 
-    // Build modules HTML with expandable procedures for interactivity
+    // Get section icon based on type
+    const getSectionIcon = (type: string): string => {
+      switch (type) {
+        case 'procedure': return '📋';
+        case 'callout-important': return '⚠️';
+        case 'table': return '📊';
+        case 'definition': return '📖';
+        case 'note': return '💡';
+        default: return '📄';
+      }
+    };
+
+    // Build modules HTML with visual enhancements
     let procedureCounter = 0;
+    let sectionCounter = 0;
     const modulesHTML = courseData.modules.map((module, idx) => {
-      const sectionsHTML = module.content.map(section => {
+      const sectionsHTML = module.content.map((section, sectionIdx) => {
         const isProcedure = section.type === 'procedure';
         const isTable = section.type === 'table';
         const stepCount = isProcedure ? countProcedureSteps(section.body) : 0;
         const shouldExpand = isProcedure && stepCount >= 5;
         const procedureId = shouldExpand ? `procedure-${idx}-${procedureCounter++}` : null;
+        const isAlternate = sectionIdx % 2 === 1;
+        const sectionNum = ++sectionCounter;
+        const icon = getSectionIcon(section.type || 'text');
         
         // Long procedures (5+ steps) are expandable
         if (shouldExpand) {
           return `
-      <div class="content-section section-procedure">
+      <div class="content-section section-procedure ${isAlternate ? 'alternate' : ''}">
+        <span class="section-number">${sectionNum}</span>
         <div class="procedure-header" onclick="toggleProcedure('${procedureId}')">
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
+          <h3><span class="section-icon">${icon}</span> ${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
           <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view ${stepCount} steps</span>
         </div>
         <div class="procedure-content" id="${procedureId}" style="display: none;">
@@ -329,8 +346,9 @@ const EnhancedCourseBuilder = () => {
         // Tables get special styling
         if (isTable) {
           return `
-      <div class="content-section section-table">
-        ${section.heading ? `<h3>📊 ${escapeHtml(section.heading)}</h3>` : ''}
+      <div class="content-section section-table ${isAlternate ? 'alternate' : ''}">
+        <span class="section-number">${sectionNum}</span>
+        ${section.heading ? `<h3><span class="section-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
         <div class="table-content">
           ${formatContent(section.body)}
         </div>
@@ -338,19 +356,26 @@ const EnhancedCourseBuilder = () => {
     `;
         }
         
-        // Short procedures or regular content - show directly
+        // Short procedures or regular content - show directly with visual enhancements
         return `
-      <div class="content-section section-${section.type || 'text'}">
-        ${section.heading ? `<h3>${escapeHtml(section.heading)}</h3>` : ''}
+      <div class="content-section section-${section.type || 'text'} ${isAlternate ? 'alternate' : ''}">
+        <span class="section-number">${sectionNum}</span>
+        ${section.heading ? `<h3><span class="section-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
         ${formatContent(section.body)}
       </div>
     `;
       }).join('\n');
 
+      // Reset section counter for each slide
+      sectionCounter = 0;
+
       return `
       <section class="slide" id="slide-${idx}" style="${idx === 0 ? 'display: block;' : 'display: none;'}">
         ${courseData.logo ? `<img src="${courseData.logo}" alt="Logo" class="module-logo" />` : ''}
-        <h2>${escapeHtml(module.title)}</h2>
+        <div class="slide-header">
+          <span class="slide-number">Section ${idx + 1}</span>
+          <h2>${escapeHtml(module.title)}</h2>
+        </div>
         <div class="module-content">
           ${sectionsHTML}
         </div>
@@ -412,24 +437,49 @@ const EnhancedCourseBuilder = () => {
     .duration { color: #6b7280; margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem; }
     .duration-icon { font-size: 1.2rem; }
     .module-content { margin-top: 2rem; }
-    .content-section { margin-bottom: 2rem; position: relative; z-index: 1; }
-    .content-section h3 { color: #1f2937; margin-bottom: 1rem; font-size: 1.5rem; font-weight: 700; }
-    .content-section p { color: #4b5563; line-height: 1.8; font-size: 1.05rem; }
+    /* Slide header with section number */
+    .slide-header { position: relative; z-index: 1; margin-bottom: 1rem; }
+    .slide-number { display: inline-block; background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan)); color: white; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 20px; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    /* Content sections with visual hierarchy */
+    .content-section { margin-bottom: 1.5rem; position: relative; z-index: 1; padding: 1.5rem; padding-left: 3.5rem; border-radius: 12px; transition: all 0.2s ease; }
+    .content-section:hover { transform: translateX(4px); }
+    /* Section numbers */
+    .section-number { position: absolute; left: 0.75rem; top: 1.5rem; width: 28px; height: 28px; background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan)); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; box-shadow: var(--shadow-sm); }
+    .section-icon { margin-right: 0.5rem; }
+    /* Alternating backgrounds for visual variety */
+    .section-text { background: #ffffff; border-left: 4px solid #e5e7eb; }
+    .section-text.alternate { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); }
+    .section-text h3 { color: #1f2937; }
+    .content-section h3 { color: #1f2937; margin-bottom: 1rem; font-size: 1.3rem; font-weight: 700; }
+    .content-section p { color: #4b5563; line-height: 1.8; font-size: 1.02rem; }
     .content-section ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.75rem; margin-bottom: 0.75rem; color: #4b5563; }
-    .content-section li { line-height: 1.8; font-size: 1.05rem; margin-bottom: 0.5rem; padding-left: 0.5rem; }
-    .section-objectives { background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%); border-left: 5px solid var(--brand-navy); padding: 2rem; border-radius: 16px; box-shadow: var(--shadow-md); }
+    .content-section li { line-height: 1.8; font-size: 1.02rem; margin-bottom: 0.5rem; padding-left: 0.5rem; }
+    /* Definition sections - yellow tint */
+    .section-definition { background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-left: 4px solid #eab308; }
+    .section-definition h3 { color: #854d0e; }
+    .section-definition p { color: #713f12; }
+    /* Note sections - light purple */
+    .section-note { background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-left: 4px solid #a855f7; }
+    .section-note h3 { color: #7e22ce; }
+    .section-note p { color: #6b21a8; }
+    /* Objectives - blue */
+    .section-objectives { background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%); border-left: 4px solid var(--brand-navy); padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
     .section-objectives h3 { color: var(--brand-navy); font-weight: 800; }
     .section-objectives p { color: #1e40af; font-weight: 500; }
-    .section-summary { background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%); border-left: 5px solid #6b7280; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); border: 2px solid #e5e7eb; }
+    /* Summary - gray */
+    .section-summary { background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%); border-left: 4px solid #6b7280; padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
     .section-summary h3 { color: #374151; font-weight: 700; }
     .section-summary p { color: #4b5563; font-weight: 500; }
-    .section-callout-important { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-left: 5px solid #dc2626; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
+    /* Important callout - red/orange */
+    .section-callout-important { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-left: 4px solid #dc2626; padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
     .section-callout-important h3, .section-callout-important h4 { color: #991b1b; font-weight: 700; }
     .section-callout-important p { color: #7f1d1d; font-weight: 500; }
-    .section-callout-key { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 5px solid #f59e0b; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
+    /* Key callout - yellow */
+    .section-callout-key { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid #f59e0b; padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
     .section-callout-key h3, .section-callout-key h4 { color: #92400e; font-weight: 700; }
     .section-callout-key p { color: #78350f; font-weight: 500; }
-    .section-procedure { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 5px solid #22c55e; padding: 0; border-radius: 16px; box-shadow: var(--shadow-md); overflow: hidden; }
+    /* Procedure - green */
+    .section-procedure { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 4px solid #22c55e; padding: 0; padding-left: 2.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; position: relative; }
     .procedure-header { padding: 1.5rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.3s ease; }
     .procedure-header:hover { background: rgba(34, 197, 94, 0.1); }
     .procedure-header h3 { color: #166534; font-weight: 700; margin: 0; }
