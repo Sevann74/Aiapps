@@ -341,94 +341,130 @@ const EnhancedCourseBuilder = () => {
       return stepCount;
     };
 
-    // Get section icon based on type
+    // Get section icon - unique per content type, empty for plain text
     const getSectionIcon = (type: string): string => {
       switch (type) {
         case 'procedure': return '📋';
         case 'callout-important': return '⚠️';
         case 'table': return '📊';
-        case 'definition': return '📖';
+        case 'definition': return '📚';
         case 'note': return '💡';
-        default: return '📄';
+        default: return '';  // No icon for plain text
       }
     };
 
-    // Get icon badge color class based on section type
-    const getIconBadgeClass = (type: string): string => {
-      switch (type) {
-        case 'procedure': return 'icon-badge-green';
-        case 'callout-important': return 'icon-badge-red';
-        case 'table': return 'icon-badge-blue';
-        case 'definition': return 'icon-badge-yellow';
-        case 'note': return 'icon-badge-purple';
-        default: return 'icon-badge-gray';
-      }
-    };
-
-    // Get section type label
-    const getSectionLabel = (type: string): string => {
-      switch (type) {
-        case 'procedure': return 'Procedure';
-        case 'callout-important': return 'Important';
-        case 'table': return 'Reference';
-        case 'definition': return 'Definition';
-        case 'note': return 'Note';
-        default: return '';
-      }
-    };
-
-    // Build modules HTML with visual enhancements
+    // Build modules HTML with professional card design
     let procedureCounter = 0;
     const modulesHTML = courseData.modules.map((module, idx) => {
       const sectionsHTML = module.content.map((section, sectionIdx) => {
-        const isProcedure = section.type === 'procedure';
-        const isTable = section.type === 'table';
+        const sectionType = section.type || 'text';
+        const isProcedure = sectionType === 'procedure';
+        const isTable = sectionType === 'table';
+        const isImportant = sectionType === 'callout-important';
+        const isDefinition = sectionType === 'definition';
+        const isNote = sectionType === 'note';
+        const isPlainText = sectionType === 'text';
         const stepCount = isProcedure ? countProcedureSteps(section.body) : 0;
         const shouldExpand = isProcedure && stepCount >= 5;
         const procedureId = shouldExpand ? `procedure-${idx}-${procedureCounter++}` : null;
-        const isAlternate = sectionIdx % 2 === 1;
-        const icon = getSectionIcon(section.type || 'text');
-        const badgeClass = getIconBadgeClass(section.type || 'text');
-        const sectionLabel = getSectionLabel(section.type || 'text');
+        const icon = getSectionIcon(sectionType);
 
-        // Long procedures (5+ steps) are expandable
-        if (shouldExpand) {
-          return `
-      <div class="content-section section-procedure ${isAlternate ? 'alternate' : ''}">
-        <div class="section-header-bar section-header-green">
-          <span class="icon-badge ${badgeClass}">${icon}</span>
-          <span class="section-type-label label-green">${sectionLabel}</span>
-        </div>
-        <div class="procedure-header" onclick="toggleProcedure('${procedureId}')">
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
-          <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view ${stepCount} steps</span>
-        </div>
-        <div class="procedure-content" id="${procedureId}" style="display: none;">
-          ${formatContent(section.body)}
-        </div>
-      </div>
-    `;
-        }
-
-        // Tables get special styling
+        // Tables - keep the good existing style (blue header with icon)
         if (isTable) {
           return `
-      <div class="content-section section-table ${isAlternate ? 'alternate' : ''}">
-        ${section.heading ? `<h3><span class="icon-badge ${badgeClass}">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
-        <div class="table-content">
+      <div class="content-card card-table">
+        <h3 class="card-title card-title-blue">
+          <span class="title-icon icon-blue">${icon}</span>
+          ${section.heading ? escapeHtml(section.heading) : 'Reference'}
+        </h3>
+        <div class="table-wrapper">
           ${formatContent(section.body)}
         </div>
-      </div>
-    `;
+      </div>`;
         }
-        
-        // Short procedures or regular content - show directly with visual enhancements
+
+        // Important callout - keep the good existing style (red/orange with warning icon)
+        if (isImportant) {
+          return `
+      <div class="content-card card-important">
+        <h3 class="card-title card-title-red">
+          <span class="title-icon icon-red">${icon}</span>
+          ${section.heading ? escapeHtml(section.heading) : 'Important'}
+        </h3>
+        <div class="card-content">
+          ${formatContent(section.body)}
+        </div>
+      </div>`;
+        }
+
+        // Procedures - expandable with green theme
+        if (shouldExpand) {
+          return `
+      <div class="content-card card-procedure">
+        <h3 class="card-title card-title-green">
+          <span class="title-icon icon-green">${icon}</span>
+          ${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}
+        </h3>
+        <div class="procedure-expand" onclick="toggleProcedure('${procedureId}')">
+          <span class="expand-text">Click to view ${stepCount} steps</span>
+          <span class="expand-arrow" id="${procedureId}-toggle">▼</span>
+        </div>
+        <div class="procedure-steps" id="${procedureId}" style="display: none;">
+          ${formatContent(section.body)}
+        </div>
+      </div>`;
+        }
+
+        // Short procedures
+        if (isProcedure) {
+          return `
+      <div class="content-card card-procedure">
+        <h3 class="card-title card-title-green">
+          <span class="title-icon icon-green">${icon}</span>
+          ${section.heading ? escapeHtml(section.heading) : 'Procedure'}
+        </h3>
+        <div class="card-content">
+          ${formatContent(section.body)}
+        </div>
+      </div>`;
+        }
+
+        // Definitions - amber/yellow theme
+        if (isDefinition) {
+          return `
+      <div class="content-card card-definition">
+        <h3 class="card-title card-title-amber">
+          <span class="title-icon icon-amber">${icon}</span>
+          ${section.heading ? escapeHtml(section.heading) : 'Definition'}
+        </h3>
+        <div class="card-content">
+          ${formatContent(section.body)}
+        </div>
+      </div>`;
+        }
+
+        // Notes - purple theme
+        if (isNote) {
+          return `
+      <div class="content-card card-note">
+        <h3 class="card-title card-title-purple">
+          <span class="title-icon icon-purple">${icon}</span>
+          ${section.heading ? escapeHtml(section.heading) : 'Note'}
+        </h3>
+        <div class="card-content">
+          ${formatContent(section.body)}
+        </div>
+      </div>`;
+        }
+
+        // Plain text - clean white card, NO icon
         return `
-      <div class="content-section section-${section.type || 'text'} ${isAlternate ? 'alternate' : ''}">
-        ${section.heading ? `<h3><span class="icon-badge ${badgeClass}">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
-        ${formatContent(section.body)}
-      </div>
-    `;
+      <div class="content-card card-text">
+        ${section.heading ? `<h3 class="card-title-plain">${escapeHtml(section.heading)}</h3>` : ''}
+        <div class="card-content">
+          ${formatContent(section.body)}
+        </div>
+      </div>`;
       }).join('\n');
 
       return `
@@ -498,76 +534,61 @@ const EnhancedCourseBuilder = () => {
     .duration { color: #6b7280; margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem; }
     .duration-icon { font-size: 1.2rem; }
     .module-content { margin-top: 2rem; }
-    /* Slide header with section number */
-    .slide-header { position: relative; z-index: 1; margin-bottom: 1rem; }
-    /* Icon badges - larger colored squares with icons */
-    .icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 12px; margin-right: 14px; font-size: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15); flex-shrink: 0; transition: transform 0.2s ease; }
-    .icon-badge:hover { transform: scale(1.05); }
-    .icon-badge-gray { background: linear-gradient(135deg, #6b7280, #4b5563); }
-    .icon-badge-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
-    .icon-badge-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .icon-badge-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-    .icon-badge-yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .icon-badge-purple { background: linear-gradient(135deg, #a855f7, #9333ea); }
-    /* Section header bar with icon and label */
-    .section-header-bar { display: flex; align-items: center; padding: 12px 16px; border-radius: 12px 12px 0 0; margin: -1.5rem -1.5rem 1rem -1.5rem; }
-    .section-header-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
-    .section-header-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
-    .section-header-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-    .section-header-yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .section-header-purple { background: linear-gradient(135deg, #a855f7, #9333ea); }
-    .section-header-gray { background: linear-gradient(135deg, #6b7280, #4b5563); }
-    .section-header-bar .icon-badge { background: rgba(255,255,255,0.2); box-shadow: none; width: 40px; height: 40px; font-size: 1.3rem; }
-    /* Section type labels */
-    .section-type-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 20px; background: rgba(255,255,255,0.2); color: white; }
-    .content-section h3 { display: flex; align-items: center; }
-    /* Alternating backgrounds for visual variety */
-    .section-text { background: #ffffff; border-left: 4px solid #e5e7eb; }
-    .section-text.alternate { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); }
-    .section-text h3 { color: #1f2937; }
-    .content-section h3 { color: #1f2937; margin-bottom: 1rem; font-size: 1.3rem; font-weight: 700; }
-    .content-section p { color: #4b5563; line-height: 1.8; font-size: 1.02rem; }
-    .content-section ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.75rem; margin-bottom: 0.75rem; color: #4b5563; }
-    .content-section li { line-height: 1.8; font-size: 1.02rem; margin-bottom: 0.5rem; padding-left: 0.5rem; }
-    /* Definition sections - yellow tint */
-    .section-definition { background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-left: 4px solid #eab308; }
-    .section-definition h3 { color: #854d0e; }
-    .section-definition p { color: #713f12; }
-    /* Note sections - light purple */
-    .section-note { background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-left: 4px solid #a855f7; }
-    .section-note h3 { color: #7e22ce; }
-    .section-note p { color: #6b21a8; }
-    /* Objectives - blue */
-    .section-objectives { background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%); border-left: 4px solid var(--brand-navy); padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
-    .section-objectives h3 { color: var(--brand-navy); font-weight: 800; }
-    .section-objectives p { color: #1e40af; font-weight: 500; }
-    /* Summary - gray */
-    .section-summary { background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%); border-left: 4px solid #6b7280; padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
-    .section-summary h3 { color: #374151; font-weight: 700; }
-    .section-summary p { color: #4b5563; font-weight: 500; }
-    /* Important callout - red/orange */
-    .section-callout-important { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-left: 4px solid #dc2626; padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
-    .section-callout-important h3, .section-callout-important h4 { color: #991b1b; font-weight: 700; }
-    .section-callout-important p { color: #7f1d1d; font-weight: 500; }
-    /* Key callout - yellow */
-    .section-callout-key { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 4px solid #f59e0b; padding: 1.5rem 1.5rem 1.5rem 3.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); }
-    .section-callout-key h3, .section-callout-key h4 { color: #92400e; font-weight: 700; }
-    .section-callout-key p { color: #78350f; font-weight: 500; }
-    /* Procedure - green */
-    .section-procedure { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 4px solid #22c55e; padding: 0; padding-left: 2.5rem; border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; position: relative; }
-    .procedure-header { padding: 1.5rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.3s ease; }
-    .procedure-header:hover { background: rgba(34, 197, 94, 0.1); }
-    .procedure-header h3 { color: #166534; font-weight: 700; margin: 0; }
-    .procedure-toggle { font-size: 0.9rem; color: #22c55e; font-weight: 600; }
-    .procedure-content { padding: 0 1.5rem 1.5rem 1.5rem; border-top: 1px solid rgba(34, 197, 94, 0.2); }
-    .procedure-content.expanded { display: block !important; }
-    .section-procedure ol { list-style-type: decimal; margin-left: 1.5rem; color: #166534; }
-    .section-procedure li { margin-bottom: 0.75rem; line-height: 1.7; }
-    .section-table { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 5px solid #0284c7; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
-    .section-table h3 { color: #0369a1; font-weight: 700; }
-    .section-table .table-content { background: white; padding: 1rem; border-radius: 8px; margin-top: 1rem; overflow-x: auto; }
-    .section-table p { color: #0c4a6e; }
-    .section-table li { color: #0c4a6e; border-bottom: 1px solid #e0f2fe; padding-bottom: 0.5rem; }
+    /* Slide header */
+    .slide-header { position: relative; z-index: 1; margin-bottom: 1.5rem; }
+    
+    /* Content Cards - Professional Card Design */
+    .content-card { background: white; border-radius: 16px; margin-bottom: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.08); overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .content-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+    
+    /* Card Titles with Icons */
+    .card-title { display: flex; align-items: center; padding: 20px 24px; margin: 0; font-size: 1.2rem; font-weight: 700; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .card-title-plain { padding: 20px 24px; margin: 0; font-size: 1.2rem; font-weight: 700; color: #1e293b; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .title-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 10px; margin-right: 14px; font-size: 1.3rem; flex-shrink: 0; }
+    
+    /* Icon Colors */
+    .icon-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+    .icon-red { background: linear-gradient(135deg, #fee2e2, #fecaca); }
+    .icon-green { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
+    .icon-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+    .icon-purple { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); }
+    
+    /* Title Colors */
+    .card-title-blue { background: linear-gradient(135deg, #eff6ff, #dbeafe); color: #1e40af; }
+    .card-title-red { background: linear-gradient(135deg, #fef2f2, #fee2e2); color: #991b1b; }
+    .card-title-green { background: linear-gradient(135deg, #f0fdf4, #dcfce7); color: #166534; }
+    .card-title-amber { background: linear-gradient(135deg, #fffbeb, #fef3c7); color: #92400e; }
+    .card-title-purple { background: linear-gradient(135deg, #faf5ff, #f3e8ff); color: #6b21a8; }
+    
+    /* Card Content */
+    .card-content { padding: 20px 24px; }
+    .card-content p { color: #475569; font-size: 1rem; line-height: 1.8; margin-bottom: 12px; }
+    .card-content p:last-child { margin-bottom: 0; }
+    .card-content ul { margin: 12px 0 12px 24px; list-style-type: disc; }
+    .card-content li { color: #475569; line-height: 1.8; margin-bottom: 8px; }
+    
+    /* Card Type Variations */
+    .card-text { border-left: 4px solid #e2e8f0; }
+    .card-table { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
+    .card-important { background: linear-gradient(135deg, #fff5f5, #fed7d7); border-left: 4px solid #e53e3e; }
+    .card-important .card-content p { color: #742a2a; font-weight: 500; }
+    .card-procedure { background: linear-gradient(135deg, #f0fff4, #c6f6d5); }
+    .card-procedure .card-content p, .card-procedure .card-content li { color: #276749; }
+    .card-definition { background: linear-gradient(135deg, #fffff0, #fefcbf); }
+    .card-definition .card-content p { color: #744210; }
+    .card-note { background: linear-gradient(135deg, #faf5ff, #e9d8fd); }
+    .card-note .card-content p { color: #553c9a; }
+    
+    /* Table Wrapper */
+    .table-wrapper { padding: 16px 24px 24px 24px; overflow-x: auto; }
+    
+    /* Procedure Expandable */
+    .procedure-expand { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background: rgba(16, 185, 129, 0.08); cursor: pointer; transition: background 0.2s; border-top: 1px solid rgba(16, 185, 129, 0.15); }
+    .procedure-expand:hover { background: rgba(16, 185, 129, 0.15); }
+    .expand-text { font-size: 0.9rem; color: #059669; font-weight: 600; }
+    .expand-arrow { font-size: 0.9rem; color: #059669; transition: transform 0.2s; }
+    .procedure-steps { padding: 20px 24px; border-top: 1px solid rgba(16, 185, 129, 0.15); }
+    .procedure-steps p, .procedure-steps li { color: #276749; }
     /* HTML Table styling */
     .content-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.95rem; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .content-table thead { background: linear-gradient(135deg, #0284c7, #0369a1); }
