@@ -234,6 +234,33 @@ const EnhancedCourseBuilder = () => {
     };
 
     const formatContent = (text: string): string => {
+      // Check for JSON table format first: {"columns":[...],"rows":[...]}
+      const trimmedText = text.trim();
+      if (trimmedText.startsWith('{"columns":') || trimmedText.startsWith('{"columns" :')) {
+        try {
+          const tableData = JSON.parse(trimmedText);
+          if (tableData.columns && tableData.rows) {
+            let html = '<table class="content-table"><thead><tr>';
+            tableData.columns.forEach((col: string) => {
+              html += `<th>${escapeHtml(col)}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            tableData.rows.forEach((row: Record<string, any>) => {
+              html += '<tr>';
+              tableData.columns.forEach((col: string) => {
+                const value = row[col];
+                html += `<td>${value !== null && value !== undefined ? escapeHtml(String(value)) : ''}</td>`;
+              });
+              html += '</tr>';
+            });
+            html += '</tbody></table>';
+            return html;
+          }
+        } catch (e) {
+          // Not valid JSON, continue with other formats
+        }
+      }
+
       // Filter out separator lines (---, --, etc.) and empty lines
       const lines = text.split(/\\n|\n/)
         .filter(line => line.trim())
