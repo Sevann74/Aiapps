@@ -66,11 +66,115 @@ export function generateSingleSCOHTML(
   const totalSlides = modules.length + (includeQuiz ? 1 : 0) + 1;
 
   function formatContent(text: string): string {
-    const originalText = text;
-    text = escapeHtml(text);
-
-    const lines = text.split(/\\n|\n/);
+    const lines = text.split(/\\n|\n/).filter(line => line.trim());
     const bulletPattern = /^[•\-\*]\s*/;
+
+    // Detect pipe-separated table format: lines with | separators (at least 2 columns)
+    const isTableFormat = (tableLines: string[]): boolean => {
+      const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);
+      return pipeLines.length >= 2;
+    };
+
+    // Detect key-value format: *Key:** Value or **Key:** Value pattern
+    const isKeyValueFormat = (kvLines: string[]): boolean => {
+      const kvPattern = /^[•\-\*]?\s*\*?\*?([^:*]+)\*?\*?:\*?\*?\s*.+/;
+      const kvMatches = kvLines.filter(line => kvPattern.test(line.trim()));
+      return kvMatches.length >= 2 && kvMatches.some(line => 
+        /responsibility|step|action|role|task|description/i.test(line)
+      );
+    };
+
+    // Convert key-value format to table
+    const formatKeyValueAsTable = (kvLines: string[]): string => {
+      const kvPattern = /^[•\-\*]?\s*\*?\*?([^:*]+)\*?\*?:\*?\*?\s*(.+)/;
+      const rows: { key: string; value: string }[] = [];
+      
+      for (const line of kvLines) {
+        const match = line.trim().match(kvPattern);
+        if (match) {
+          rows.push({ key: match[1].trim(), value: match[2].trim() });
+        }
+      }
+
+      if (rows.length < 2) return '';
+
+      const headers = ['Responsibility', 'Step', 'Action'];
+      const tableRows: string[][] = [];
+      let currentRow: Record<string, string> = {};
+
+      for (const row of rows) {
+        const keyLower = row.key.toLowerCase();
+        if (keyLower.includes('responsibility') || keyLower.includes('role')) {
+          if (Object.keys(currentRow).length > 0) {
+            tableRows.push([currentRow['responsibility'] || '', currentRow['step'] || '', currentRow['action'] || '']);
+          }
+          currentRow = { responsibility: row.value };
+        } else if (keyLower.includes('step')) {
+          currentRow['step'] = row.value;
+        } else if (keyLower.includes('action')) {
+          currentRow['action'] = row.value;
+        }
+      }
+      
+      if (Object.keys(currentRow).length > 0) {
+        tableRows.push([currentRow['responsibility'] || '', currentRow['step'] || '', currentRow['action'] || '']);
+      }
+
+      if (tableRows.length === 0) return '';
+
+      let tableHtml = '<table class="content-table"><thead><tr>';
+      headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
+      tableHtml += '</tr></thead><tbody>';
+
+      tableRows.forEach(row => {
+        tableHtml += '<tr>';
+        row.forEach(cell => { tableHtml += `<td>${escapeHtml(cell)}</td>`; });
+        tableHtml += '</tr>';
+      });
+
+      tableHtml += '</tbody></table>';
+      return tableHtml;
+    };
+
+    // Format pipe-separated table content into HTML table
+    const formatTable = (tableLines: string[]): string => {
+      const pipedLines = tableLines.filter(line => line.includes('|'));
+      if (pipedLines.length === 0) return '';
+
+      const headerLine = pipedLines[0];
+      const headers = headerLine.split('|').map(h => h.trim()).filter(h => h && !h.match(/^[\-\*]+$/));
+
+      const dataRows = pipedLines.slice(1)
+        .filter(line => !line.match(/^\|?[\s\-\*\|]+\|?$/))
+        .map(line => line.split('|').map(cell => cell.trim()).filter(c => c));
+
+      let tableHtml = '<table class="content-table"><thead><tr>';
+      headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
+      tableHtml += '</tr></thead><tbody>';
+
+      dataRows.forEach(row => {
+        tableHtml += '<tr>';
+        for (let i = 0; i < headers.length; i++) {
+          tableHtml += `<td>${escapeHtml(row[i] || '')}</td>`;
+        }
+        tableHtml += '</tr>';
+      });
+
+      tableHtml += '</tbody></table>';
+      return tableHtml;
+    };
+
+    // Check for pipe-separated table format first
+    if (isTableFormat(lines)) {
+      return formatTable(lines);
+    }
+
+    // Check for key-value format that should be a table
+    if (isKeyValueFormat(lines)) {
+      const tableHtml = formatKeyValueAsTable(lines);
+      if (tableHtml) return tableHtml;
+    }
+
     const hasListItems = lines.some(line => bulletPattern.test(line.trim()));
 
     if (hasListItems) {
@@ -80,7 +184,7 @@ export function generateSingleSCOHTML(
           const trimmed = line.trim();
           if (bulletPattern.test(trimmed)) {
             const cleanText = trimmed.replace(bulletPattern, '');
-            return `<li>${cleanText}</li>`;
+            return `<li>${escapeHtml(cleanText)}</li>`;
           } else if (trimmed.length > 0) {
             return trimmed;
           }
@@ -91,8 +195,8 @@ export function generateSingleSCOHTML(
       const hasNonListContent = listItems.some(item => !item.startsWith('<li>'));
 
       if (hasNonListContent) {
-        const formatted = [];
-        let currentList = [];
+        const formatted: string[] = [];
+        let currentList: string[] = [];
 
         for (const item of listItems) {
           if (item.startsWith('<li>')) {
@@ -102,7 +206,7 @@ export function generateSingleSCOHTML(
               formatted.push(`<ul>${currentList.join('')}</ul>`);
               currentList = [];
             }
-            formatted.push(`<p>${item}</p>`);
+            formatted.push(`<p>${escapeHtml(item)}</p>`);
           }
         }
 
@@ -117,7 +221,7 @@ export function generateSingleSCOHTML(
     } else {
       return lines
         .filter(line => line.trim().length > 0)
-        .map(line => `<p>${line.trim()}</p>`)
+        .map(line => `<p>${escapeHtml(line.trim())}</p>`)
         .join('');
     }
   }
@@ -148,7 +252,6 @@ export function generateSingleSCOHTML(
       <section class="slide" id="slide-${index}" style="${index === 0 ? 'display: block;' : 'display: none;'}">
         ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
         <h2>${escapeHtml(module.title)}</h2>
-        <p class="duration"><span class="duration-icon">📚</span> Duration: ${escapeHtml(module.duration || '10-15 mins')}</p>
 
         <div class="module-content">
           ${sectionsHTML}
@@ -709,6 +812,52 @@ export function generateSingleSCOHTML(
     .section-callout-important p {
       color: #7f1d1d;
       font-weight: 500;
+    }
+
+    /* HTML Table styling */
+    .content-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .content-table thead {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+    }
+
+    .content-table th {
+      color: white;
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      border: none;
+    }
+
+    .content-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+      color: #374151;
+    }
+
+    .content-table tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    .content-table tbody tr:hover {
+      background: #eff6ff;
+    }
+
+    .content-table tbody tr:last-child td {
+      border-bottom: none;
     }
 
     /* Acknowledgment Checkbox Styles */

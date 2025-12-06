@@ -237,13 +237,74 @@ const EnhancedCourseBuilder = () => {
       const lines = text.split(/\\n|\n/).filter(line => line.trim());
       const bulletPattern = /^[•\-\*]\s*/;
 
-      // Detect table format: lines with | separators (at least 2 columns)
+      // Detect pipe-separated table format: lines with | separators (at least 2 columns)
       const isTableFormat = (tableLines: string[]): boolean => {
         const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);
         return pipeLines.length >= 2;
       };
 
-      // Format table content into HTML table
+      // Detect key-value format: *Key:** Value or **Key:** Value pattern
+      const isKeyValueFormat = (kvLines: string[]): boolean => {
+        const kvPattern = /^[•\-\*]?\s*\*?\*?([^:*]+)\*?\*?:\*?\*?\s*.+/;
+        const kvMatches = kvLines.filter(line => kvPattern.test(line.trim()));
+        return kvMatches.length >= 2 && kvMatches.some(line => 
+          /responsibility|step|action|role|task|description/i.test(line)
+        );
+      };
+
+      // Convert key-value format to table
+      const formatKeyValueAsTable = (kvLines: string[]): string => {
+        const kvPattern = /^[•\-\*]?\s*\*?\*?([^:*]+)\*?\*?:\*?\*?\s*(.+)/;
+        const rows: { key: string; value: string }[] = [];
+        
+        for (const line of kvLines) {
+          const match = line.trim().match(kvPattern);
+          if (match) {
+            rows.push({ key: match[1].trim(), value: match[2].trim() });
+          }
+        }
+
+        if (rows.length < 2) return '';
+
+        const headers = ['Responsibility', 'Step', 'Action'];
+        const tableRows: string[][] = [];
+        let currentRow: Record<string, string> = {};
+
+        for (const row of rows) {
+          const keyLower = row.key.toLowerCase();
+          if (keyLower.includes('responsibility') || keyLower.includes('role')) {
+            if (Object.keys(currentRow).length > 0) {
+              tableRows.push([currentRow['responsibility'] || '', currentRow['step'] || '', currentRow['action'] || '']);
+            }
+            currentRow = { responsibility: row.value };
+          } else if (keyLower.includes('step')) {
+            currentRow['step'] = row.value;
+          } else if (keyLower.includes('action')) {
+            currentRow['action'] = row.value;
+          }
+        }
+        
+        if (Object.keys(currentRow).length > 0) {
+          tableRows.push([currentRow['responsibility'] || '', currentRow['step'] || '', currentRow['action'] || '']);
+        }
+
+        if (tableRows.length === 0) return '';
+
+        let tableHtml = '<table class="content-table"><thead><tr>';
+        headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
+        tableHtml += '</tr></thead><tbody>';
+
+        tableRows.forEach(row => {
+          tableHtml += '<tr>';
+          row.forEach(cell => { tableHtml += `<td>${escapeHtml(cell)}</td>`; });
+          tableHtml += '</tr>';
+        });
+
+        tableHtml += '</tbody></table>';
+        return tableHtml;
+      };
+
+      // Format pipe-separated table content into HTML table
       const formatTable = (tableLines: string[]): string => {
         const pipedLines = tableLines.filter(line => line.includes('|'));
         if (pipedLines.length === 0) return '';
@@ -271,9 +332,15 @@ const EnhancedCourseBuilder = () => {
         return tableHtml;
       };
 
-      // Check for table format first
+      // Check for pipe-separated table format first
       if (isTableFormat(lines)) {
         return formatTable(lines);
+      }
+
+      // Check for key-value format that should be a table
+      if (isKeyValueFormat(lines)) {
+        const tableHtml = formatKeyValueAsTable(lines);
+        if (tableHtml) return tableHtml;
       }
 
       const hasListItems = lines.some(line => bulletPattern.test(line.trim()));
@@ -460,7 +527,7 @@ const EnhancedCourseBuilder = () => {
         // Plain text - clean white card, NO icon
         return `
       <div class="content-card card-text">
-        ${section.heading ? `<h3 class="card-title-plain">${escapeHtml(section.heading)}</h3>` : ''}
+        ${section.heading ? `<div class="card-header-text"><span class="header-icon-text">📄</span><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
@@ -568,7 +635,10 @@ const EnhancedCourseBuilder = () => {
     .card-content li { color: #475569; line-height: 1.8; margin-bottom: 8px; }
     
     /* Card Type Variations */
-    .card-text { border-left: 4px solid #e2e8f0; }
+    .card-text { background: linear-gradient(135deg, #ffffff, #f8fafc); }
+    .card-header-text { display: flex; align-items: center; padding: 16px 24px; background: linear-gradient(135deg, #f1f5f9, #e2e8f0); border-bottom: 1px solid #cbd5e1; }
+    .card-header-text h3 { margin: 0; font-size: 1.15rem; font-weight: 700; color: #334155; }
+    .header-icon-text { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; margin-right: 12px; font-size: 1.2rem; background: linear-gradient(135deg, #e2e8f0, #cbd5e1); }
     .card-table { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
     .card-important { background: linear-gradient(135deg, #fff5f5, #fed7d7); border-left: 4px solid #e53e3e; }
     .card-important .card-content p { color: #742a2a; font-weight: 500; }
@@ -2632,7 +2702,35 @@ const EnhancedCourseBuilder = () => {
                           </div>
                         )}
                         
-                        {(!section.type || section.type === 'content') && (
+                        {section.type === 'procedure' && (
+                          <div className="bg-green-50 border-l-4 border-green-500 p-5 mb-6 rounded-lg">
+                            <h4 className="text-lg font-semibold text-green-900 mb-3">📋 {section.heading}</h4>
+                            {renderFormattedContent(section.body, 'text-green-800')}
+                          </div>
+                        )}
+                        
+                        {section.type === 'table' && (
+                          <div className="bg-blue-50 border-l-4 border-blue-400 p-5 mb-6 rounded-lg">
+                            <h4 className="text-lg font-semibold text-blue-900 mb-3">📊 {section.heading}</h4>
+                            {renderFormattedContent(section.body, 'text-blue-800')}
+                          </div>
+                        )}
+                        
+                        {section.type === 'definition' && (
+                          <div className="bg-amber-50 border-l-4 border-amber-500 p-5 mb-6 rounded-lg">
+                            <h4 className="text-lg font-semibold text-amber-900 mb-3">📚 {section.heading}</h4>
+                            {renderFormattedContent(section.body, 'text-amber-800')}
+                          </div>
+                        )}
+                        
+                        {section.type === 'note' && (
+                          <div className="bg-purple-50 border-l-4 border-purple-500 p-5 mb-6 rounded-lg">
+                            <h4 className="text-lg font-semibold text-purple-900 mb-3">💡 {section.heading}</h4>
+                            {renderFormattedContent(section.body, 'text-purple-800')}
+                          </div>
+                        )}
+                        
+                        {(!section.type || section.type === 'content' || section.type === 'text') && (
                           <div className="mb-8">
                             <h3 className="text-2xl font-semibold text-gray-900 mb-4">{section.heading}</h3>
                             {renderFormattedContent(section.body, 'text-gray-700')}
