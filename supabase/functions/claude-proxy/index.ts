@@ -120,30 +120,46 @@ DO NOT include any text before or after the JSON.`;
         break;
 
       case 'generate-modules':
-        prompt = `Convert this SOP document into an e-learning course. PRESERVE ALL CONTENT from the original document.
+        prompt = `Convert this document into an e-learning course. PRESERVE ALL CONTENT from the original document.
 
 ABSOLUTE REQUIREMENT:
 Include EVERY piece of content - this is compliance training where missing content is a legal liability.
 
-CONTENT STRUCTURE:
-1. Each major document section becomes a course SECTION
-2. Use "text" type for regular content - include ALL original text
-3. Use "procedure" type ONLY for numbered step-by-step processes (these will be expandable)
-4. Use "callout-important" type ONLY for actual warnings, safety alerts, or critical compliance deadlines
-5. DO NOT add "objectives" or "summary" sections - just use the original document content
+IGNORE/FILTER OUT:
+- Repeated page headers and footers (company name, document number, page numbers, version info that appears on every page)
+- Do NOT include "Page X of Y" text
+- Do NOT repeat document metadata that appears on multiple pages
+
+CONTENT TYPE RULES:
+1. Use "text" type for ALL regular content including:
+   - Paragraphs and descriptions
+   - Section-numbered content (like 5.1, 5.1.1, 5.1.2) - these are section references, NOT procedures
+   - Bullet point lists
+   - Definitions and explanations
+
+2. Use "procedure" type ONLY for actual step-by-step instructions that:
+   - Start with simple numbers (1., 2., 3.) not section numbers (5.1, 5.1.1)
+   - Describe sequential actions to perform
+   - Are actual "how to do something" steps
+
+3. Use "callout-important" ONLY for actual warnings, safety alerts, or critical deadlines
+
+4. Use "table" type for table data - convert to structured format:
+   - Include table title as heading
+   - Convert rows to readable format with bullet points
+   - Preserve all data from the table
+
+IMPORTANT DISTINCTIONS:
+- "5.1.1 Case Intake and Triage" = section heading, use "text" type
+- "1. Review the document 2. Verify the data 3. Submit" = procedure steps, use "procedure" type
+- Tables with columns and rows = use "table" type, format as structured list
 
 CONTENT RULES:
-- Include ALL text from the original document exactly as written
-- Keep ALL numbered steps exactly as written
+- Include ALL text exactly as written
+- Keep ALL numbered items exactly as written
 - Keep ALL bullet points exactly as written
 - DO NOT skip, summarize, or paraphrase any content
-- DO NOT add AI-generated learning objectives or summaries
-- Break content into logical blocks with clear headings from the document
-
-FORMATTING:
-- Use bullet points (•) for lists
-- Use numbered lists (1. 2. 3.) for sequential steps in procedures
-- Use descriptive headings from the original document
+- DO NOT add AI-generated objectives or summaries
 
 DOCUMENT TO CONVERT:
 ${text}
@@ -155,17 +171,18 @@ OUTPUT FORMAT - Respond with ONLY valid JSON:
       "id": "section_1",
       "title": "Section Title from Document",
       "content": [
-        {"type": "text", "heading": "Subsection Heading", "body": "Full content from document exactly as written"},
-        {"type": "text", "heading": "Another Heading", "body": "More content with bullet points:\\n• Point 1\\n• Point 2\\n• Point 3"},
-        {"type": "procedure", "heading": "Procedure: Process Name", "body": "1. First step exactly as written\\n2. Second step\\n3. Third step"},
-        {"type": "callout-important", "heading": "⚠️ Warning", "body": "Only use for actual safety warnings or critical deadlines from the document"}
+        {"type": "text", "heading": "5.1.1 Subsection Title", "body": "Content for this subsection exactly as written"},
+        {"type": "text", "heading": "Description", "body": "Regular content with bullets:\\n• Point 1\\n• Point 2"},
+        {"type": "procedure", "heading": "How to Process a Case", "body": "1. Open the system\\n2. Enter the data\\n3. Click submit"},
+        {"type": "table", "heading": "Requirements Matrix", "body": "**Column Headers:** Type A | Type B | Type C\\n\\n• Requirement 1: ✓ | ✓ | ✗\\n• Requirement 2: ✓ | ✗ | ✓"},
+        {"type": "callout-important", "heading": "⚠️ Warning", "body": "Only for actual warnings from the document"}
       ],
       "relatedFacts": []
     }
   ]
 }
 
-Create sections matching the document structure. Only use callout-important for ACTUAL warnings in the source document.`;
+Create sections matching the document structure.`;
         maxTokens = 32000;
         break;
 

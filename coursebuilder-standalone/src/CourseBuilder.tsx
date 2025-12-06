@@ -287,19 +287,37 @@ const EnhancedCourseBuilder = () => {
       }
     };
 
+    // Count actual procedure steps (1., 2., 3. format, not section numbers like 5.1)
+    const countProcedureSteps = (text: string): number => {
+      const lines = text.split(/\\n|\n/);
+      let stepCount = 0;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // Match simple numbered steps like "1." "2." but not "5.1" or "5.1.1"
+        if (/^\d+\.\s+\w/.test(trimmed) && !/^\d+\.\d+/.test(trimmed)) {
+          stepCount++;
+        }
+      }
+      return stepCount;
+    };
+
     // Build modules HTML with expandable procedures for interactivity
     let procedureCounter = 0;
     const modulesHTML = courseData.modules.map((module, idx) => {
       const sectionsHTML = module.content.map(section => {
         const isProcedure = section.type === 'procedure';
-        const procedureId = isProcedure ? `procedure-${idx}-${procedureCounter++}` : null;
+        const isTable = section.type === 'table';
+        const stepCount = isProcedure ? countProcedureSteps(section.body) : 0;
+        const shouldExpand = isProcedure && stepCount >= 5;
+        const procedureId = shouldExpand ? `procedure-${idx}-${procedureCounter++}` : null;
         
-        if (isProcedure) {
+        // Long procedures (5+ steps) are expandable
+        if (shouldExpand) {
           return `
       <div class="content-section section-procedure">
         <div class="procedure-header" onclick="toggleProcedure('${procedureId}')">
           <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
-          <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view steps</span>
+          <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view ${stepCount} steps</span>
         </div>
         <div class="procedure-content" id="${procedureId}" style="display: none;">
           ${formatContent(section.body)}
@@ -307,7 +325,20 @@ const EnhancedCourseBuilder = () => {
       </div>
     `;
         }
+
+        // Tables get special styling
+        if (isTable) {
+          return `
+      <div class="content-section section-table">
+        ${section.heading ? `<h3>📊 ${escapeHtml(section.heading)}</h3>` : ''}
+        <div class="table-content">
+          ${formatContent(section.body)}
+        </div>
+      </div>
+    `;
+        }
         
+        // Short procedures or regular content - show directly
         return `
       <div class="content-section section-${section.type || 'text'}">
         ${section.heading ? `<h3>${escapeHtml(section.heading)}</h3>` : ''}
@@ -407,6 +438,11 @@ const EnhancedCourseBuilder = () => {
     .procedure-content.expanded { display: block !important; }
     .section-procedure ol { list-style-type: decimal; margin-left: 1.5rem; color: #166534; }
     .section-procedure li { margin-bottom: 0.75rem; line-height: 1.7; }
+    .section-table { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 5px solid #0284c7; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
+    .section-table h3 { color: #0369a1; font-weight: 700; }
+    .section-table .table-content { background: white; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+    .section-table p { color: #0c4a6e; }
+    .section-table li { color: #0c4a6e; border-bottom: 1px solid #e0f2fe; padding-bottom: 0.5rem; }
     .quiz-options { list-style-type: none; padding-left: 0; margin-top: 0.75rem; }
     .quiz-option { margin-bottom: 0.5rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: #f3f4f6; color: #374151; }
     .quiz-option.correct-answer { border-left: 4px solid #16a34a; background: #ecfdf3; font-weight: 600; color: #166534; position: relative; padding-left: 2.2rem; }
