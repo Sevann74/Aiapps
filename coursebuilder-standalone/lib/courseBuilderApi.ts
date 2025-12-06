@@ -99,7 +99,7 @@ export async function extractVerifiableFacts(text: string): Promise<Fact[]> {
       throw new Error('Document text is too short. Please ensure the PDF contains sufficient text content.');
     }
 
-    const MAX_TEXT_LENGTH = 75000; // ~30 pages
+    const MAX_TEXT_LENGTH = 150000; // ~50 pages
     let processText = text;
 
     if (text.length > MAX_TEXT_LENGTH) {
@@ -188,7 +188,7 @@ export async function generateModulesFromDocument(
   facts: Fact[]
 ): Promise<Module[]> {
   try {
-    const MAX_TEXT_LENGTH = 75000; // ~30 pages
+    const MAX_TEXT_LENGTH = 150000; // ~50 pages
     let processText = text;
 
     if (text.length > MAX_TEXT_LENGTH) {
