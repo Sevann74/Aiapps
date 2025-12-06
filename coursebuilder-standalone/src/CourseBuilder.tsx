@@ -287,23 +287,31 @@ const EnhancedCourseBuilder = () => {
       }
     };
 
-    // Build modules HTML with interactive checkboxes for important sections
-    let checkboxCounter = 0;
+    // Build modules HTML with expandable procedures for interactivity
+    let procedureCounter = 0;
     const modulesHTML = courseData.modules.map((module, idx) => {
       const sectionsHTML = module.content.map(section => {
-        const isInteractive = section.type === 'callout-important' || section.type === 'callout-key';
-        const checkboxId = isInteractive ? `checkbox-${idx}-${checkboxCounter++}` : null;
+        const isProcedure = section.type === 'procedure';
+        const procedureId = isProcedure ? `procedure-${idx}-${procedureCounter++}` : null;
+        
+        if (isProcedure) {
+          return `
+      <div class="content-section section-procedure">
+        <div class="procedure-header" onclick="toggleProcedure('${procedureId}')">
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
+          <span class="procedure-toggle" id="${procedureId}-toggle">▼ Click to view steps</span>
+        </div>
+        <div class="procedure-content" id="${procedureId}" style="display: none;">
+          ${formatContent(section.body)}
+        </div>
+      </div>
+    `;
+        }
         
         return `
       <div class="content-section section-${section.type || 'text'}">
         ${section.heading ? `<h3>${escapeHtml(section.heading)}</h3>` : ''}
         ${formatContent(section.body)}
-        ${isInteractive ? `
-        <label class="acknowledge-checkbox" for="${checkboxId}">
-          <input type="checkbox" id="${checkboxId}" onchange="markAcknowledged('${checkboxId}', ${idx})">
-          <span class="checkbox-label">I have read and understood this ${section.type === 'callout-important' ? 'important information' : 'key point'}</span>
-        </label>
-        ` : ''}
       </div>
     `;
       }).join('\n');
@@ -390,12 +398,15 @@ const EnhancedCourseBuilder = () => {
     .section-callout-key { background: linear-gradient(135deg, #fef3c7 0%, #fef9e6 100%); border-left: 5px solid #f59e0b; padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow-md); }
     .section-callout-key h3, .section-callout-key h4 { color: #92400e; font-weight: 700; }
     .section-callout-key p { color: #78350f; font-weight: 500; }
-    .acknowledge-checkbox { display: flex; align-items: center; gap: 12px; margin-top: 1rem; padding: 12px 16px; background: rgba(255, 255, 255, 0.8); border: 2px solid #d1d5db; border-radius: 10px; cursor: pointer; transition: all 0.3s ease; user-select: none; }
-    .acknowledge-checkbox:hover { border-color: var(--brand-cyan); background: rgba(255, 255, 255, 0.95); }
-    .acknowledge-checkbox input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--brand-cyan); cursor: pointer; flex-shrink: 0; }
-    .acknowledge-checkbox .checkbox-label { font-size: 0.95rem; font-weight: 600; color: #374151; }
-    .acknowledge-checkbox:has(input:checked) { border-color: #10b981; background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); }
-    .acknowledge-checkbox:has(input:checked) .checkbox-label { color: #065f46; }
+    .section-procedure { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 5px solid #22c55e; padding: 0; border-radius: 16px; box-shadow: var(--shadow-md); overflow: hidden; }
+    .procedure-header { padding: 1.5rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.3s ease; }
+    .procedure-header:hover { background: rgba(34, 197, 94, 0.1); }
+    .procedure-header h3 { color: #166534; font-weight: 700; margin: 0; }
+    .procedure-toggle { font-size: 0.9rem; color: #22c55e; font-weight: 600; }
+    .procedure-content { padding: 0 1.5rem 1.5rem 1.5rem; border-top: 1px solid rgba(34, 197, 94, 0.2); }
+    .procedure-content.expanded { display: block !important; }
+    .section-procedure ol { list-style-type: decimal; margin-left: 1.5rem; color: #166534; }
+    .section-procedure li { margin-bottom: 0.75rem; line-height: 1.7; }
     .quiz-options { list-style-type: none; padding-left: 0; margin-top: 0.75rem; }
     .quiz-option { margin-bottom: 0.5rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: #f3f4f6; color: #374151; }
     .quiz-option.correct-answer { border-left: 4px solid #16a34a; background: #ecfdf3; font-weight: 600; color: #166534; position: relative; padding-left: 2.2rem; }
@@ -451,10 +462,17 @@ const EnhancedCourseBuilder = () => {
     const NUM_MODULES = ${courseData.modules.length};
     let currentSlide = 0;
     
-    // Track acknowledged checkboxes
-    function markAcknowledged(checkboxId, slideIndex) {
-      // Visual feedback only in preview - no navigation blocking
-      console.log('Acknowledged:', checkboxId, 'on slide', slideIndex);
+    // Toggle expandable procedure sections
+    function toggleProcedure(procedureId) {
+      const content = document.getElementById(procedureId);
+      const toggle = document.getElementById(procedureId + '-toggle');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▲ Click to hide steps';
+      } else {
+        content.style.display = 'none';
+        toggle.textContent = '▼ Click to view steps';
+      }
     }
 
     function goToSlide(slideIndex) {

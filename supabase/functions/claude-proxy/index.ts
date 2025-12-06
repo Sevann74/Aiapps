@@ -120,30 +120,30 @@ DO NOT include any text before or after the JSON.`;
         break;
 
       case 'generate-modules':
-        prompt = `Convert this SOP document into an e-learning course. Your task is to PRESERVE ALL CONTENT while adding minimal instructional structure.
+        prompt = `Convert this SOP document into an e-learning course. PRESERVE ALL CONTENT from the original document.
 
-ABSOLUTE REQUIREMENT - READ CAREFULLY:
-You must include EVERY SINGLE piece of content from the document. This is compliance training - missing content is a legal liability. Count the sections in the document and ensure your output has the same number of sections.
+ABSOLUTE REQUIREMENT:
+Include EVERY piece of content - this is compliance training where missing content is a legal liability.
 
-CONVERSION RULES:
-1. Each major section (1.0, 2.0, 3.0, etc.) becomes a MODULE
-2. Each subsection (1.1, 1.2, 2.1, etc.) becomes a CONTENT BLOCK within that module
-3. Copy ALL text from each section - do not summarize or paraphrase
-4. Keep ALL numbered steps exactly as written
-5. Keep ALL bullet points exactly as written
-6. Keep ALL warnings, notes, and important information
-7. Add ONLY: learning objectives at module start, brief summary at module end
+CONTENT STRUCTURE:
+1. Each major document section becomes a course SECTION
+2. Use "text" type for regular content - include ALL original text
+3. Use "procedure" type ONLY for numbered step-by-step processes (these will be expandable)
+4. Use "callout-important" type ONLY for actual warnings, safety alerts, or critical compliance deadlines
+5. DO NOT add "objectives" or "summary" sections - just use the original document content
 
-WHAT TO ADD (minimal):
-- Learning objectives based on the section content
-- A 2-3 sentence summary at the end of each module
+CONTENT RULES:
+- Include ALL text from the original document exactly as written
+- Keep ALL numbered steps exactly as written
+- Keep ALL bullet points exactly as written
+- DO NOT skip, summarize, or paraphrase any content
+- DO NOT add AI-generated learning objectives or summaries
+- Break content into logical blocks with clear headings from the document
 
-WHAT NOT TO DO:
-- Do NOT summarize paragraphs
-- Do NOT combine steps
-- Do NOT skip any content
-- Do NOT paraphrase - use original wording
-- Do NOT reduce the number of bullet points
+FORMATTING:
+- Use bullet points (•) for lists
+- Use numbered lists (1. 2. 3.) for sequential steps in procedures
+- Use descriptive headings from the original document
 
 DOCUMENT TO CONVERT:
 ${text}
@@ -152,23 +152,20 @@ OUTPUT FORMAT - Respond with ONLY valid JSON:
 {
   "modules": [
     {
-      "id": "module_1",
-      "title": "Section title from document",
-      "duration": "5-10 mins",
+      "id": "section_1",
+      "title": "Section Title from Document",
       "content": [
-        {"type": "objectives", "heading": "Learning Objectives", "body": "After this module you will understand:\\n• Objective 1\\n• Objective 2"},
-        {"type": "text", "heading": "Subsection Title", "body": "FULL content from this subsection - copy everything"},
-        {"type": "text", "heading": "Next Subsection", "body": "FULL content from next subsection"},
-        {"type": "procedure", "heading": "Procedure Name", "body": "1. Step one exactly as written\\n2. Step two exactly as written\\n3. All remaining steps"},
-        {"type": "callout-warning", "heading": "Warning/Note Title", "body": "Full warning or note text"},
-        {"type": "summary", "heading": "Summary", "body": "Brief 2-3 sentence summary"}
+        {"type": "text", "heading": "Subsection Heading", "body": "Full content from document exactly as written"},
+        {"type": "text", "heading": "Another Heading", "body": "More content with bullet points:\\n• Point 1\\n• Point 2\\n• Point 3"},
+        {"type": "procedure", "heading": "Procedure: Process Name", "body": "1. First step exactly as written\\n2. Second step\\n3. Third step"},
+        {"type": "callout-important", "heading": "⚠️ Warning", "body": "Only use for actual safety warnings or critical deadlines from the document"}
       ],
       "relatedFacts": []
     }
   ]
 }
 
-VERIFICATION: Before responding, count the major sections in the document. Your response MUST have that many modules. If the document has 8 sections, output 8 modules.`;
+Create sections matching the document structure. Only use callout-important for ACTUAL warnings in the source document.`;
         maxTokens = 32000;
         break;
 
