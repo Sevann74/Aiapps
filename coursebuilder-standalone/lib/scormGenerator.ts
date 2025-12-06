@@ -141,12 +141,22 @@ export function generateSingleSCOHTML(
       const pipedLines = tableLines.filter(line => line.includes('|'));
       if (pipedLines.length === 0) return '';
 
-      const headerLine = pipedLines[0];
-      const headers = headerLine.split('|').map(h => h.trim()).filter(h => h && !h.match(/^[\-\*]+$/));
+      // Clean line: remove bullet prefix and markdown asterisks
+      const cleanLine = (line: string): string => {
+        return line.trim()
+          .replace(/^[•·●○\-\*]\s*/, '')  // Remove bullet prefix
+          .replace(/\*\*/g, '');           // Remove markdown bold **
+      };
+
+      const headerLine = cleanLine(pipedLines[0]);
+      const headers = headerLine.split('|').map(h => h.trim()).filter(h => h && !h.match(/^[\-]+$/));
 
       const dataRows = pipedLines.slice(1)
         .filter(line => !line.match(/^\|?[\s\-\*\|]+\|?$/))
-        .map(line => line.split('|').map(cell => cell.trim()).filter(c => c));
+        .map(line => {
+          const cleaned = cleanLine(line);
+          return cleaned.split('|').map(cell => cell.trim()).filter(c => c);
+        });
 
       let tableHtml = '<table class="content-table"><thead><tr>';
       headers.forEach(h => { tableHtml += `<th>${escapeHtml(h)}</th>`; });
