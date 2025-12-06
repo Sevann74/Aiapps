@@ -99,11 +99,13 @@ export async function extractVerifiableFacts(text: string): Promise<Fact[]> {
       throw new Error('Document text is too short. Please ensure the PDF contains sufficient text content.');
     }
 
-    const MAX_TEXT_LENGTH = 80000; // ~30 pages - optimized for API timeout limits
+    const MAX_TEXT_LENGTH = 60000; // ~25 pages per API call - safe for timeout
     let processText = text;
 
+    // For fact extraction, we use the first portion of the document
+    // Facts from the beginning are usually the most important (definitions, scope, etc.)
     if (text.length > MAX_TEXT_LENGTH) {
-      console.warn(`Document text is ${text.length} characters. Truncating to ${MAX_TEXT_LENGTH} (~30 pages) for fact extraction.`);
+      console.warn(`Document text is ${text.length} characters. Using first ${MAX_TEXT_LENGTH} characters for fact extraction.`);
       processText = text.substring(0, MAX_TEXT_LENGTH);
     }
 
@@ -183,29 +185,129 @@ export async function generateQuestionsFromFacts(
   }
 }
 
+// Split text into chunks at natural boundaries (paragraphs, sections)
+function splitTextIntoChunks(text: string, maxChunkSize: number): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+  
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChunkSize) {
+      chunks.push(remaining);
+      break;
+    }
+    
+    // Find a good break point (paragraph or section break)
+    let breakPoint = maxChunkSize;
+    
+    // Look for section breaks first (e.g., "5.1", "Section", double newlines)
+    const sectionPattern = /\n\s*\n|\n\d+\.\d*\s|\nSection\s/gi;
+    let lastGoodBreak = -1;
+    let match;
+    
+    // Reset regex and search within the chunk
+    const searchText = remaining.substring(0, maxChunkSize);
+    const regex = new RegExp(sectionPattern);
+    while ((match = regex.exec(searchText)) !== null) {
+      if (match.index > maxChunkSize * 0.5) { // Only use breaks in the second half
+        lastGoodBreak = match.index;
+      }
+    }
+    
+    if (lastGoodBreak > 0) {
+      breakPoint = lastGoodBreak;
+    } else {
+      // Fall back to last period or newline
+      const lastPeriod = searchText.lastIndexOf('. ');
+      const lastNewline = searchText.lastIndexOf('\n');
+      breakPoint = Math.max(lastPeriod, lastNewline, maxChunkSize * 0.8);
+    }
+    
+    chunks.push(remaining.substring(0, breakPoint));
+    remaining = remaining.substring(breakPoint).trim();
+  }
+  
+  return chunks;
+}
+
 export async function generateModulesFromDocument(
   text: string,
-  facts: Fact[]
+  facts: Fact[],
+  onProgress?: (message: string) => void
 ): Promise<Module[]> {
   try {
-    const MAX_TEXT_LENGTH = 80000; // ~30 pages - optimized for API timeout limits
+    const CHUNK_SIZE = 60000; // ~25 pages per chunk - safe for API timeout
+    const MAX_TOTAL_SIZE = 200000; // ~80 pages max total
+    
     let processText = text;
-
-    if (text.length > MAX_TEXT_LENGTH) {
-      console.warn(`Document text is ${text.length} characters. Truncating to ${MAX_TEXT_LENGTH} (~30 pages) for processing.`);
-      processText = text.substring(0, MAX_TEXT_LENGTH);
+    if (text.length > MAX_TOTAL_SIZE) {
+      console.warn(`Document text is ${text.length} characters. Limiting to ${MAX_TOTAL_SIZE} characters.`);
+      processText = text.substring(0, MAX_TOTAL_SIZE);
     }
-
-    const result = await callEdgeFunction<{ modules: Module[] }>('generate-modules', {
-      text: processText,
-      facts: facts.slice(0, 15)
-    });
-
-    if (!result.modules || result.modules.length === 0) {
-      throw new Error('No modules were generated. The API response was empty or invalid.');
+    
+    // If document is small enough, process in one go
+    if (processText.length <= CHUNK_SIZE) {
+      onProgress?.('Processing document...');
+      const result = await callEdgeFunction<{ modules: Module[] }>('generate-modules', {
+        text: processText,
+        facts: facts.slice(0, 15)
+      });
+      
+      if (!result.modules || result.modules.length === 0) {
+        throw new Error('No modules were generated. The API response was empty or invalid.');
+      }
+      
+      return result.modules;
     }
-
-    return result.modules;
+    
+    // For large documents, process in chunks
+    const chunks = splitTextIntoChunks(processText, CHUNK_SIZE);
+    console.log(`Processing large document in ${chunks.length} chunks...`);
+    onProgress?.(`Processing large document in ${chunks.length} parts...`);
+    
+    const allModules: Module[] = [];
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const chunkNum = i + 1;
+      
+      console.log(`Processing chunk ${chunkNum}/${chunks.length} (${chunk.length} characters)...`);
+      onProgress?.(`Processing part ${chunkNum} of ${chunks.length}...`);
+      
+      try {
+        const result = await callEdgeFunction<{ modules: Module[] }>('generate-modules', {
+          text: chunk,
+          facts: facts.slice(0, 10),
+          chunkInfo: { current: chunkNum, total: chunks.length }
+        });
+        
+        if (result.modules && result.modules.length > 0) {
+          // Adjust module IDs to be unique across chunks
+          const adjustedModules = result.modules.map((module, idx) => ({
+            ...module,
+            id: `section_${allModules.length + idx + 1}`
+          }));
+          allModules.push(...adjustedModules);
+        }
+      } catch (chunkError) {
+        console.error(`Error processing chunk ${chunkNum}:`, chunkError);
+        // Continue with other chunks even if one fails
+        onProgress?.(`Warning: Part ${chunkNum} had issues, continuing...`);
+      }
+      
+      // Small delay between chunks to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    if (allModules.length === 0) {
+      throw new Error('No modules were generated from any part of the document.');
+    }
+    
+    console.log(`Successfully generated ${allModules.length} modules from ${chunks.length} chunks`);
+    onProgress?.(`Generated ${allModules.length} sections from document`);
+    
+    return allModules;
   } catch (error) {
     console.error('Error generating modules:', error);
     throw new Error(`Failed to generate modules: ${error instanceof Error ? error.message : 'Unknown error'}`);

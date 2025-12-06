@@ -1333,7 +1333,7 @@ const EnhancedCourseBuilder = () => {
           <p className="text-lg font-semibold text-gray-700 mb-2">
             {uploadedFile ? uploadedFile.name : 'Click to upload or drag and drop'}
           </p>
-          <p className="text-sm text-gray-500">PDF files only • Max 10MB • Up to 30 pages</p>
+          <p className="text-sm text-gray-500">PDF files only • Max 10MB • Up to 80 pages</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -1346,7 +1346,7 @@ const EnhancedCourseBuilder = () => {
         {documentText && (
           <div className="mt-8">
             {/* Document Size Warning */}
-            {pdfExtractionResult && (pdfExtractionResult.pageCount > 30 || pdfExtractionResult.characterCount > 80000) && (
+            {pdfExtractionResult && (pdfExtractionResult.pageCount > 80 || pdfExtractionResult.characterCount > 200000) && (
               <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4 mb-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
@@ -1356,7 +1356,7 @@ const EnhancedCourseBuilder = () => {
                       Your document has <strong>{pdfExtractionResult.pageCount} pages</strong> and <strong>{pdfExtractionResult.characterCount.toLocaleString()} characters</strong>.
                     </p>
                     <p className="text-sm text-orange-700 mt-1">
-                      The system will process the first ~30 pages (80,000 characters) to avoid timeouts. 
+                      Large documents are processed in parts. Up to ~80 pages (200,000 characters) supported. 
                       Content beyond this limit may not be included in the generated course.
                     </p>
                   </div>
@@ -1372,7 +1372,7 @@ const EnhancedCourseBuilder = () => {
                   {pdfExtractionResult && (
                     <p className="text-sm text-green-700">
                       {pdfExtractionResult.pageCount} pages • {pdfExtractionResult.wordCount} words • {pdfExtractionResult.characterCount.toLocaleString()} characters
-                      {pdfExtractionResult.characterCount <= 80000 && (
+                      {pdfExtractionResult.characterCount <= 200000 && (
                         <span className="ml-2 text-green-600"> Within limits</span>
                       )}
                     </p>
