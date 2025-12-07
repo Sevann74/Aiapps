@@ -190,6 +190,13 @@ CONTENT RULES:
 - PRESERVE FORMATTING: Use double newlines between separate items, definitions, or paragraphs
 - For definition lists: separate each term with blank lines for readability
 
+BULLET POINT FORMATTING - CRITICAL:
+- ALWAYS put each bullet point on its own line with \\n before each bullet
+- NEVER output bullets inline like "• Item 1 • Item 2 • Item 3"
+- CORRECT: "Intro text:\\n• Item 1\\n• Item 2\\n• Item 3"
+- WRONG: "Intro text: • Item 1 • Item 2 • Item 3"
+- Each bullet MUST be on a separate line using \\n
+
 DOCUMENT TO CONVERT:
 ${text}
 
