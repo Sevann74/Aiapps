@@ -177,19 +177,7 @@ const EnhancedCourseBuilder = () => {
     
     const bulletCount = (processedText.match(/•/g) || []).length;
     if (bulletCount >= 2) {
-      // Check if bullets are inline (multiple on same line)
-      const linesWithBullets = processedText.split('\n').filter(line => line.includes('•'));
-      const hasInlineBullets = linesWithBullets.some(line => (line.match(/•/g) || []).length >= 2);
-      
-      if (hasInlineBullets) {
-        processedText = processedText.replace(/\.\s*•\s*/g, '.\n• ');
-        processedText = processedText.replace(/([^.\n])\s*•\s*/g, '$1\n• ');
-        if (processedText.startsWith('\n')) {
-          processedText = processedText.substring(1);
-        }
-      }
-    } else if (bulletCount === 1) {
-      processedText = processedText.replace(/([^.\n])\s*•\s*/g, '$1\n• ');
+      processedText = processedText.replace(/\s*•\s*/g, '\n• ');
       if (processedText.startsWith('\n')) {
         processedText = processedText.substring(1);
       }
@@ -311,27 +299,10 @@ const EnhancedCourseBuilder = () => {
       // First, normalize any escaped newlines
       processedText = processedText.replace(/\\n/g, '\n');
       
-      // Check if text has multiple bullet points on same line (inline bullets)
-      // Pattern: text followed by bullet, or bullet followed by text then another bullet
+      // Simple: if 2+ bullets, put each on its own line
       const bulletCount = (processedText.match(/•/g) || []).length;
       if (bulletCount >= 2) {
-        // Check if bullets are inline (not already on separate lines)
-        const linesWithBullets = processedText.split('\n').filter(line => line.includes('•'));
-        const hasInlineBullets = linesWithBullets.some(line => (line.match(/•/g) || []).length >= 2);
-        
-        if (hasInlineBullets) {
-          // Split on bullet character, putting each bullet on its own line
-          // Handle patterns like "• Item 1. • Item 2." or "• Item 1 • Item 2"
-          processedText = processedText.replace(/\.\s*•\s*/g, '.\n• ');  // Period before bullet
-          processedText = processedText.replace(/([^.\n])\s*•\s*/g, '$1\n• ');  // No period before bullet
-          // Clean up any leading newline
-          if (processedText.startsWith('\n')) {
-            processedText = processedText.substring(1);
-          }
-        }
-      } else if (bulletCount === 1) {
-        // Single bullet - ensure it's on its own line if there's text before it
-        processedText = processedText.replace(/([^.\n])\s*•\s*/g, '$1\n• ');
+        processedText = processedText.replace(/\s*•\s*/g, '\n• ');
         if (processedText.startsWith('\n')) {
           processedText = processedText.substring(1);
         }
