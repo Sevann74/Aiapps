@@ -175,12 +175,14 @@ const EnhancedCourseBuilder = () => {
     // Normalize escaped newlines
     processedText = processedText.replace(/\\n/g, '\n');
     
+    // Aggressive bullet fix: split on bullet character and rejoin with newlines
     const bulletCount = (processedText.match(/•/g) || []).length;
     if (bulletCount >= 2) {
-      processedText = processedText.replace(/\s*•\s*/g, '\n• ');
-      if (processedText.startsWith('\n')) {
-        processedText = processedText.substring(1);
-      }
+      // Split by bullet, filter empty parts, rejoin with newline + bullet
+      const parts = processedText.split('•');
+      const firstPart = parts[0].trim(); // Text before first bullet (if any)
+      const bulletParts = parts.slice(1).map(p => '• ' + p.trim()).filter(p => p !== '• ');
+      processedText = firstPart ? firstPart + '\n' + bulletParts.join('\n') : bulletParts.join('\n');
     }
     
     const lines = processedText.split('\n').filter(line => line.trim());
@@ -299,13 +301,13 @@ const EnhancedCourseBuilder = () => {
       // First, normalize any escaped newlines
       processedText = processedText.replace(/\\n/g, '\n');
       
-      // Simple: if 2+ bullets, put each on its own line
+      // Aggressive bullet fix: split on bullet character and rejoin with newlines
       const bulletCount = (processedText.match(/•/g) || []).length;
       if (bulletCount >= 2) {
-        processedText = processedText.replace(/\s*•\s*/g, '\n• ');
-        if (processedText.startsWith('\n')) {
-          processedText = processedText.substring(1);
-        }
+        const parts = processedText.split('•');
+        const firstPart = parts[0].trim();
+        const bulletParts = parts.slice(1).map(p => '• ' + p.trim()).filter(p => p !== '• ');
+        processedText = firstPart ? firstPart + '\n' + bulletParts.join('\n') : bulletParts.join('\n');
       }
 
       // Filter out separator lines (---, --, etc.) and empty lines
