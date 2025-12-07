@@ -277,10 +277,23 @@ const EnhancedCourseBuilder = () => {
         }
       }
 
+      // First, normalize any escaped newlines
+      let processedText = text.replace(/\\n/g, '\n');
+      
+      // ALWAYS process bullets first, before any other formatting
+      // Aggressive bullet fix: split on bullet character and rejoin with newlines
+      const bulletCount = (processedText.match(/•/g) || []).length;
+      if (bulletCount >= 2) {
+        const parts = processedText.split('•');
+        const firstPart = parts[0].trim();
+        const bulletParts = parts.slice(1).map(p => '• ' + p.trim()).filter(p => p !== '• ');
+        processedText = firstPart ? firstPart + '\n' + bulletParts.join('\n') : bulletParts.join('\n');
+      }
+
       // Check for definition list format (Term: Definition with double newlines)
       // If text contains double newlines, treat as paragraph-separated content
-      if (text.includes('\n\n')) {
-        const paragraphs = text.split('\n\n').filter(p => p.trim());
+      if (processedText.includes('\n\n')) {
+        const paragraphs = processedText.split('\n\n').filter(p => p.trim());
         if (paragraphs.length > 1) {
           return paragraphs.map(p => {
             const trimmed = p.trim().replace(/\n/g, ' ');
@@ -292,22 +305,6 @@ const EnhancedCourseBuilder = () => {
             return `<p>${escapeHtml(trimmed)}</p>`;
           }).join('\n');
         }
-      }
-
-      // Convert inline bullets to proper line-separated bullets
-      // Matches patterns like "• Item 1. • Item 2. • Item 3." or "• Item 1 • Item 2"
-      let processedText = text;
-      
-      // First, normalize any escaped newlines
-      processedText = processedText.replace(/\\n/g, '\n');
-      
-      // Aggressive bullet fix: split on bullet character and rejoin with newlines
-      const bulletCount = (processedText.match(/•/g) || []).length;
-      if (bulletCount >= 2) {
-        const parts = processedText.split('•');
-        const firstPart = parts[0].trim();
-        const bulletParts = parts.slice(1).map(p => '• ' + p.trim()).filter(p => p !== '• ');
-        processedText = firstPart ? firstPart + '\n' + bulletParts.join('\n') : bulletParts.join('\n');
       }
 
       // Filter out separator lines (---, --, etc.) and empty lines
