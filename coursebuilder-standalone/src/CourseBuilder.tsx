@@ -851,13 +851,31 @@ const EnhancedCourseBuilder = () => {
     .icon-green { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
     .icon-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); }
     .icon-purple { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); }
+    .icon-emerald { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
+    .icon-slate { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); }
+    .icon-gray { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); }
+    
+    /* Card Header (matching SCORM output) */
+    .card-header { display: flex; align-items: center; padding: 18px 24px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .card-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
     
     /* Title Colors */
     .card-title-blue { background: linear-gradient(135deg, #eff6ff, #dbeafe); color: #1e40af; }
+    .card-title-blue h3 { color: #1e40af; }
     .card-title-red { background: linear-gradient(135deg, #fef2f2, #fee2e2); color: #991b1b; }
+    .card-title-red h3 { color: #991b1b; }
     .card-title-green { background: linear-gradient(135deg, #f0fdf4, #dcfce7); color: #166534; }
+    .card-title-green h3 { color: #166534; }
     .card-title-amber { background: linear-gradient(135deg, #fffbeb, #fef3c7); color: #92400e; }
+    .card-title-amber h3 { color: #92400e; }
     .card-title-purple { background: linear-gradient(135deg, #faf5ff, #f3e8ff); color: #6b21a8; }
+    .card-title-purple h3 { color: #6b21a8; }
+    .card-title-emerald { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
+    .card-title-emerald h3 { color: #065f46; }
+    .card-title-slate { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
+    .card-title-slate h3 { color: #334155; }
+    .card-title-gray { background: linear-gradient(135deg, #f9fafb, #f3f4f6); }
+    .card-title-gray h3 { color: #374151; }
     
     /* Card Content */
     .card-content { padding: 20px 24px; }
