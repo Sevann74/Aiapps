@@ -220,9 +220,16 @@ export function generateSingleSCOHTML(
     }
 
     // Detect pipe-separated table format: lines with | separators (at least 2 columns)
+    // Require at least 3 non-separator pipe lines (header + 2 data rows) to be a real table
     const isTableFormat = (tableLines: string[]): boolean => {
       const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);
-      return pipeLines.length >= 2;
+      // Filter out separator lines (|---|---|)
+      const nonSeparatorLines = pipeLines.filter(line => {
+        const cells = line.split('|').map(c => c.trim());
+        return !cells.every(c => c === '' || /^[\-:]+$/.test(c));
+      });
+      // Need at least 3 non-separator lines (header + at least 2 data rows) to be a real table
+      return nonSeparatorLines.length >= 3;
     };
 
     // Detect key-value format: *Key:** Value or **Key:** Value pattern
