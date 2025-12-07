@@ -185,6 +185,8 @@ CONTENT RULES:
 - Keep ALL bullet points exactly as written
 - DO NOT skip, summarize, or paraphrase any content
 - DO NOT add AI-generated objectives or summaries
+- CRITICAL FORMATTING: For definition lists, separate each definition with \\n\\n (double newline)
+- Example: "Term1: definition\\n\\nTerm2: definition\\n\\nTerm3: definition"
 - PRESERVE FORMATTING: Use double newlines between separate items, definitions, or paragraphs
 - For definition lists: separate each term with blank lines for readability
 
