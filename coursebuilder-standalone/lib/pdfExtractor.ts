@@ -92,7 +92,13 @@ export async function extractTextFromPDF(file: File): Promise<PDFExtractionResul
 
 function cleanExtractedText(text: string): string {
   return text
+    // Remove control characters
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    // Normalize bullet characters: Symbol font bullets, various Unicode bullets -> standard bullet
+    // This handles Word Symbol font bullets that appear as different characters when extracted
+    .replace(/[\u00B7\u2022\u2023\u2043\u204C\u204D\u2219\u25AA\u25AB\u25CF\u25CB\u25D8\u25E6\u2619\u2765\u2767\u29BE\u29BF\uF0B7\uF0A7\uF076\uF0D8\uF0FC\uF0E8]/g, '\u2022')
+    // Also normalize common dash-like bullets
+    .replace(/^\s*[\u2013\u2014\u2212]\s+/gm, '\u2022 ')
     .replace(/\s+/g, ' ')
     .replace(/\n\s*\n\s*\n/g, '\n\n')
     .trim();
