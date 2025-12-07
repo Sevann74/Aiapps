@@ -65,15 +65,6 @@ const EnhancedCourseBuilder = () => {
   const logoInputRef = useRef(null);
 
   const renderFormattedContent = (text: string, colorClass: string = 'text-gray-700') => {
-    // Convert inline bullets to proper line-separated bullets first
-    let processedText = text;
-    const bulletCount = (text.match(//g) || []).length;
-    if (bulletCount >= 1) {
-      processedText = text.replace(/\\s*\\s*/g, '\n ');
-      if (processedText.startsWith('\n')) {
-        processedText = processedText.substring(1);
-      }
-    }
     const lines = text.split('\n').filter(line => line.trim());
     const bulletLines = lines.filter(line => line.trim().startsWith('â€¢') || line.trim().startsWith('-'));
     const hasBullets = bulletLines.length > 0;
@@ -139,15 +130,6 @@ const EnhancedCourseBuilder = () => {
     };
 
     const formatContent = (text: string): string => {
-      // Convert inline bullets to proper line-separated bullets
-      let processedText = text;
-      const bulletCount = (text.match(//g) || []).length;
-      if (bulletCount >= 1) {
-        processedText = text.replace(/\\s*•\\s*/g, '\n• ');
-        if (processedText.startsWith('\n')) {
-          processedText = processedText.substring(1);
-        }
-      }
       const lines = text.split(/\\n|\n/).filter(line => line.trim());
       const bulletPattern = /^[â€¢\-\*]\s*/;
       const hasListItems = lines.some(line => bulletPattern.test(line.trim()));
