@@ -163,16 +163,21 @@ CONTENT TYPE RULES:
       AUD-02      QC Lab        Completed"
       OUTPUT: "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled\\nAUD-02 | QC Lab | Completed"
 
-CRITICAL: DEFINITION LISTS ARE NOT TABLES
-- If content is: "Term: Definition" repeated multiple times = use "text" type
+CRITICAL: DEFINITION LISTS ARE NOT TABLES - NEVER USE TABLE TYPE FOR DEFINITIONS
+- If content is: "Term: Definition" repeated multiple times = ALWAYS use "text" type, NEVER "table"
 - Example: "Deviation: Any departure from procedures\\nPlanned Deviation: A pre-approved departure" = "text" type
-- Only use "table" when there are actual columns of data to compare side-by-side
+- Example: "Root Cause Analysis (RCA): A structured approach..." = "text" type
+- Even if definitions have labels like "Responsibility:", "Step:", "Action:" = still "text" type, NOT table
+- Only use "table" when there are MULTIPLE COLUMNS of DATA to compare side-by-side with clear headers and data rows
+- A single column of labeled definitions is TEXT, not a table
 
 IMPORTANT DISTINCTIONS:
 - "Deviation: definition text\\nPlanned Deviation: definition text\\nCorrective Action: definition text" = definition list, use "text" type
+- "Responsibility: text\\nStep: text\\nAction: text" = labeled definitions, use "text" type NOT table
+- "Root Cause Analysis (RCA): definition\\nImpact Assessment: definition" = glossary terms, use "text" type NOT table
 - "5.1.1 Case Intake and Triage" = section heading, use "text" type
 - "1. Review the document 2. Verify the data 3. Submit" = procedure steps, use "procedure" type
-- "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled" = actual table, use "table" type with pipes
+- "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled" = actual multi-column table, use "table" type with pipes
 
 CONTENT RULES:
 - Include ALL text exactly as written
