@@ -151,14 +151,25 @@ CONTENT TYPE RULES:
    - Data that needs to be compared across columns
    - Examples: audit schedules, comparison matrices, data grids
    - Format with pipe separators: "Header1 | Header2\\nData1 | Data2"
+   
+   EXAMPLES OF TABLES TO DETECT:
+   - "Original Submission (Rejected)    Clone Submission (Approved)
+      Nucenta                            Nucynta
+      Invocana                           Invokana"
+      OUTPUT: "Original Submission (Rejected) | Clone Submission (Approved)\\nNucenta | Nucynta\\nInvocana | Invokana"
+   
+   - "Audit ID    Department    Status
+      AUD-01      Manufacturing Scheduled
+      AUD-02      QC Lab        Completed"
+      OUTPUT: "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled\\nAUD-02 | QC Lab | Completed"
 
 CRITICAL: DEFINITION LISTS ARE NOT TABLES
 - If content is: "Term: Definition" repeated multiple times = use "text" type
 - Example: "Deviation: Any departure from procedures\\nPlanned Deviation: A pre-approved departure" = "text" type
-- Only use "table" when there are actual columns of data to compare
+- Only use "table" when there are actual columns of data to compare side-by-side
 
 IMPORTANT DISTINCTIONS:
-- "Deviation: definition text\\nPlanned Deviation: definition text" = definition list, use "text" type
+- "Deviation: definition text\\nPlanned Deviation: definition text\\nCorrective Action: definition text" = definition list, use "text" type
 - "5.1.1 Case Intake and Triage" = section heading, use "text" type
 - "1. Review the document 2. Verify the data 3. Submit" = procedure steps, use "procedure" type
 - "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled" = actual table, use "table" type with pipes
@@ -169,6 +180,8 @@ CONTENT RULES:
 - Keep ALL bullet points exactly as written
 - DO NOT skip, summarize, or paraphrase any content
 - DO NOT add AI-generated objectives or summaries
+- PRESERVE FORMATTING: Use double newlines between separate items, definitions, or paragraphs
+- For definition lists: separate each term with blank lines for readability
 
 DOCUMENT TO CONVERT:
 ${text}
@@ -183,6 +196,7 @@ OUTPUT FORMAT - Respond with ONLY valid JSON:
         {"type": "text", "heading": "3.1 Core Terminology", "body": "Deviation: Any departure from procedures.\\n\\nPlanned Deviation: A pre-approved departure.\\n\\nCorrective Action: Actions taken to eliminate the cause."},
         {"type": "text", "heading": "Description", "body": "Regular content with bullets:\\n• Point 1\\n• Point 2"},
         {"type": "procedure", "heading": "How to Process a Case", "body": "1. Open the system\\n2. Enter the data\\n3. Click submit"},
+        {"type": "table", "heading": "Clone Examples", "body": "Original Submission (Rejected) | Clone Submission (Approved)\\nNucenta | Nucynta\\nInvocana | Invokana"},
         {"type": "table", "heading": "Audit Schedule", "body": "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled\\nAUD-02 | QC Lab | Completed"},
         {"type": "callout-important", "heading": "⚠️ Warning", "body": "Only for actual warnings from the document"}
       ],
