@@ -69,6 +69,13 @@ export function generateSingleSCOHTML(
     const originalText = text;
     text = escapeHtml(text);
 
+    // Convert inline bullets to proper line-separated bullets
+    const bulletCount = (text.match(/•/g) || []).length;
+    if (bulletCount >= 1) {
+      text = text.replace(/\\s*•\\s*/g, '\n• ');
+      if (text.startsWith('\n')) { text = text.substring(1); }
+    }
+
     const lines = text.split(/\\n|\n/);
     const bulletPattern = /^[â€¢\-\*]\s*/;
     const hasListItems = lines.some(line => bulletPattern.test(line.trim()));

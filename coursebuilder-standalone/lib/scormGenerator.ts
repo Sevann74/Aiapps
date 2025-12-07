@@ -510,12 +510,43 @@ export function generateSingleSCOHTML(
       const checkboxId = isInteractive ? `checkbox-${index}-${checkboxCounter++}` : null;
       const isTable = section.type === 'table' || isTableContent(section.body);
       const { icon } = getSectionStyle(section.type || 'text', section.heading || '');
+      const headingLower = (section.heading || '').toLowerCase();
+      
+      // Determine card style based on heading keywords
+      let cardClass = 'card-text';
+      let titleClass = 'card-title-gray';
+      let iconClass = 'icon-gray';
+      
+      if (headingLower.includes('purpose') || headingLower.includes('scope') || headingLower.includes('objective')) {
+        cardClass = 'card-objectives';
+        titleClass = 'card-title-blue';
+        iconClass = 'icon-blue';
+      } else if (headingLower.includes('definition') || headingLower.includes('glossary') || headingLower.includes('term')) {
+        cardClass = 'card-definition';
+        titleClass = 'card-title-green';
+        iconClass = 'icon-green';
+      } else if (headingLower.includes('procedure') || headingLower.includes('step') || headingLower.includes('process')) {
+        cardClass = 'card-procedure';
+        titleClass = 'card-title-emerald';
+        iconClass = 'icon-emerald';
+      } else if (headingLower.includes('responsibility') || headingLower.includes('role') || headingLower.includes('applicable') || headingLower.includes('group')) {
+        cardClass = 'card-roles';
+        titleClass = 'card-title-purple';
+        iconClass = 'icon-purple';
+      } else if (headingLower.includes('reference') || headingLower.includes('document') || headingLower.includes('related')) {
+        cardClass = 'card-documents';
+        titleClass = 'card-title-slate';
+        iconClass = 'icon-slate';
+      }
 
       // Tables get special styling
       if (isTable) {
         return `
-      <div class="content-section">
-        ${section.heading ? `<h3 class="section-heading"><span class="heading-icon">📊</span> ${escapeHtml(section.heading)}</h3>` : ''}
+      <div class="content-card card-table">
+        <div class="card-header card-title-blue">
+          <span class="title-icon icon-blue">📊</span>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Reference Table'}</h3>
+        </div>
         <div class="table-wrapper">
           ${formatContent(section.body)}
         </div>
@@ -526,9 +557,12 @@ export function generateSingleSCOHTML(
       // Important callouts get highlighted
       if (isInteractive) {
         return `
-      <div class="content-section callout-section" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
-        ${section.heading ? `<h3 class="section-heading callout-heading"><span class="heading-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
-        <div class="section-body">
+      <div class="content-card card-important" ${checkboxId ? `data-checkbox-id="${checkboxId}"` : ''}>
+        <div class="card-header card-title-red">
+          <span class="title-icon icon-red">${icon}</span>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Important'}</h3>
+        </div>
+        <div class="card-content">
           ${formatContent(section.body)}
         </div>
         <label class="acknowledge-checkbox" for="${checkboxId}">
@@ -539,11 +573,14 @@ export function generateSingleSCOHTML(
         `;
       }
       
-      // Regular sections - clean and simple
+      // Regular sections with card design
       return `
-      <div class="content-section">
-        ${section.heading ? `<h3 class="section-heading"><span class="heading-icon">${icon}</span> ${escapeHtml(section.heading)}</h3>` : ''}
-        <div class="section-body">
+      <div class="content-card ${cardClass}">
+        <div class="card-header ${titleClass}">
+          <span class="title-icon ${iconClass}">${icon}</span>
+          <h3>${section.heading ? escapeHtml(section.heading) : ''}</h3>
+        </div>
+        <div class="card-content">
           ${formatContent(section.body)}
         </div>
       </div>
@@ -839,6 +876,119 @@ export function generateSingleSCOHTML(
 
     .module-content {
       margin-top: 2rem;
+    }
+
+    /* Content Cards - Professional Card Design */
+    .content-card {
+      background: white;
+      border-radius: 16px;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      animation: fadeIn 0.5s ease-out;
+      position: relative;
+      z-index: 1;
+    }
+    .content-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    
+    /* Card Header with Icon */
+    .card-header {
+      display: flex;
+      align-items: center;
+      padding: 18px 24px;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .card-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    
+    /* Title Icon Box */
+    .title-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      margin-right: 14px;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    
+    /* Icon Background Colors */
+    .icon-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+    .icon-green { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
+    .icon-emerald { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
+    .icon-purple { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); }
+    .icon-red { background: linear-gradient(135deg, #fee2e2, #fecaca); }
+    .icon-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+    .icon-slate { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); }
+    .icon-gray { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); }
+    
+    /* Title Header Colors */
+    .card-title-blue { background: linear-gradient(135deg, #eff6ff, #dbeafe); }
+    .card-title-blue h3 { color: #1e40af; }
+    .card-title-green { background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+    .card-title-green h3 { color: #166534; }
+    .card-title-emerald { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
+    .card-title-emerald h3 { color: #065f46; }
+    .card-title-purple { background: linear-gradient(135deg, #faf5ff, #f3e8ff); }
+    .card-title-purple h3 { color: #6b21a8; }
+    .card-title-red { background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+    .card-title-red h3 { color: #991b1b; }
+    .card-title-amber { background: linear-gradient(135deg, #fffbeb, #fef3c7); }
+    .card-title-amber h3 { color: #92400e; }
+    .card-title-slate { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
+    .card-title-slate h3 { color: #334155; }
+    .card-title-gray { background: linear-gradient(135deg, #f9fafb, #f3f4f6); }
+    .card-title-gray h3 { color: #374151; }
+    
+    /* Card Content */
+    .card-content {
+      padding: 20px 24px;
+    }
+    .card-content p {
+      color: #475569;
+      font-size: 1rem;
+      line-height: 1.8;
+      margin-bottom: 12px;
+    }
+    .card-content p:last-child {
+      margin-bottom: 0;
+    }
+    .card-content ul {
+      margin: 12px 0 12px 24px;
+      list-style-type: disc;
+    }
+    .card-content li {
+      color: #475569;
+      line-height: 1.8;
+      margin-bottom: 8px;
+    }
+    
+    /* Card Type Variations */
+    .card-text { background: linear-gradient(135deg, #ffffff, #f8fafc); }
+    .card-objectives { background: linear-gradient(135deg, #ffffff, #eff6ff); }
+    .card-definition { background: linear-gradient(135deg, #ffffff, #f0fdf4); }
+    .card-procedure { background: linear-gradient(135deg, #ffffff, #ecfdf5); }
+    .card-roles { background: linear-gradient(135deg, #ffffff, #faf5ff); }
+    .card-documents { background: linear-gradient(135deg, #ffffff, #f8fafc); }
+    .card-table { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
+    .card-important { background: linear-gradient(135deg, #fff5f5, #fed7d7); border-left: 4px solid #e53e3e; }
+    .card-important .card-content p { color: #742a2a; font-weight: 500; }
+    
+    /* Table Wrapper in Cards */
+    .table-wrapper {
+      padding: 16px 24px 24px 24px;
+      overflow-x: auto;
     }
 
     .content-section {
