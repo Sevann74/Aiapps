@@ -110,8 +110,18 @@ export function generateSingleSCOHTML(
       }
     }
 
+    // Convert inline bullets to proper line-separated bullets
+    // Matches patterns like "• Item 1 • Item 2 • Item 3" or "o Item 1 o Item 2"
+    let processedText = text;
+    if (text.includes(' • ') || / o [A-Z]/.test(text)) {
+      // Split by inline bullet patterns and rejoin with newlines
+      processedText = text
+        .replace(/\s+•\s+/g, '\n• ')
+        .replace(/\s+o\s+(?=[A-Z])/g, '\n• ');  // Convert "o " bullets to "• "
+    }
+
     // Filter out separator lines (---, --, etc.) and empty lines
-    const lines = text.split(/\\n|\n/)
+    const lines = processedText.split(/\\n|\n/)
       .filter(line => line.trim())
       .filter(line => !line.trim().match(/^-{2,}$/));  // Remove --- separators
     const bulletPattern = /^[•\-\*]\s*/;
