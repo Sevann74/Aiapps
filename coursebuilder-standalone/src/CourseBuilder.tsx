@@ -279,13 +279,18 @@ const EnhancedCourseBuilder = () => {
       }
 
       // Convert inline bullets to proper line-separated bullets
-      // Matches patterns like "• Item 1 • Item 2 • Item 3" or "o Item 1 o Item 2"
+      // Matches patterns like "• Item 1 • Item 2 • Item 3"
       let processedText = text;
-      if (text.includes(' • ') || / o [A-Z]/.test(text)) {
-        // Split by inline bullet patterns and rejoin with newlines
-        processedText = text
-          .replace(/\s+•\s+/g, '\n• ')
-          .replace(/\s+o\s+(?=[A-Z])/g, '\n• ');  // Convert "o " bullets to "• "
+      // Check if text has multiple bullet points on same line (inline bullets)
+      const bulletCount = (text.match(/•/g) || []).length;
+      const lineCount = text.split(/\n/).filter(l => l.trim()).length;
+      if (bulletCount > lineCount && bulletCount >= 2) {
+        // Multiple bullets but fewer lines = inline bullets, need to split
+        processedText = text.replace(/\s*•\s*/g, '\n• ').trim();
+        // Ensure first line doesn't start with newline
+        if (processedText.startsWith('\n')) {
+          processedText = processedText.substring(1);
+        }
       }
 
       // Filter out separator lines (---, --, etc.) and empty lines
