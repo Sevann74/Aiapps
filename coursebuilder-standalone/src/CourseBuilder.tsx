@@ -169,7 +169,17 @@ const EnhancedCourseBuilder = () => {
   };
 
   const renderFormattedContent = (text: string, colorClass: string = 'text-gray-700') => {
-    const lines = text.split('\n').filter(line => line.trim());
+    // Convert inline bullets to proper line-separated bullets first
+    let processedText = text;
+    const bulletCount = (text.match(/•/g) || []).length;
+    if (bulletCount >= 1) {
+      processedText = text.replace(/\s*•\s*/g, '\n• ');
+      if (processedText.startsWith('\n')) {
+        processedText = processedText.substring(1);
+      }
+    }
+    
+    const lines = processedText.split('\n').filter(line => line.trim());
     const bulletLines = lines.filter(line => line.trim().startsWith('•') || line.trim().startsWith('-'));
     const hasBullets = bulletLines.length > 0;
 
