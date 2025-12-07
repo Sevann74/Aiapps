@@ -111,22 +111,39 @@ export function generateSingleSCOHTML(
     }
 
     // Convert inline bullets to proper line-separated bullets
-    // Matches patterns like "• Item 1 • Item 2 • Item 3"
+    // Matches patterns like "• Item 1. • Item 2. • Item 3." or "• Item 1 • Item 2"
     let processedText = text;
-    // Check if text has any bullet points
-    const bulletCount = (text.match(/•/g) || []).length;
-    if (bulletCount >= 1) {
-      // Split on bullet character, putting each bullet on its own line
-      // This handles: "Intro text: • Item 1 • Item 2" -> "Intro text:\n• Item 1\n• Item 2"
-      processedText = text.replace(/\s*•\s*/g, '\n• ');
-      // Clean up any leading newline
+    
+    // First, normalize any escaped newlines
+    processedText = processedText.replace(/\\n/g, '\n');
+    
+    // Check if text has multiple bullet points on same line (inline bullets)
+    const bulletCount = (processedText.match(/•/g) || []).length;
+    if (bulletCount >= 2) {
+      // Check if bullets are inline (not already on separate lines)
+      const linesWithBullets = processedText.split('\n').filter(line => line.includes('•'));
+      const hasInlineBullets = linesWithBullets.some(line => (line.match(/•/g) || []).length >= 2);
+      
+      if (hasInlineBullets) {
+        // Split on bullet character, putting each bullet on its own line
+        // Handle patterns like "• Item 1. • Item 2." or "• Item 1 • Item 2"
+        processedText = processedText.replace(/\.\s*•\s*/g, '.\n• ');  // Period before bullet
+        processedText = processedText.replace(/([^.\n])\s*•\s*/g, '$1\n• ');  // No period before bullet
+        // Clean up any leading newline
+        if (processedText.startsWith('\n')) {
+          processedText = processedText.substring(1);
+        }
+      }
+    } else if (bulletCount === 1) {
+      // Single bullet - ensure it's on its own line if there's text before it
+      processedText = processedText.replace(/([^.\n])\s*•\s*/g, '$1\n• ');
       if (processedText.startsWith('\n')) {
         processedText = processedText.substring(1);
       }
     }
 
     // Filter out separator lines (---, --, etc.) and empty lines
-    const lines = processedText.split(/\\n|\n/)
+    const lines = processedText.split(/\n/)
       .filter(line => line.trim())
       .filter(line => !line.trim().match(/^-{2,}$/));  // Remove --- separators
     const bulletPattern = /^[•\-\*]\s*/;
