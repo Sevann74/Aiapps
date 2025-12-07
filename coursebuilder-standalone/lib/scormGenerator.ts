@@ -368,11 +368,12 @@ export function generateSingleSCOHTML(
       return formatTable(lines);
     }
 
-    // Check for key-value format that should be a table
-    if (isKeyValueFormat(lines)) {
-      const tableHtml = formatKeyValueAsTable(lines);
-      if (tableHtml) return tableHtml;
-    }
+    // DISABLED: This was incorrectly converting definition lists to tables
+    // Key-value format detection removed - definitions should stay as text
+    // if (isKeyValueFormat(lines)) {
+    //   const tableHtml = formatKeyValueAsTable(lines);
+    //   if (tableHtml) return tableHtml;
+    // }
 
     const hasListItems = lines.some(line => bulletPattern.test(line.trim()));
 
