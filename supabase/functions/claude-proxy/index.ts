@@ -135,7 +135,8 @@ CONTENT TYPE RULES:
    - Paragraphs and descriptions
    - Section-numbered content (like 5.1, 5.1.1, 5.1.2) - these are section references, NOT procedures
    - Bullet point lists
-   - Definitions and explanations
+   - Definition lists (Term: Definition format) - ALWAYS use text type for these
+   - Glossaries and terminology sections
 
 2. Use "procedure" type ONLY for actual step-by-step instructions that:
    - Start with simple numbers (1., 2., 3.) not section numbers (5.1, 5.1.1)
@@ -144,32 +145,23 @@ CONTENT TYPE RULES:
 
 3. Use "callout-important" ONLY for actual warnings, safety alerts, or critical deadlines
 
-4. Use "table" type for table data - convert to PLAIN TEXT format (NOT pipe-separated):
-   - Include table title as heading
-   - Convert EACH ROW to a clearly labeled text block with line breaks
-   - Use this EXACT format for each row:
-     ---
-     [First Column Header]: [Value]
-     [Second Column Header]: [Value]
-     [Third Column Header]: [Value]
-     ---
-   - Example for a table with Month, Sales, Region columns:
-     ---
-     Month: January 2025
-     Sales: $50,000
-     Region: North
-     ---
-     Month: February 2025
-     Sales: $62,000
-     Region: South
-     ---
-   - NEVER use pipe (|) separators - they cause parsing issues
-   - Preserve ALL data from every row and column
+4. Use "table" type ONLY for multi-column tabular data with:
+   - Multiple data rows (not just definitions)
+   - Clear column structure with headers
+   - Data that needs to be compared across columns
+   - Examples: audit schedules, comparison matrices, data grids
+   - Format with pipe separators: "Header1 | Header2\\nData1 | Data2"
+
+CRITICAL: DEFINITION LISTS ARE NOT TABLES
+- If content is: "Term: Definition" repeated multiple times = use "text" type
+- Example: "Deviation: Any departure from procedures\\nPlanned Deviation: A pre-approved departure" = "text" type
+- Only use "table" when there are actual columns of data to compare
 
 IMPORTANT DISTINCTIONS:
+- "Deviation: definition text\\nPlanned Deviation: definition text" = definition list, use "text" type
 - "5.1.1 Case Intake and Triage" = section heading, use "text" type
 - "1. Review the document 2. Verify the data 3. Submit" = procedure steps, use "procedure" type
-- Tables with columns and rows = use "table" type, format as PLAIN TEXT blocks (not pipes)
+- "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled" = actual table, use "table" type with pipes
 
 CONTENT RULES:
 - Include ALL text exactly as written
@@ -188,10 +180,10 @@ OUTPUT FORMAT - Respond with ONLY valid JSON:
       "id": "section_1",
       "title": "Section Title from Document",
       "content": [
-        {"type": "text", "heading": "5.1.1 Subsection Title", "body": "Content for this subsection exactly as written"},
+        {"type": "text", "heading": "3.1 Core Terminology", "body": "Deviation: Any departure from procedures.\\n\\nPlanned Deviation: A pre-approved departure.\\n\\nCorrective Action: Actions taken to eliminate the cause."},
         {"type": "text", "heading": "Description", "body": "Regular content with bullets:\\n• Point 1\\n• Point 2"},
         {"type": "procedure", "heading": "How to Process a Case", "body": "1. Open the system\\n2. Enter the data\\n3. Click submit"},
-        {"type": "table", "heading": "Requirements Matrix", "body": "---\\nRequirement: Requirement 1\\nType A: ✓\\nType B: ✓\\nType C: ✗\\n---\\nRequirement: Requirement 2\\nType A: ✓\\nType B: ✗\\nType C: ✓\\n---"},
+        {"type": "table", "heading": "Audit Schedule", "body": "Audit ID | Department | Status\\nAUD-01 | Manufacturing | Scheduled\\nAUD-02 | QC Lab | Completed"},
         {"type": "callout-important", "heading": "⚠️ Warning", "body": "Only for actual warnings from the document"}
       ],
       "relatedFacts": []
