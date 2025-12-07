@@ -281,12 +281,13 @@ const EnhancedCourseBuilder = () => {
       // Convert inline bullets to proper line-separated bullets
       // Matches patterns like "• Item 1 • Item 2 • Item 3"
       let processedText = text;
-      // Check if text has multiple bullet points (2 or more)
+      // Check if text has any bullet points
       const bulletCount = (text.match(/•/g) || []).length;
-      if (bulletCount >= 2) {
-        // Split on bullet character, keeping the bullet with each item
-        processedText = text.replace(/\s*•\s*/g, '\n• ').trim();
-        // Ensure first line doesn't start with newline
+      if (bulletCount >= 1) {
+        // Split on bullet character, putting each bullet on its own line
+        // This handles: "Intro text: • Item 1 • Item 2" -> "Intro text:\n• Item 1\n• Item 2"
+        processedText = text.replace(/\s*•\s*/g, '\n• ');
+        // Clean up any leading newline
         if (processedText.startsWith('\n')) {
           processedText = processedText.substring(1);
         }
