@@ -330,6 +330,46 @@ const EnhancedCourseBuilder = () => {
         return formatAsRecordCards(lines);
       }
 
+      // Detect space-aligned table format (columns separated by 2+ spaces)
+      const isSpaceAlignedTable = (tableLines: string[]): boolean => {
+        if (tableLines.length < 2) return false;
+        const linesWithMultiSpace = tableLines.filter(line => /\s{2,}/.test(line.trim()));
+        return linesWithMultiSpace.length >= 2;
+      };
+
+      // Format space-aligned table
+      const formatSpaceAlignedTable = (tableLines: string[]): string => {
+        const rows = tableLines.map(line => 
+          line.trim().split(/\s{2,}/).map(cell => cell.trim()).filter(cell => cell)
+        ).filter(row => row.length >= 2);
+        
+        if (rows.length < 2) return '';
+        
+        const headers = rows[0];
+        const dataRows = rows.slice(1);
+        
+        let html = '<table class="content-table"><thead><tr>';
+        headers.forEach(h => { html += `<th>${escapeHtml(h)}</th>`; });
+        html += '</tr></thead><tbody>';
+        
+        dataRows.forEach(row => {
+          html += '<tr>';
+          headers.forEach((_, idx) => {
+            html += `<td>${escapeHtml(row[idx] || '')}</td>`;
+          });
+          html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        return html;
+      };
+
+      // Check for space-aligned table
+      if (isSpaceAlignedTable(lines)) {
+        const tableHtml = formatSpaceAlignedTable(lines);
+        if (tableHtml) return tableHtml;
+      }
+
       // Detect pipe-separated table format: lines with | separators (at least 2 columns)
       const isTableFormat = (tableLines: string[]): boolean => {
         const pipeLines = tableLines.filter(line => line.includes('|') && line.split('|').length >= 2);
