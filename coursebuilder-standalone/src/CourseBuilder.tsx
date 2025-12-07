@@ -261,8 +261,25 @@ const EnhancedCourseBuilder = () => {
         }
       }
 
+      // Check for definition list format (Term: Definition with double newlines)
+      // If text contains double newlines, treat as paragraph-separated content
+      if (text.includes('\n\n')) {
+        const paragraphs = text.split('\n\n').filter(p => p.trim());
+        if (paragraphs.length > 1) {
+          return paragraphs.map(p => {
+            const trimmed = p.trim().replace(/\n/g, ' ');
+            // Check if it's a definition (Term: Definition)
+            const defMatch = trimmed.match(/^([^:]+):\s*(.+)$/);
+            if (defMatch) {
+              return `<p><strong>${escapeHtml(defMatch[1])}:</strong> ${escapeHtml(defMatch[2])}</p>`;
+            }
+            return `<p>${escapeHtml(trimmed)}</p>`;
+          }).join('\n');
+        }
+      }
+
       // Filter out separator lines (---, --, etc.) and empty lines
-      const lines = text.split(/\\n|\n/)
+      const lines = text.split(/\n/)
         .filter(line => line.trim())
         .filter(line => !line.trim().match(/^-{2,}$/));  // Remove --- separators
       const bulletPattern = /^[•\-\*]\s*/;
