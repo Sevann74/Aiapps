@@ -36,9 +36,9 @@ const StreamlinedCourseBuilder = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [currentUser, setCurrentUser] = useState({
     id: 'client-001',
-    email: 'john@abcpharma.com',
+    email: 'sarah@abcpharma.com',
     password: 'demo123',
-    name: 'John Doe',
+    name: 'Sarah Johnson',
     role: 'client',
     organization: 'ABC Pharma',
     createdAt: new Date().toISOString()
@@ -102,9 +102,9 @@ const StreamlinedCourseBuilder = () => {
     return saved ? JSON.parse(saved) : [
       {
         id: 'client-001',
-        email: 'john@abcpharma.com',
+        email: 'sarah@abcpharma.com',
         password: 'demo123',
-        name: 'John Doe',
+        name: 'Sarah Johnson',
         role: 'client',
         organization: 'ABC Pharma',
         createdAt: new Date().toISOString()
@@ -141,8 +141,8 @@ const StreamlinedCourseBuilder = () => {
       {
         id: 'J001',
         clientId: 'client-001',
-        clientName: 'John Doe',
-        clientEmail: 'john@abcpharma.com',
+        clientName: 'Sarah Johnson',
+        clientEmail: 'sarah@abcpharma.com',
         organization: 'ABC Pharma',
         status: 'pending_review',
         courseTitle: 'Lab Safety Procedures',
@@ -252,7 +252,7 @@ const StreamlinedCourseBuilder = () => {
 </body>
 </html>`,
         auditLog: [
-          { timestamp: '2025-01-07T10:30:00Z', action: 'Job submitted', actor: 'john@abcpharma.com', ip: '192.168.1.1' },
+          { timestamp: '2025-01-07T10:30:00Z', action: 'Job submitted', actor: 'sarah@abcpharma.com', ip: '192.168.1.1' },
           { timestamp: '2025-01-07T10:30:05Z', action: 'Email notification sent', actor: 'system', details: 'Sent to david.dergazarian@navigantlearning.com' },
 { timestamp: '2025-01-08T09:15:00Z', action: 'Admin downloaded SOP', actor: 'admin@aicoursebuilder.com', ip: '10.0.0.1' },
           { timestamp: '2025-01-08T14:20:00Z', action: 'Preview uploaded', actor: 'admin@aicoursebuilder.com', details: 'Client preview last.html' }
@@ -279,7 +279,7 @@ const StreamlinedCourseBuilder = () => {
       setIsAuthenticated(true);
       setCurrentView(user.role === 'admin' ? 'admin-dashboard' : 'dashboard');
     } else {
-alert('Invalid credentials. Try:\nClient: john@abcpharma.com / demo123\nAdmin: admin@aicoursebuilder.com / admin123');
+alert('Invalid credentials. Try:\nClient: sarah@abcpharma.com / demo123\nAdmin: admin@aicoursebuilder.com / admin123');
     }
   };
   
@@ -1148,7 +1148,7 @@ AI Course Builder | Navigant Learning
           
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
             <p className="text-sm font-semibold text-blue-900 mb-2">Demo Credentials:</p>
-            <p className="text-sm text-blue-700">Client: john@abcpharma.com / demo123</p>
+            <p className="text-sm text-blue-700">Client: sarah@abcpharma.com / demo123</p>
             <p className="text-sm text-blue-700">Admin: admin@aicoursebuilder.com / admin123</p>
           </div>
         </div>
@@ -2294,7 +2294,7 @@ AI Course Builder | Navigant Learning
                   value={newClientForm.name}
                   onChange={(e) => setNewClientForm({...newClientForm, name: e.target.value})}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
-                  placeholder="e.g., John Doe"
+                  placeholder="e.g., Sarah Johnson"
                 />
               </div>
               
