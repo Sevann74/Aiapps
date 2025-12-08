@@ -2006,7 +2006,7 @@ export function generateSingleSCOHTML(
       <div class="header-tools">
         <button class="tool-btn" onclick="toggleTOC()" title="Table of Contents">📑 Contents</button>
         <button class="tool-btn" onclick="toggleTTS()" id="ttsBtn" title="Read Aloud">🔊 Read Aloud</button>
-        ${hasSourceDoc ? `<button class="tool-btn" onclick="openSourceDoc()" title="View Original SOP">📄 Original SOP</button>` : ''}
+        ${hasSourceDoc ? `<button class="tool-btn" onclick="openSourceDoc()" title="Download Document">📄 Download Document</button>` : ''}
       </div>
     </div>
     <div class="progress-container">
@@ -2376,15 +2376,15 @@ export function generateSingleSCOHTML(
       speechSynthesis.speak(utterance);
     }
     
-    // Chrome workaround: pause/resume to prevent audio cutoff
+    // Chrome workaround: pause/resume to prevent audio cutoff (every 5 sec)
     function startChromeWorkaround() {
       if (ttsResumeInterval) clearInterval(ttsResumeInterval);
       ttsResumeInterval = setInterval(function() {
         if (speechSynthesis.speaking && !speechSynthesis.paused) {
           speechSynthesis.pause();
-          speechSynthesis.resume();
+          setTimeout(function() { speechSynthesis.resume(); }, 50);
         }
-      }, 10000);
+      }, 5000);
     }
 
     function toggleTTS() {
@@ -2403,6 +2403,13 @@ export function generateSingleSCOHTML(
         ttsVoices = speechSynthesis.getVoices();
       }
       
+      // Chrome fix: cancel any pending speech and do a warm-up
+      speechSynthesis.cancel();
+      
+      // Chrome requires a tiny warm-up utterance after user interaction
+      const warmup = new SpeechSynthesisUtterance('');
+      warmup.volume = 0;
+      speechSynthesis.speak(warmup);
       speechSynthesis.cancel();
       
       const slide = document.getElementById('slide-' + currentSlide);
@@ -2426,7 +2433,7 @@ export function generateSingleSCOHTML(
       // Split into smaller chunks to avoid Chrome issues
       ttsQueue = [];
       textParts.forEach(part => {
-        const sentences = part.split(/(?<=[.!?])\\s+/);
+        const sentences = part.match(/[^.!?]+[.!?]+/g) || [part];
         sentences.forEach(s => {
           const cleaned = s.trim();
           if (cleaned.length > 2) {
