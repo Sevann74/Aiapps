@@ -32,9 +32,15 @@ const COURSE_STATUSES = {
 // MAIN COMPONENT
 // ============================================
 const StreamlinedCourseBuilder = () => {
-  // Authentication state - Login required
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  // Authentication state - Login required (persisted to localStorage for demo)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const saved = localStorage.getItem('coursebuilder_session');
+    return saved ? JSON.parse(saved).isAuthenticated : false;
+  });
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    const saved = localStorage.getItem('coursebuilder_session');
+    return saved ? JSON.parse(saved).user : null;
+  });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
@@ -279,6 +285,8 @@ const StreamlinedCourseBuilder = () => {
       setCurrentUser(user);
       setIsAuthenticated(true);
       setCurrentView(user.role === 'admin' ? 'admin-dashboard' : 'dashboard');
+      // Save session to localStorage for persistence
+      localStorage.setItem('coursebuilder_session', JSON.stringify({ isAuthenticated: true, user }));
     } else {
 alert('Invalid credentials. Try:\nClient: sarah@abcpharma.com / demo123\nAdmin: admin@aicoursebuilder.com / admin123');
     }
@@ -290,6 +298,8 @@ alert('Invalid credentials. Try:\nClient: sarah@abcpharma.com / demo123\nAdmin: 
     setCurrentView('dashboard');
     setLoginEmail('');
     setLoginPassword('');
+    // Clear session from localStorage
+    localStorage.removeItem('coursebuilder_session');
   };
   
   // ============================================
