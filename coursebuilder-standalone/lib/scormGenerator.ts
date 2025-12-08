@@ -2298,18 +2298,27 @@ export function generateSingleSCOHTML(
       }
     }
 
-    // Text-to-Speech with chunking to avoid Chrome bug
+    // Text-to-Speech with Chrome workaround
     let ttsActive = false;
     let ttsQueue = [];
     let ttsCurrentIndex = 0;
+    let ttsResumeInterval = null;
     
-    // Pre-load voices
+    // Pre-load voices - important for Chrome
+    let ttsVoices = [];
+    function loadVoices() {
+      ttsVoices = speechSynthesis.getVoices();
+    }
     if ('speechSynthesis' in window) {
-      speechSynthesis.getVoices();
-      speechSynthesis.onvoiceschanged = function() {};
+      loadVoices();
+      speechSynthesis.onvoiceschanged = loadVoices;
     }
 
     function stopTTS() {
+      if (ttsResumeInterval) {
+        clearInterval(ttsResumeInterval);
+        ttsResumeInterval = null;
+      }
       speechSynthesis.cancel();
       ttsActive = false;
       ttsQueue = [];
@@ -2331,32 +2340,45 @@ export function generateSingleSCOHTML(
       utterance.volume = 1;
       utterance.lang = 'en-US';
       
-      const voices = speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        const voice = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en')) || voices[0];
+      // Use cached voices
+      if (ttsVoices.length > 0) {
+        const voice = ttsVoices.find(v => v.lang === 'en-US') || 
+                      ttsVoices.find(v => v.lang.startsWith('en')) || 
+                      ttsVoices[0];
         if (voice) utterance.voice = voice;
       }
       
       utterance.onend = function() {
         ttsCurrentIndex++;
         if (ttsActive) {
-          setTimeout(speakNextChunk, 50);
+          setTimeout(speakNextChunk, 100);
         }
       };
       
       utterance.onerror = function(e) {
         if (e.error !== 'canceled' && e.error !== 'interrupted') {
-          console.error('TTS chunk error:', e.error);
+          console.error('TTS error:', e.error);
         }
         ttsCurrentIndex++;
         if (ttsActive && ttsCurrentIndex < ttsQueue.length) {
-          setTimeout(speakNextChunk, 50);
+          setTimeout(speakNextChunk, 100);
         } else {
           stopTTS();
         }
       };
       
       speechSynthesis.speak(utterance);
+    }
+    
+    // Chrome workaround: pause/resume to prevent audio cutoff
+    function startChromeWorkaround() {
+      if (ttsResumeInterval) clearInterval(ttsResumeInterval);
+      ttsResumeInterval = setInterval(function() {
+        if (speechSynthesis.speaking && !speechSynthesis.paused) {
+          speechSynthesis.pause();
+          speechSynthesis.resume();
+        }
+      }, 10000);
     }
 
     function toggleTTS() {
@@ -2368,6 +2390,11 @@ export function generateSingleSCOHTML(
       if (ttsActive) {
         stopTTS();
         return;
+      }
+      
+      // Ensure voices are loaded
+      if (ttsVoices.length === 0) {
+        ttsVoices = speechSynthesis.getVoices();
       }
       
       speechSynthesis.cancel();
@@ -2390,10 +2417,9 @@ export function generateSingleSCOHTML(
         return;
       }
       
-      // Split into smaller chunks (sentences) to avoid Chrome interruption bug
+      // Split into smaller chunks to avoid Chrome issues
       ttsQueue = [];
       textParts.forEach(part => {
-        // Split by sentence endings
         const sentences = part.split(/(?<=[.!?])\\s+/);
         sentences.forEach(s => {
           const cleaned = s.trim();
@@ -2413,8 +2439,11 @@ export function generateSingleSCOHTML(
       document.getElementById('ttsBtn').classList.add('active');
       document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
       
-      // Start speaking
-      setTimeout(speakNextChunk, 100);
+      // Start Chrome workaround
+      startChromeWorkaround();
+      
+      // Start speaking after a short delay
+      setTimeout(speakNextChunk, 200);
     }
 
     window.onbeforeunload = function() {
