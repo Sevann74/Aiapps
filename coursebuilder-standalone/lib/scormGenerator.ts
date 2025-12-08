@@ -592,6 +592,7 @@ export function generateSingleSCOHTML(
 
     return `
       <section class="slide" id="slide-${index}" style="${index === 0 ? 'display: block;' : 'display: none;'}">
+        <button class="bookmark-btn" id="bookmark-btn-${index}" onclick="toggleBookmark(${index})" title="Mark for Review">🔖 Mark for Review</button>
         ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
         <h2>${escapeHtml(module.title)}</h2>
 
@@ -604,6 +605,7 @@ export function generateSingleSCOHTML(
 
   const quizSlideHTML = includeQuiz ? `
     <section class="slide quiz-slide" id="slide-${modules.length}" style="display: none;">
+      <button class="bookmark-btn" id="bookmark-btn-${modules.length}" onclick="toggleBookmark(${modules.length})" title="Mark for Review">🔖 Mark for Review</button>
       ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
       <h2><span class="section-icon">📝</span> Final Assessment</h2>
       <p class="quiz-info"><span class="info-icon">ℹ️</span> Passing Score: ${passingScore}% | Maximum Attempts: ${maxAttempts}</p>
@@ -1990,6 +1992,54 @@ export function generateSingleSCOHTML(
       background: rgba(0,0,0,0.3);
       z-index: 999;
     }
+    
+    /* Bookmark styles */
+    .bookmark-btn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: transparent;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #6b7280;
+      transition: all 0.2s ease;
+      z-index: 10;
+    }
+    .bookmark-btn:hover {
+      border-color: #f59e0b;
+      color: #f59e0b;
+      background: #fffbeb;
+    }
+    .bookmark-btn.bookmarked {
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      border-color: #f59e0b;
+      color: #b45309;
+    }
+    .toc-item.bookmarked::before {
+      content: '🔖 ';
+    }
+    .bookmarks-section {
+      border-top: 1px solid #e5e7eb;
+      margin-top: 1rem;
+      padding-top: 1rem;
+    }
+    .bookmarks-title {
+      font-size: 0.8rem;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      padding: 0 1rem;
+    }
+    .no-bookmarks {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      padding: 0.5rem 1rem;
+      font-style: italic;
+    }
 
     @media print {
       .course-header, .slide-navigation, .header-tools, .search-bar, .toc-sidebar, .toc-overlay { display: none !important; }
@@ -2005,6 +2055,7 @@ export function generateSingleSCOHTML(
       <h1>${escapeHtml(title)}</h1>
       <div class="header-tools">
         <button class="tool-btn" onclick="toggleTOC()" title="Table of Contents">📑 Contents</button>
+        <button class="tool-btn" onclick="toggleBookmarks()" id="bookmarksBtn" title="Bookmarked Slides">🔖 Bookmarks</button>
         <button class="tool-btn" onclick="toggleTTS()" id="ttsBtn" title="Read Aloud">🔊 Read Aloud</button>
         ${hasSourceDoc ? `<button class="tool-btn" onclick="openSourceDoc()" title="Download Document">📄 Download Document</button>` : ''}
       </div>
@@ -2027,6 +2078,10 @@ export function generateSingleSCOHTML(
       ${modules.map((m, i) => `<div class="toc-item" data-slide="${i}" onclick="navigateToSlide(${i})">${i + 1}. ${escapeHtml(m.title)}</div>`).join('\n      ')}
       ${includeQuiz ? `<div class="toc-item toc-quiz" data-slide="${modules.length}" onclick="navigateToSlide(${modules.length})">📝 Final Assessment</div>` : ''}
       <div class="toc-item toc-ack" data-slide="${totalSlides - 1}" onclick="navigateToSlide(${totalSlides - 1})">🎓 Acknowledgment</div>
+      <div class="bookmarks-section" id="bookmarksSection">
+        <div class="bookmarks-title">🔖 Marked for Review</div>
+        <div id="bookmarksList"><div class="no-bookmarks">No bookmarks yet</div></div>
+      </div>
     </div>
   </div>
 
@@ -2055,6 +2110,9 @@ export function generateSingleSCOHTML(
     
     // Track highest slide reached (for TOC navigation restriction)
     let highestSlideReached = 0;
+    
+    // Bookmarked slides
+    let bookmarkedSlides = new Set();
     
     // Track acknowledged checkboxes per slide
     const acknowledgedItems = {};
@@ -2298,10 +2356,97 @@ export function generateSingleSCOHTML(
         sidebar.style.display = 'block';
         overlay.style.display = 'block';
         updateTOCState();
+        updateBookmarksList();
       } else {
         sidebar.style.display = 'none';
         overlay.style.display = 'none';
       }
+    }
+    
+    // Bookmarks - open TOC and scroll to bookmarks section
+    function toggleBookmarks() {
+      const sidebar = document.getElementById('tocSidebar');
+      const overlay = document.getElementById('tocOverlay');
+      sidebar.style.display = 'block';
+      overlay.style.display = 'block';
+      updateTOCState();
+      updateBookmarksList();
+      // Scroll to bookmarks section
+      document.getElementById('bookmarksSection').scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    // Toggle bookmark for current slide
+    function toggleBookmark(slideIndex) {
+      if (bookmarkedSlides.has(slideIndex)) {
+        bookmarkedSlides.delete(slideIndex);
+      } else {
+        bookmarkedSlides.add(slideIndex);
+      }
+      updateBookmarkButton(slideIndex);
+      updateBookmarksList();
+      updateTOCBookmarks();
+    }
+    
+    // Update bookmark button state on slide
+    function updateBookmarkButton(slideIndex) {
+      const btn = document.getElementById('bookmark-btn-' + slideIndex);
+      if (btn) {
+        if (bookmarkedSlides.has(slideIndex)) {
+          btn.classList.add('bookmarked');
+          btn.innerHTML = '🔖 Bookmarked';
+        } else {
+          btn.classList.remove('bookmarked');
+          btn.innerHTML = '🔖 Mark for Review';
+        }
+      }
+    }
+    
+    // Update all bookmark buttons when navigating
+    function updateAllBookmarkButtons() {
+      for (let i = 0; i < TOTAL_SLIDES; i++) {
+        updateBookmarkButton(i);
+      }
+    }
+    
+    // Update bookmarks list in TOC sidebar
+    function updateBookmarksList() {
+      const list = document.getElementById('bookmarksList');
+      if (!list) return;
+      
+      if (bookmarkedSlides.size === 0) {
+        list.innerHTML = '<div class="no-bookmarks">No bookmarks yet</div>';
+        return;
+      }
+      
+      const slideNames = ${JSON.stringify(modules.map((m, i) => ({ index: i, name: m.title })))};
+      let html = '';
+      
+      const sortedBookmarks = Array.from(bookmarkedSlides).sort((a, b) => a - b);
+      sortedBookmarks.forEach(slideIdx => {
+        let name = 'Slide ' + (slideIdx + 1);
+        if (slideIdx < slideNames.length) {
+          name = slideNames[slideIdx].name;
+        } else if (slideIdx === TOTAL_SLIDES - 1) {
+          name = 'Acknowledgment';
+        } else if (HAS_QUIZ && slideIdx === NUM_MODULES) {
+          name = 'Final Assessment';
+        }
+        html += '<div class="toc-item" onclick="navigateToSlide(' + slideIdx + ')">🔖 ' + name + '</div>';
+      });
+      
+      list.innerHTML = html;
+    }
+    
+    // Mark bookmarked items in TOC
+    function updateTOCBookmarks() {
+      document.querySelectorAll('.toc-item[data-slide]').forEach(item => {
+        const slideIdx = parseInt(item.getAttribute('data-slide'));
+        if (bookmarkedSlides.has(slideIdx)) {
+          item.classList.add('bookmarked');
+        } else {
+          item.classList.remove('bookmarked');
+        }
+      });
     }
 
     // Text-to-Speech with Chrome workaround
