@@ -35,6 +35,10 @@ interface CourseData {
   quiz: { questions: Question[] };
   images?: Array<{ moduleId: string; imageUrl: string; altText: string }>;
   includeQuiz?: boolean;
+  sourceDocument?: {
+    name: string;
+    data: string; // base64 encoded PDF
+  } | null;
 }
 
 function escapeXml(str: string): string {
@@ -60,8 +64,9 @@ export function generateSingleSCOHTML(
   courseData: CourseData,
   config: CourseConfig
 ): string {
-  const { title, modules, quiz, logo, includeQuiz = true } = courseData;
+  const { title, modules, quiz, logo, includeQuiz = true, sourceDocument } = courseData;
   const { passingScore, maxAttempts } = config;
+  const hasSourceDoc = sourceDocument && sourceDocument.data;
 
   const totalSlides = modules.length + (includeQuiz ? 1 : 0) + 1;
 
@@ -2001,6 +2006,7 @@ export function generateSingleSCOHTML(
       <div class="header-tools">
         <button class="tool-btn" onclick="toggleTOC()" title="Table of Contents">📑 Contents</button>
         <button class="tool-btn" onclick="toggleTTS()" id="ttsBtn" title="Read Aloud">🔊 Read Aloud</button>
+        ${hasSourceDoc ? `<button class="tool-btn" onclick="openSourceDoc()" title="View Original SOP">📄 Original SOP</button>` : ''}
       </div>
     </div>
     <div class="progress-container">
@@ -2446,6 +2452,11 @@ export function generateSingleSCOHTML(
       setTimeout(speakNextChunk, 200);
     }
 
+    // Open Source Document
+    function openSourceDoc() {
+      window.open('source_document.pdf', '_blank');
+    }
+
     window.onbeforeunload = function() {
       if (ttsActive) speechSynthesis.cancel();
       terminateSCORM();
@@ -2606,6 +2617,7 @@ export function generateSingleSCOManifest(
       <file href="index.html"/>
       <file href="scorm.js"/>
       ${courseData.logo ? '<file href="shared/logo.png"/>' : ''}
+      ${courseData.sourceDocument?.data ? '<file href="source_document.pdf"/>' : ''}
     </resource>
   </resources>
 </manifest>`;
@@ -2632,6 +2644,16 @@ export async function generateSCORMPackage(
       const logoData = courseData.logo.split(',')[1];
       sharedFolder.file('logo.png', logoData, { base64: true });
     }
+  }
+
+  // Add source document PDF if present
+  if (courseData.sourceDocument?.data) {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    let pdfData = courseData.sourceDocument.data;
+    if (pdfData.includes(',')) {
+      pdfData = pdfData.split(',')[1];
+    }
+    zip.file('source_document.pdf', pdfData, { base64: true });
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });

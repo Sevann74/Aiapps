@@ -14,6 +14,7 @@ import ErrorModal from '../components/ErrorModal';
 const EnhancedCourseBuilder = () => {
   const [step, setStep] = useState('upload');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [sourceDocumentData, setSourceDocumentData] = useState<string | null>(null); // Base64 PDF data
   const [documentText, setDocumentText] = useState('');
   const [pdfExtractionResult, setPdfExtractionResult] = useState<PDFExtractionResult | null>(null);
   const [courseTitle, setCourseTitle] = useState('');
@@ -1057,6 +1058,13 @@ const EnhancedCourseBuilder = () => {
 
     if (file.type === 'application/pdf') {
       try {
+        // Store PDF as base64 for SCORM package
+        const reader = new FileReader();
+        reader.onload = () => {
+          setSourceDocumentData(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+
         const result = await extractTextFromPDF(file);
         setPdfExtractionResult(result);
 
@@ -1473,7 +1481,11 @@ const EnhancedCourseBuilder = () => {
         quiz: questions,
         verification,
         questionMode: config.questionMode,
-        includeQuiz: config.includeQuiz
+        includeQuiz: config.includeQuiz,
+        sourceDocument: sourceDocumentData ? {
+          name: uploadedFile?.name || 'source_document.pdf',
+          data: sourceDocumentData
+        } : null
       };
 
       setCourseData(course);
