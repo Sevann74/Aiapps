@@ -1816,18 +1816,210 @@ export function generateSingleSCOHTML(
         height: 10px;
       }
     }
+
+    /* Tool Buttons */
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .header-tools {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .tool-btn {
+      background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+      border: 1px solid #cbd5e1;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #475569;
+      transition: all 0.2s ease;
+    }
+    .tool-btn:hover {
+      background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+      transform: translateY(-1px);
+    }
+    .tool-btn.active {
+      background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan));
+      color: white;
+      border-color: var(--brand-navy);
+    }
+
+    /* Search Bar */
+    .search-bar {
+      background: white;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-bar input {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.5rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    .search-bar input:focus {
+      outline: none;
+      border-color: var(--brand-cyan);
+    }
+    .search-bar button {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .search-bar button:first-of-type {
+      background: var(--brand-navy);
+      color: white;
+    }
+    .search-bar button:last-of-type {
+      background: #f1f5f9;
+      color: #475569;
+    }
+    #searchResults {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-left: 0.5rem;
+    }
+    .search-highlight {
+      background: #fef08a;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    /* Table of Contents Sidebar */
+    .toc-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 320px;
+      height: 100vh;
+      background: white;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+      z-index: 1000;
+      overflow-y: auto;
+      animation: slideInLeft 0.3s ease;
+    }
+    @keyframes slideInLeft {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(0); }
+    }
+    .toc-header {
+      background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan));
+      color: white;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+    }
+    .toc-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    .toc-close {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+    .toc-close:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .toc-content {
+      padding: 1rem;
+    }
+    .toc-item {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 0.25rem;
+      transition: all 0.2s ease;
+      font-size: 0.95rem;
+      color: #374151;
+    }
+    .toc-item:hover {
+      background: #f1f5f9;
+      color: var(--brand-navy);
+    }
+    .toc-item.active {
+      background: linear-gradient(135deg, #dbeafe, #eff6ff);
+      color: var(--brand-navy);
+      font-weight: 600;
+    }
+    .toc-quiz { color: #7c3aed; font-weight: 600; }
+    .toc-ack { color: #059669; font-weight: 600; }
+    .toc-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 999;
+    }
+
+    @media print {
+      .course-header, .slide-navigation, .header-tools, .search-bar, .toc-sidebar, .toc-overlay { display: none !important; }
+      .slide { display: block !important; page-break-after: always; box-shadow: none; }
+      .course-content { max-width: 100%; margin: 0; padding: 0; }
+    }
   </style>
   <script src="scorm.js"></script>
 </head>
 <body>
   <header class="course-header">
-    <h1>${escapeHtml(title)}</h1>
+    <div class="header-top">
+      <h1>${escapeHtml(title)}</h1>
+      <div class="header-tools">
+        <button class="tool-btn" onclick="toggleTOC()" title="Table of Contents">📑 Contents</button>
+        <button class="tool-btn" onclick="toggleSearch()" title="Search">🔍 Search</button>
+        <button class="tool-btn" onclick="toggleTTS()" id="ttsBtn" title="Read Aloud">🔊 Read Aloud</button>
+        <button class="tool-btn" onclick="printCourse()" title="Print">🖨️ Print</button>
+      </div>
+    </div>
     <div class="progress-container">
       <div class="progress-bar" id="progressBar"></div>
     </div>
     <p class="progress-text" id="progressText">0% Complete</p>
     <p class="module-indicator" id="moduleIndicator">Slide 1 of ${totalSlides}</p>
   </header>
+
+  <!-- Search Bar -->
+  <div id="searchBar" class="search-bar" style="display: none;">
+    <input type="text" id="searchInput" placeholder="Search content..." onkeyup="searchContent(event)">
+    <button onclick="performSearch()">Search</button>
+    <button onclick="clearSearch()">Clear</button>
+    <span id="searchResults"></span>
+  </div>
+
+  <!-- Table of Contents Sidebar -->
+  <div id="tocOverlay" class="toc-overlay" style="display: none;" onclick="toggleTOC()"></div>
+  <div id="tocSidebar" class="toc-sidebar" style="display: none;">
+    <div class="toc-header">
+      <h3>📑 Table of Contents</h3>
+      <button onclick="toggleTOC()" class="toc-close">✕</button>
+    </div>
+    <div class="toc-content">
+      ${modules.map((m, i) => `<div class="toc-item" data-slide="${i}" onclick="goToSlide(${i}); toggleTOC();">${i + 1}. ${escapeHtml(m.title)}</div>`).join('\n      ')}
+      ${includeQuiz ? `<div class="toc-item toc-quiz" data-slide="${modules.length}" onclick="goToSlide(${modules.length}); toggleTOC();">📝 Final Assessment</div>` : ''}
+      <div class="toc-item toc-ack" data-slide="${totalSlides - 1}" onclick="goToSlide(${totalSlides - 1}); toggleTOC();">🎓 Acknowledgment</div>
+    </div>
+  </div>
 
   <main class="course-content">
     ${moduleSlidesHTML}
@@ -2055,7 +2247,114 @@ export function generateSingleSCOHTML(
       alert('Course completed successfully! You may now close this window.');
     }
 
+    // Table of Contents Toggle
+    function toggleTOC() {
+      const sidebar = document.getElementById('tocSidebar');
+      const overlay = document.getElementById('tocOverlay');
+      if (sidebar.style.display === 'none') {
+        sidebar.style.display = 'block';
+        overlay.style.display = 'block';
+        updateTOCHighlight();
+      } else {
+        sidebar.style.display = 'none';
+        overlay.style.display = 'none';
+      }
+    }
+
+    function updateTOCHighlight() {
+      document.querySelectorAll('.toc-item').forEach(item => {
+        item.classList.remove('active');
+        if (parseInt(item.dataset.slide) === currentSlide) {
+          item.classList.add('active');
+        }
+      });
+    }
+
+    // Search Toggle
+    function toggleSearch() {
+      const searchBar = document.getElementById('searchBar');
+      searchBar.style.display = searchBar.style.display === 'none' ? 'flex' : 'none';
+      if (searchBar.style.display === 'flex') {
+        document.getElementById('searchInput').focus();
+      }
+    }
+
+    // Search Content
+    function searchContent(event) {
+      if (event.key === 'Enter') performSearch();
+    }
+
+    function performSearch() {
+      clearSearch();
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      if (!query) return;
+      
+      let count = 0;
+      document.querySelectorAll('.card-content p, .card-content li, .content-section p, .content-section li').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        if (text.includes(query)) {
+          const regex = new RegExp('(' + query.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi');
+          el.innerHTML = el.innerHTML.replace(regex, '<mark class="search-highlight">$1</mark>');
+          count++;
+        }
+      });
+      document.getElementById('searchResults').textContent = count > 0 ? count + ' matches found' : 'No matches';
+    }
+
+    function clearSearch() {
+      document.querySelectorAll('.search-highlight').forEach(el => {
+        el.outerHTML = el.textContent;
+      });
+      document.getElementById('searchResults').textContent = '';
+      document.getElementById('searchInput').value = '';
+    }
+
+    // Text-to-Speech
+    let ttsActive = false;
+    let ttsUtterance = null;
+
+    function toggleTTS() {
+      if (!('speechSynthesis' in window)) {
+        alert('Text-to-speech is not supported in this browser.');
+        return;
+      }
+      
+      if (ttsActive) {
+        speechSynthesis.cancel();
+        ttsActive = false;
+        document.getElementById('ttsBtn').classList.remove('active');
+        document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+      } else {
+        const slide = document.getElementById('slide-' + currentSlide);
+        const text = slide ? slide.textContent.replace(/\\s+/g, ' ').trim() : '';
+        if (text) {
+          ttsUtterance = new SpeechSynthesisUtterance(text);
+          ttsUtterance.rate = 0.9;
+          ttsUtterance.onend = function() {
+            ttsActive = false;
+            document.getElementById('ttsBtn').classList.remove('active');
+            document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+          };
+          speechSynthesis.speak(ttsUtterance);
+          ttsActive = true;
+          document.getElementById('ttsBtn').classList.add('active');
+          document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
+        }
+      }
+    }
+
+    // Print Course
+    function printCourse() {
+      // Show all slides for printing
+      document.querySelectorAll('.slide').forEach(s => s.style.display = 'block');
+      window.print();
+      // Restore current slide view
+      document.querySelectorAll('.slide').forEach(s => s.style.display = 'none');
+      document.getElementById('slide-' + currentSlide).style.display = 'block';
+    }
+
     window.onbeforeunload = function() {
+      if (ttsActive) speechSynthesis.cancel();
       terminateSCORM();
     };
   </script>
