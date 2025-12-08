@@ -1918,6 +1918,53 @@ const EnhancedCourseBuilder = () => {
               </details>
             )}
 
+            {/* Downloadable PDF Upload Section */}
+            <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">
+              <h4 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                📥 Downloadable Source Document (Optional)
+              </h4>
+              <p className="text-sm text-amber-800 mb-3">
+                {uploadedFile?.name?.toLowerCase().endsWith('.docx') 
+                  ? "Since you uploaded a Word document, upload a PDF version here for learners to download in the course."
+                  : "Optionally upload a different PDF to be included as the downloadable source document in the SCORM package."}
+              </p>
+              <div 
+                className="border-2 border-dashed border-amber-400 rounded-lg p-4 text-center cursor-pointer hover:border-amber-500 hover:bg-amber-100 transition-all"
+                onClick={() => pdfInputRef.current?.click()}
+              >
+                {downloadablePdfName ? (
+                  <div className="flex items-center justify-center gap-2 text-amber-900">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <span className="font-medium">{downloadablePdfName}</span>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setDownloadablePdfData(null); setDownloadablePdfName(null); }}
+                      className="ml-2 text-red-600 hover:text-red-800 text-sm"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                    <p className="text-amber-700 font-medium">Click to upload PDF for download link</p>
+                    <p className="text-xs text-amber-600 mt-1">This PDF will be available for learners to download</p>
+                  </div>
+                )}
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={handleDownloadablePdfUpload}
+                />
+              </div>
+              {!downloadablePdfName && uploadedFile?.name?.toLowerCase().endsWith('.pdf') && (
+                <p className="text-xs text-amber-700 mt-2 italic">
+                  💡 Your uploaded PDF will be used as the downloadable document if you don't upload a separate one.
+                </p>
+              )}
+            </div>
+
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Course Title</label>
