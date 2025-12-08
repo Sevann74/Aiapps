@@ -4,6 +4,7 @@ import * as courseApi from '../lib/courseBuilderApi';
 import { generateSCORMPackage } from '../lib/scormGenerator';
 import { validateSCORMStructure, getSCORMCompatibilityInfo } from '../lib/scormValidator';
 import { extractTextFromPDF, validateDocumentText, getTextPreview, PDFExtractionResult } from '../lib/pdfExtractor';
+import { extractTextFromWord, isWordDocument } from '../lib/wordExtractor';
 import { parseAPIError, ErrorDetails } from '../lib/errorHandler';
 import { testEdgeFunctionConnection, APITestResult } from '../lib/apiTester';
 import * as auditTrail from '../lib/auditTrail';
@@ -1053,18 +1054,57 @@ const EnhancedCourseBuilder = () => {
     if (!file) return;
 
     setUploadedFile(file);
-    setProcessingStage('Extracting text from PDF...');
     setIsProcessing(true);
 
-    if (file.type === 'application/pdf') {
-      try {
-        // Store PDF as base64 for SCORM package
-        const reader = new FileReader();
-        reader.onload = () => {
-          setSourceDocumentData(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+    // Store file as base64 for SCORM package
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSourceDocumentData(reader.result as string);
+    };
+    reader.readAsDataURL(file);
 
+    // Handle Word documents (.docx) - better for bullets and tables
+    if (isWordDocument(file)) {
+      setProcessingStage('Extracting text from Word document...');
+      try {
+        const result = await extractTextFromWord(file);
+        
+        // Convert to PDF extraction result format for compatibility
+        const pdfResult: PDFExtractionResult = {
+          text: result.text,
+          pageCount: Math.ceil(result.characterCount / 3000),
+          characterCount: result.characterCount,
+          wordCount: result.wordCount,
+          isValid: result.isValid,
+          errors: result.errors,
+          warnings: result.warnings
+        };
+        setPdfExtractionResult(pdfResult);
+
+        if (result.isValid) {
+          setDocumentText(result.text);
+          setCourseTitle(file.name.replace(/\.(docx|doc)$/i, ''));
+        } else {
+          const errorDetails: ErrorDetails = {
+            title: 'Word Document Extraction Failed',
+            message: 'Unable to extract readable text from the Word document.',
+            suggestions: result.errors,
+            recoveryActions: [
+              'Try a different Word document',
+              'Ensure the document is not corrupted',
+              'Try saving as .docx format if using older .doc'
+            ]
+          };
+          setCurrentError(errorDetails);
+        }
+      } catch (error) {
+        setCurrentError(parseAPIError(error));
+      }
+    }
+    // Handle PDF documents
+    else if (file.type === 'application/pdf') {
+      setProcessingStage('Extracting text from PDF...');
+      try {
         const result = await extractTextFromPDF(file);
         setPdfExtractionResult(result);
 
@@ -1078,6 +1118,7 @@ const EnhancedCourseBuilder = () => {
             suggestions: result.errors,
             recoveryActions: [
               'Try a different PDF file',
+              'Try uploading a Word document (.docx) for better results',
               'Ensure the PDF contains text (not just images)',
               'Check if the PDF is not password-protected'
             ]
@@ -1088,9 +1129,23 @@ const EnhancedCourseBuilder = () => {
         setCurrentError(parseAPIError(error));
       }
     }
+    // Unsupported file type
+    else {
+      const errorDetails: ErrorDetails = {
+        title: 'Unsupported File Type',
+        message: `File type "${file.type || 'unknown'}" is not supported.`,
+        suggestions: ['Please upload a PDF or Word document (.docx)'],
+        recoveryActions: [
+          'Convert your document to PDF or Word format',
+          'Use Microsoft Word to save as .docx'
+        ]
+      };
+      setCurrentError(errorDetails);
+    }
 
     setIsProcessing(false);
   };
+
 
   const testAPIConnection = async () => {
     setIsTestingAPI(true);
