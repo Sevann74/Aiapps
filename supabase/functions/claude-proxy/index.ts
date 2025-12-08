@@ -36,7 +36,7 @@ Deno.serve(async (req: Request) => {
 
     switch (operation) {
       case 'extract-facts':
-        prompt = `You are a fact extraction system. Extract key facts from this document with ABSOLUTE PRECISION.
+        prompt = `You are a fact extraction system for COMPLIANCE TRAINING. Extract facts that learners MUST KNOW to do their job safely and correctly.
 
 CRITICAL RULES - ZERO TOLERANCE FOR DEVIATION:
 1. Extract ONLY facts that are EXPLICITLY and LITERALLY stated in the document
@@ -48,10 +48,26 @@ CRITICAL RULES - ZERO TOLERANCE FOR DEVIATION:
 7. If something is not explicitly stated, DO NOT include it
 8. Use ONLY text that appears verbatim in the source document
 
+PRIORITIZE THESE FACT TYPES (in order of importance):
+1. SAFETY REQUIREMENTS - Warnings, hazards, protective measures, what could cause harm
+2. REQUIRED ACTIONS - Steps that MUST be performed, mandatory procedures
+3. COMPLIANCE REQUIREMENTS - Regulatory mandates, legal obligations, audit requirements
+4. CRITICAL THRESHOLDS - Time limits, temperature ranges, dosages, quantities, deadlines
+5. RESPONSIBILITIES - Who must do what, accountability, approval authorities
+6. PROHIBITED ACTIONS - What must NOT be done, restrictions, contraindications
+
+DO NOT EXTRACT (these make poor quiz questions):
+- Document metadata (SOP number, version, effective date, author, revision history)
+- General introductions or purpose statements
+- Definitions of common terms
+- Organizational background information
+- References to other documents
+- Page numbers, headers, footers
+
 DOCUMENT TEXT:
 ${text}
 
-Extract 8-12 facts and respond with ONLY valid JSON in this EXACT format:
+Extract 8-12 facts focusing on ACTIONABLE KNOWLEDGE and respond with ONLY valid JSON in this EXACT format:
 
 {
   "facts": [
@@ -65,6 +81,11 @@ Extract 8-12 facts and respond with ONLY valid JSON in this EXACT format:
   ]
 }
 
+IMPORTANCE RATINGS:
+- "critical" = Safety-related, could cause harm if not followed, regulatory requirement
+- "important" = Key procedure step, required action, significant responsibility
+- "supplementary" = Supporting information, context (avoid extracting these)
+
 DO NOT include any text before or after the JSON. Your response must start with { and end with }`;
         break;
 
@@ -73,7 +94,35 @@ DO NOT include any text before or after the JSON. Your response must start with 
           f.importance === 'critical' || f.importance === 'important'
         ).slice(0, questionCount || 5);
 
-        prompt = `You are creating a compliance quiz. Generate questions EXCLUSIVELY from these verified facts with ZERO HALLUCINATION.
+        prompt = `You are creating a COMPLIANCE TRAINING quiz. Generate questions that test ACTIONABLE KNOWLEDGE - what learners need to KNOW and DO to perform their job safely and correctly.
+
+QUESTION QUALITY REQUIREMENTS:
+1. Questions must test PRACTICAL KNOWLEDGE that affects job performance
+2. Focus on: "What should you do?", "How should you do it?", "What is required?", "What is prohibited?"
+3. Questions should help learners REMEMBER important procedures and safety requirements
+4. A learner who answers correctly should be SAFER and MORE COMPLIANT at their job
+
+FORBIDDEN QUESTION TOPICS (NEVER ask about these):
+- Document metadata: SOP number, version number, effective date, revision date
+- Author names, approvers, document owners
+- When the document was created or last updated
+- Document title or full name of the procedure
+- Page numbers or section numbers as the answer
+- "What is the purpose of this SOP?" or similar meta-questions
+
+GOOD QUESTION EXAMPLES:
+- "What PPE is required when handling [chemical]?"
+- "How long must samples be stored before disposal?"
+- "What is the maximum temperature for [process]?"
+- "Who must approve [action] before it can proceed?"
+- "What should you do if [situation] occurs?"
+- "How often must [equipment] be calibrated?"
+
+BAD QUESTION EXAMPLES (DO NOT GENERATE):
+- "What is the SOP number for this procedure?"
+- "When was this document last revised?"
+- "What is the title of Section 3?"
+- "Who authored this procedure?"
 
 CRITICAL RULES - ABSOLUTE COMPLIANCE REQUIRED:
 1. Each question must be based on ONE of the provided facts ONLY
@@ -91,16 +140,12 @@ ${JSON.stringify(questionnableFacts, null, 2)}
 
 Generate EXACTLY ${questionnableFacts?.length || 5} questions in this JSON format:
 
-IMPORTANT: Questions should be DIRECT without "According to Section" prefixes.
-EXAMPLE - GOOD: "What is the minimum handwashing time?"
-EXAMPLE - BAD: "According to Section 4, what is the minimum handwashing time?"
-
 {
   "questions": [
     {
       "id": "q1",
       "basedOnFactId": "fact_1",
-      "question": "Direct question about the content without section prefix",
+      "question": "Direct question about actionable knowledge (what to do, how to do it, what is required)",
       "sourceReference": "Section number from the fact",
       "exactQuote": "The exact quote this question is based on",
       "options": [
