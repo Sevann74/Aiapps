@@ -2449,123 +2449,65 @@ export function generateSingleSCOHTML(
       });
     }
 
-    // Text-to-Speech with Chrome workaround
+    // Text-to-Speech - Robust Chrome Implementation
     let ttsActive = false;
-    let ttsQueue = [];
-    let ttsCurrentIndex = 0;
-    let ttsResumeInterval = null;
+    let ttsUtterance = null;
+    let ttsResumeTimer = null;
     
-    // Pre-load voices - important for Chrome
-    let ttsVoices = [];
-    function loadVoices() {
-      ttsVoices = speechSynthesis.getVoices();
-    }
-    if ('speechSynthesis' in window) {
-      loadVoices();
-      speechSynthesis.onvoiceschanged = loadVoices;
+    // Get voices with retry for Chrome
+    function getVoices() {
+      return new Promise(function(resolve) {
+        let voices = speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          resolve(voices);
+          return;
+        }
+        // Chrome loads voices async
+        speechSynthesis.onvoiceschanged = function() {
+          voices = speechSynthesis.getVoices();
+          resolve(voices);
+        };
+        // Timeout fallback
+        setTimeout(function() { resolve(speechSynthesis.getVoices()); }, 1000);
+      });
     }
 
     function stopTTS() {
-      if (ttsResumeInterval) {
-        clearInterval(ttsResumeInterval);
-        ttsResumeInterval = null;
+      ttsActive = false;
+      if (ttsResumeTimer) {
+        clearInterval(ttsResumeTimer);
+        ttsResumeTimer = null;
       }
       speechSynthesis.cancel();
-      ttsActive = false;
-      ttsQueue = [];
-      ttsCurrentIndex = 0;
-      document.getElementById('ttsBtn').classList.remove('active');
-      document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+      ttsUtterance = null;
+      const btn = document.getElementById('ttsBtn');
+      if (btn) {
+        btn.classList.remove('active');
+        btn.innerHTML = '🔊 Read Aloud';
+      }
     }
 
-    function speakNextChunk() {
-      if (ttsCurrentIndex >= ttsQueue.length) {
-        stopTTS();
-        return;
-      }
-      
-      const text = ttsQueue[ttsCurrentIndex];
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-      utterance.lang = 'en-US';
-      
-      // Use cached voices
-      if (ttsVoices.length > 0) {
-        const voice = ttsVoices.find(v => v.lang === 'en-US') || 
-                      ttsVoices.find(v => v.lang.startsWith('en')) || 
-                      ttsVoices[0];
-        if (voice) utterance.voice = voice;
-      }
-      
-      utterance.onend = function() {
-        ttsCurrentIndex++;
-        if (ttsActive) {
-          setTimeout(speakNextChunk, 100);
-        }
-      };
-      
-      utterance.onerror = function(e) {
-        if (e.error !== 'canceled' && e.error !== 'interrupted') {
-          console.error('TTS error:', e.error);
-        }
-        ttsCurrentIndex++;
-        if (ttsActive && ttsCurrentIndex < ttsQueue.length) {
-          setTimeout(speakNextChunk, 100);
-        } else {
-          stopTTS();
-        }
-      };
-      
-      speechSynthesis.speak(utterance);
-    }
-    
-    // Chrome workaround: pause/resume to prevent audio cutoff (every 5 sec)
-    function startChromeWorkaround() {
-      if (ttsResumeInterval) clearInterval(ttsResumeInterval);
-      ttsResumeInterval = setInterval(function() {
-        if (speechSynthesis.speaking && !speechSynthesis.paused) {
-          speechSynthesis.pause();
-          setTimeout(function() { speechSynthesis.resume(); }, 50);
-        }
-      }, 5000);
-    }
-
-    function toggleTTS() {
+    async function toggleTTS() {
       if (!('speechSynthesis' in window)) {
         alert('Text-to-speech is not supported in this browser.');
         return;
       }
       
-      if (ttsActive) {
+      // If already speaking, stop
+      if (ttsActive || speechSynthesis.speaking) {
         stopTTS();
         return;
       }
       
-      // Ensure voices are loaded
-      if (ttsVoices.length === 0) {
-        ttsVoices = speechSynthesis.getVoices();
-      }
-      
-      // Chrome fix: cancel any pending speech and do a warm-up
-      speechSynthesis.cancel();
-      
-      // Chrome requires a tiny warm-up utterance after user interaction
-      const warmup = new SpeechSynthesisUtterance('');
-      warmup.volume = 0;
-      speechSynthesis.speak(warmup);
-      speechSynthesis.cancel();
-      
       const slide = document.getElementById('slide-' + currentSlide);
       if (!slide) return;
       
-      // Get text content
+      // Collect text from slide
       let textParts = [];
       const title = slide.querySelector('h2');
       if (title) textParts.push(title.textContent.trim());
       
-      slide.querySelectorAll('h3, h4, p, li').forEach(el => {
+      slide.querySelectorAll('h3, h4, p, li').forEach(function(el) {
         const text = el.textContent.trim();
         if (text && text.length > 2) textParts.push(text);
       });
@@ -2575,33 +2517,66 @@ export function generateSingleSCOHTML(
         return;
       }
       
-      // Split into smaller chunks to avoid Chrome issues
-      ttsQueue = [];
-      textParts.forEach(part => {
-        const sentences = part.match(/[^.!?]+[.!?]+/g) || [part];
-        sentences.forEach(s => {
-          const cleaned = s.trim();
-          if (cleaned.length > 2) {
-            ttsQueue.push(cleaned);
-          }
-        });
-      });
+      // Combine all text
+      const fullText = textParts.join('. ');
       
-      if (ttsQueue.length === 0) {
-        alert('No readable content on this slide.');
-        return;
+      // Update UI immediately
+      ttsActive = true;
+      const btn = document.getElementById('ttsBtn');
+      btn.classList.add('active');
+      btn.innerHTML = '⏹️ Stop';
+      
+      // Cancel any pending speech first
+      speechSynthesis.cancel();
+      
+      // Wait a moment for cancel to complete
+      await new Promise(function(r) { setTimeout(r, 100); });
+      
+      // Get voices
+      const voices = await getVoices();
+      
+      // Create utterance
+      ttsUtterance = new SpeechSynthesisUtterance(fullText);
+      ttsUtterance.rate = 0.9;
+      ttsUtterance.pitch = 1;
+      ttsUtterance.volume = 1;
+      
+      // Select English voice
+      if (voices.length > 0) {
+        const englishVoice = voices.find(function(v) { return v.lang === 'en-US'; }) ||
+                            voices.find(function(v) { return v.lang.startsWith('en'); }) ||
+                            voices[0];
+        if (englishVoice) {
+          ttsUtterance.voice = englishVoice;
+        }
       }
       
-      ttsActive = true;
-      ttsCurrentIndex = 0;
-      document.getElementById('ttsBtn').classList.add('active');
-      document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
+      ttsUtterance.onend = function() {
+        stopTTS();
+      };
       
-      // Start Chrome workaround
-      startChromeWorkaround();
+      ttsUtterance.onerror = function(e) {
+        if (e.error !== 'canceled' && e.error !== 'interrupted') {
+          console.error('TTS error:', e.error);
+        }
+        stopTTS();
+      };
       
-      // Start speaking after a short delay
-      setTimeout(speakNextChunk, 200);
+      // CHROME FIX: Pause/resume every 10 seconds to prevent cutoff
+      ttsResumeTimer = setInterval(function() {
+        if (speechSynthesis.speaking && !speechSynthesis.paused) {
+          speechSynthesis.pause();
+          speechSynthesis.resume();
+        }
+      }, 10000);
+      
+      // Start speaking
+      speechSynthesis.speak(ttsUtterance);
+      
+      // Chrome sometimes needs a kick to start
+      if (speechSynthesis.paused) {
+        speechSynthesis.resume();
+      }
     }
 
     // Open Source Document
