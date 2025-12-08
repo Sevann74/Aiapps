@@ -15,7 +15,9 @@ import ErrorModal from '../components/ErrorModal';
 const EnhancedCourseBuilder = () => {
   const [step, setStep] = useState('upload');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [sourceDocumentData, setSourceDocumentData] = useState<string | null>(null); // Base64 PDF data
+  const [sourceDocumentData, setSourceDocumentData] = useState<string | null>(null); // Base64 data from uploaded file
+  const [downloadablePdfData, setDownloadablePdfData] = useState<string | null>(null); // Base64 PDF for SCORM download
+  const [downloadablePdfName, setDownloadablePdfName] = useState<string | null>(null); // Name of downloadable PDF
   const [documentText, setDocumentText] = useState('');
   const [pdfExtractionResult, setPdfExtractionResult] = useState<PDFExtractionResult | null>(null);
   const [courseTitle, setCourseTitle] = useState('');
@@ -76,6 +78,7 @@ const EnhancedCourseBuilder = () => {
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const logoInputRef = useRef(null);
+  const pdfInputRef = useRef(null); // For downloadable PDF upload
 
   // ============================================
   // SAVED COURSES FUNCTIONS
@@ -1193,6 +1196,20 @@ const EnhancedCourseBuilder = () => {
     }
   };
 
+  const handleDownloadablePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setDownloadablePdfData(reader.result as string);
+        setDownloadablePdfName(file.name);
+      };
+      reader.readAsDataURL(file);
+    } else if (file) {
+      alert('Please upload a PDF file for the downloadable document.');
+    }
+  };
+
   // ============================================
   // CONTENT EDITING FUNCTIONS
   // ============================================
@@ -1537,9 +1554,10 @@ const EnhancedCourseBuilder = () => {
         verification,
         questionMode: config.questionMode,
         includeQuiz: config.includeQuiz,
-        sourceDocument: sourceDocumentData ? {
-          name: uploadedFile?.name || 'source_document.pdf',
-          data: sourceDocumentData
+        // Use downloadable PDF if provided, otherwise use source doc only if it's a PDF
+        sourceDocument: (downloadablePdfData || (sourceDocumentData && uploadedFile?.name?.toLowerCase().endsWith('.pdf'))) ? {
+          name: downloadablePdfName || uploadedFile?.name || 'source_document.pdf',
+          data: downloadablePdfData || sourceDocumentData
         } : null
       };
 
@@ -1818,7 +1836,8 @@ const EnhancedCourseBuilder = () => {
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• <strong>Maximum:</strong> 30 pages or 75,000 characters</li>
             <li>• <strong>Optimal:</strong> 25 pages or under for best results</li>
-            <li>• <strong>Format:</strong> PDF with selectable text (not scanned images)</li>
+            <li>• <strong>Format:</strong> PDF or Word (.docx) - Word recommended for better bullet/table extraction</li>
+            <li>• <strong>Tip:</strong> If using Word for extraction, also upload a PDF version for the downloadable source document</li>
           </ul>
         </div>
 
@@ -1828,11 +1847,11 @@ const EnhancedCourseBuilder = () => {
           <p className="text-lg font-semibold text-gray-700 mb-2">
             {uploadedFile ? uploadedFile.name : 'Click to upload or drag and drop'}
           </p>
-          <p className="text-sm text-gray-500">PDF files only • Max 10MB • Up to 80 pages</p>
+          <p className="text-sm text-gray-500">PDF or Word (.docx) • Max 10MB • Up to 80 pages</p>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf"
+            accept=".pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
             onChange={handleFileUpload}
           />
