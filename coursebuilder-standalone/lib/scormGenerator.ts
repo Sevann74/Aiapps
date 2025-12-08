@@ -1966,6 +1966,19 @@ export function generateSingleSCOHTML(
     }
     .toc-quiz { color: #7c3aed; font-weight: 600; }
     .toc-ack { color: #059669; font-weight: 600; }
+    .toc-item.locked {
+      color: #9ca3af;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    .toc-item.locked:hover {
+      background: transparent;
+      color: #9ca3af;
+    }
+    .toc-item.locked::after {
+      content: ' 🔒';
+      font-size: 0.8rem;
+    }
     .toc-overlay {
       position: fixed;
       inset: 0;
@@ -1987,9 +2000,8 @@ export function generateSingleSCOHTML(
       <h1>${escapeHtml(title)}</h1>
       <div class="header-tools">
         <button class="tool-btn" onclick="toggleTOC()" title="Table of Contents">📑 Contents</button>
-        <button class="tool-btn" onclick="toggleSearch()" title="Search">🔍 Search</button>
         <button class="tool-btn" onclick="toggleTTS()" id="ttsBtn" title="Read Aloud">🔊 Read Aloud</button>
-        <button class="tool-btn" onclick="printCourse()" title="Print">🖨️ Print</button>
+        <button class="tool-btn" onclick="downloadSourceDoc()" title="Download Source Document">📄 Source Doc</button>
       </div>
     </div>
     <div class="progress-container">
@@ -1999,14 +2011,6 @@ export function generateSingleSCOHTML(
     <p class="module-indicator" id="moduleIndicator">Slide 1 of ${totalSlides}</p>
   </header>
 
-  <!-- Search Bar -->
-  <div id="searchBar" class="search-bar" style="display: none;">
-    <input type="text" id="searchInput" placeholder="Search content..." onkeyup="searchContent(event)">
-    <button onclick="performSearch()">Search</button>
-    <button onclick="clearSearch()">Clear</button>
-    <span id="searchResults"></span>
-  </div>
-
   <!-- Table of Contents Sidebar -->
   <div id="tocOverlay" class="toc-overlay" style="display: none;" onclick="toggleTOC()"></div>
   <div id="tocSidebar" class="toc-sidebar" style="display: none;">
@@ -2015,9 +2019,9 @@ export function generateSingleSCOHTML(
       <button onclick="toggleTOC()" class="toc-close">✕</button>
     </div>
     <div class="toc-content">
-      ${modules.map((m, i) => `<div class="toc-item" data-slide="${i}" onclick="goToSlide(${i}); toggleTOC();">${i + 1}. ${escapeHtml(m.title)}</div>`).join('\n      ')}
-      ${includeQuiz ? `<div class="toc-item toc-quiz" data-slide="${modules.length}" onclick="goToSlide(${modules.length}); toggleTOC();">📝 Final Assessment</div>` : ''}
-      <div class="toc-item toc-ack" data-slide="${totalSlides - 1}" onclick="goToSlide(${totalSlides - 1}); toggleTOC();">🎓 Acknowledgment</div>
+      ${modules.map((m, i) => `<div class="toc-item" data-slide="${i}" onclick="navigateToSlide(${i})">${i + 1}. ${escapeHtml(m.title)}</div>`).join('\n      ')}
+      ${includeQuiz ? `<div class="toc-item toc-quiz" data-slide="${modules.length}" onclick="navigateToSlide(${modules.length})">📝 Final Assessment</div>` : ''}
+      <div class="toc-item toc-ack" data-slide="${totalSlides - 1}" onclick="navigateToSlide(${totalSlides - 1})">🎓 Acknowledgment</div>
     </div>
   </div>
 
@@ -2043,6 +2047,9 @@ export function generateSingleSCOHTML(
     let quizAnswers = [];
     let quizAttempts = 0;
     const correctAnswers = ${includeQuiz ? JSON.stringify(quiz.questions.map(q => q.correctAnswer)) : '[]'};
+    
+    // Track highest slide reached (for TOC navigation restriction)
+    let highestSlideReached = 0;
     
     // Track acknowledged checkboxes per slide
     const acknowledgedItems = {};
@@ -2073,6 +2080,7 @@ export function generateSingleSCOHTML(
       checkBookmark();
       updateProgress();
       updateNavigation();
+      updateTOCState();
     };
 
     function goToSlide(slideIndex) {
@@ -2081,13 +2089,43 @@ export function generateSingleSCOHTML(
       document.getElementById('slide-' + currentSlide).style.display = 'none';
       currentSlide = slideIndex;
       document.getElementById('slide-' + currentSlide).style.display = 'block';
+      
+      // Update highest slide reached
+      if (currentSlide > highestSlideReached) {
+        highestSlideReached = currentSlide;
+      }
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
       updateProgress();
       updateNavigation();
+      updateTOCState();
       setBookmark('slide-' + currentSlide);
       commitSCORM();
+    }
+    
+    // Navigate from TOC - only allow if slide has been reached
+    function navigateToSlide(slideIndex) {
+      if (slideIndex <= highestSlideReached) {
+        goToSlide(slideIndex);
+        toggleTOC();
+      } else {
+        alert('Please complete the previous sections first.');
+      }
+    }
+    
+    // Update TOC visual state
+    function updateTOCState() {
+      document.querySelectorAll('.toc-item').forEach(item => {
+        const slideNum = parseInt(item.dataset.slide);
+        item.classList.remove('active', 'locked');
+        if (slideNum === currentSlide) {
+          item.classList.add('active');
+        }
+        if (slideNum > highestSlideReached) {
+          item.classList.add('locked');
+        }
+      });
     }
 
     function nextSlide() {
@@ -2254,59 +2292,11 @@ export function generateSingleSCOHTML(
       if (sidebar.style.display === 'none') {
         sidebar.style.display = 'block';
         overlay.style.display = 'block';
-        updateTOCHighlight();
+        updateTOCState();
       } else {
         sidebar.style.display = 'none';
         overlay.style.display = 'none';
       }
-    }
-
-    function updateTOCHighlight() {
-      document.querySelectorAll('.toc-item').forEach(item => {
-        item.classList.remove('active');
-        if (parseInt(item.dataset.slide) === currentSlide) {
-          item.classList.add('active');
-        }
-      });
-    }
-
-    // Search Toggle
-    function toggleSearch() {
-      const searchBar = document.getElementById('searchBar');
-      searchBar.style.display = searchBar.style.display === 'none' ? 'flex' : 'none';
-      if (searchBar.style.display === 'flex') {
-        document.getElementById('searchInput').focus();
-      }
-    }
-
-    // Search Content
-    function searchContent(event) {
-      if (event.key === 'Enter') performSearch();
-    }
-
-    function performSearch() {
-      clearSearch();
-      const query = document.getElementById('searchInput').value.trim().toLowerCase();
-      if (!query) return;
-      
-      let count = 0;
-      document.querySelectorAll('.card-content p, .card-content li, .content-section p, .content-section li').forEach(el => {
-        const text = el.textContent.toLowerCase();
-        if (text.includes(query)) {
-          const regex = new RegExp('(' + query.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi');
-          el.innerHTML = el.innerHTML.replace(regex, '<mark class="search-highlight">$1</mark>');
-          count++;
-        }
-      });
-      document.getElementById('searchResults').textContent = count > 0 ? count + ' matches found' : 'No matches';
-    }
-
-    function clearSearch() {
-      document.querySelectorAll('.search-highlight').forEach(el => {
-        el.outerHTML = el.textContent;
-      });
-      document.getElementById('searchResults').textContent = '';
-      document.getElementById('searchInput').value = '';
     }
 
     // Text-to-Speech
@@ -2326,31 +2316,60 @@ export function generateSingleSCOHTML(
         document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
       } else {
         const slide = document.getElementById('slide-' + currentSlide);
-        const text = slide ? slide.textContent.replace(/\\s+/g, ' ').trim() : '';
-        if (text) {
-          ttsUtterance = new SpeechSynthesisUtterance(text);
+        if (!slide) return;
+        
+        // Get readable text from the slide
+        let textParts = [];
+        
+        // Get the title
+        const title = slide.querySelector('h2');
+        if (title) textParts.push(title.textContent);
+        
+        // Get content from cards and sections
+        slide.querySelectorAll('.card-header h3, .card-content p, .card-content li, .content-section h3, .content-section p, .content-section li').forEach(el => {
+          const text = el.textContent.trim();
+          if (text) textParts.push(text);
+        });
+        
+        const fullText = textParts.join('. ').replace(/\\s+/g, ' ').trim();
+        
+        if (fullText) {
+          ttsUtterance = new SpeechSynthesisUtterance(fullText);
           ttsUtterance.rate = 0.9;
+          ttsUtterance.pitch = 1;
+          ttsUtterance.volume = 1;
+          
+          // Try to get a good voice
+          const voices = speechSynthesis.getVoices();
+          const englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
+                              voices.find(v => v.lang.startsWith('en'));
+          if (englishVoice) ttsUtterance.voice = englishVoice;
+          
           ttsUtterance.onend = function() {
             ttsActive = false;
             document.getElementById('ttsBtn').classList.remove('active');
             document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
           };
+          ttsUtterance.onerror = function(e) {
+            console.error('TTS Error:', e);
+            ttsActive = false;
+            document.getElementById('ttsBtn').classList.remove('active');
+            document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+          };
+          
           speechSynthesis.speak(ttsUtterance);
           ttsActive = true;
           document.getElementById('ttsBtn').classList.add('active');
           document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
+        } else {
+          alert('No readable content on this slide.');
         }
       }
     }
 
-    // Print Course
-    function printCourse() {
-      // Show all slides for printing
-      document.querySelectorAll('.slide').forEach(s => s.style.display = 'block');
-      window.print();
-      // Restore current slide view
-      document.querySelectorAll('.slide').forEach(s => s.style.display = 'none');
-      document.getElementById('slide-' + currentSlide).style.display = 'block';
+    // Download Source Document
+    function downloadSourceDoc() {
+      alert('Source document download is available from your LMS or training administrator.\\n\\nContact your administrator to request the original SOP document.');
     }
 
     window.onbeforeunload = function() {
