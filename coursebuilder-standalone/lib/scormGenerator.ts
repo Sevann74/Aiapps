@@ -2302,10 +2302,19 @@ export function generateSingleSCOHTML(
     // Text-to-Speech
     let ttsActive = false;
     let ttsUtterance = null;
+    let voicesLoaded = false;
+    
+    // Pre-load voices (required for some browsers)
+    if ('speechSynthesis' in window) {
+      speechSynthesis.getVoices();
+      speechSynthesis.onvoiceschanged = function() {
+        voicesLoaded = true;
+      };
+    }
 
     function toggleTTS() {
       if (!('speechSynthesis' in window)) {
-        alert('Text-to-speech is not supported in this browser.');
+        alert('Text-to-speech is not supported in this browser. Please use Chrome, Edge, or Safari.');
         return;
       }
       
@@ -2314,57 +2323,80 @@ export function generateSingleSCOHTML(
         ttsActive = false;
         document.getElementById('ttsBtn').classList.remove('active');
         document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
-      } else {
-        const slide = document.getElementById('slide-' + currentSlide);
-        if (!slide) return;
-        
-        // Get readable text from the slide
-        let textParts = [];
-        
-        // Get the title
-        const title = slide.querySelector('h2');
-        if (title) textParts.push(title.textContent);
-        
-        // Get content from cards and sections
-        slide.querySelectorAll('.card-header h3, .card-content p, .card-content li, .content-section h3, .content-section p, .content-section li').forEach(el => {
-          const text = el.textContent.trim();
-          if (text) textParts.push(text);
-        });
-        
-        const fullText = textParts.join('. ').replace(/\\s+/g, ' ').trim();
-        
-        if (fullText) {
-          ttsUtterance = new SpeechSynthesisUtterance(fullText);
-          ttsUtterance.rate = 0.9;
-          ttsUtterance.pitch = 1;
-          ttsUtterance.volume = 1;
-          
-          // Try to get a good voice
-          const voices = speechSynthesis.getVoices();
-          const englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
-                              voices.find(v => v.lang.startsWith('en'));
-          if (englishVoice) ttsUtterance.voice = englishVoice;
-          
-          ttsUtterance.onend = function() {
-            ttsActive = false;
-            document.getElementById('ttsBtn').classList.remove('active');
-            document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
-          };
-          ttsUtterance.onerror = function(e) {
-            console.error('TTS Error:', e);
-            ttsActive = false;
-            document.getElementById('ttsBtn').classList.remove('active');
-            document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
-          };
-          
-          speechSynthesis.speak(ttsUtterance);
-          ttsActive = true;
-          document.getElementById('ttsBtn').classList.add('active');
-          document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
-        } else {
-          alert('No readable content on this slide.');
-        }
+        return;
       }
+      
+      // Cancel any pending speech first
+      speechSynthesis.cancel();
+      
+      const slide = document.getElementById('slide-' + currentSlide);
+      if (!slide) {
+        alert('No slide content found.');
+        return;
+      }
+      
+      // Get readable text from the slide - more comprehensive selection
+      let textParts = [];
+      
+      // Get the title
+      const title = slide.querySelector('h2');
+      if (title) textParts.push(title.textContent.trim());
+      
+      // Get all text content
+      slide.querySelectorAll('h3, h4, p, li, td').forEach(el => {
+        const text = el.textContent.trim();
+        if (text && text.length > 1) textParts.push(text);
+      });
+      
+      const fullText = textParts.join('. ').replace(/\\s+/g, ' ').replace(/\\.\\s*\\./g, '.').trim();
+      
+      if (!fullText || fullText.length < 5) {
+        alert('No readable content on this slide.');
+        return;
+      }
+      
+      // Create utterance
+      ttsUtterance = new SpeechSynthesisUtterance(fullText);
+      ttsUtterance.rate = 0.9;
+      ttsUtterance.pitch = 1;
+      ttsUtterance.volume = 1;
+      ttsUtterance.lang = 'en-US';
+      
+      // Try to get a good voice
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        const preferredVoice = voices.find(v => v.lang === 'en-US' && v.localService) || 
+                              voices.find(v => v.lang.startsWith('en')) ||
+                              voices[0];
+        if (preferredVoice) ttsUtterance.voice = preferredVoice;
+      }
+      
+      ttsUtterance.onstart = function() {
+        ttsActive = true;
+        document.getElementById('ttsBtn').classList.add('active');
+        document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
+      };
+      
+      ttsUtterance.onend = function() {
+        ttsActive = false;
+        document.getElementById('ttsBtn').classList.remove('active');
+        document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+      };
+      
+      ttsUtterance.onerror = function(e) {
+        console.error('TTS Error:', e.error);
+        ttsActive = false;
+        document.getElementById('ttsBtn').classList.remove('active');
+        document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+        if (e.error !== 'canceled') {
+          alert('Speech error: ' + e.error + '. Please try again.');
+        }
+      };
+      
+      // Small delay to ensure everything is ready
+      setTimeout(function() {
+        speechSynthesis.speak(ttsUtterance);
+      }, 100);
     }
 
     // Download Source Document
