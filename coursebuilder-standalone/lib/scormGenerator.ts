@@ -2001,7 +2001,6 @@ export function generateSingleSCOHTML(
       <div class="header-tools">
         <button class="tool-btn" onclick="toggleTOC()" title="Table of Contents">📑 Contents</button>
         <button class="tool-btn" onclick="toggleTTS()" id="ttsBtn" title="Read Aloud">🔊 Read Aloud</button>
-        <button class="tool-btn" onclick="downloadSourceDoc()" title="Download Source Document">📄 Source Doc</button>
       </div>
     </div>
     <div class="progress-container">
@@ -2299,109 +2298,123 @@ export function generateSingleSCOHTML(
       }
     }
 
-    // Text-to-Speech
+    // Text-to-Speech with chunking to avoid Chrome bug
     let ttsActive = false;
-    let ttsUtterance = null;
-    let voicesLoaded = false;
+    let ttsQueue = [];
+    let ttsCurrentIndex = 0;
     
-    // Pre-load voices (required for some browsers)
+    // Pre-load voices
     if ('speechSynthesis' in window) {
       speechSynthesis.getVoices();
-      speechSynthesis.onvoiceschanged = function() {
-        voicesLoaded = true;
+      speechSynthesis.onvoiceschanged = function() {};
+    }
+
+    function stopTTS() {
+      speechSynthesis.cancel();
+      ttsActive = false;
+      ttsQueue = [];
+      ttsCurrentIndex = 0;
+      document.getElementById('ttsBtn').classList.remove('active');
+      document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+    }
+
+    function speakNextChunk() {
+      if (ttsCurrentIndex >= ttsQueue.length) {
+        stopTTS();
+        return;
+      }
+      
+      const text = ttsQueue[ttsCurrentIndex];
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      utterance.lang = 'en-US';
+      
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        const voice = voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en')) || voices[0];
+        if (voice) utterance.voice = voice;
+      }
+      
+      utterance.onend = function() {
+        ttsCurrentIndex++;
+        if (ttsActive) {
+          setTimeout(speakNextChunk, 50);
+        }
       };
+      
+      utterance.onerror = function(e) {
+        if (e.error !== 'canceled' && e.error !== 'interrupted') {
+          console.error('TTS chunk error:', e.error);
+        }
+        ttsCurrentIndex++;
+        if (ttsActive && ttsCurrentIndex < ttsQueue.length) {
+          setTimeout(speakNextChunk, 50);
+        } else {
+          stopTTS();
+        }
+      };
+      
+      speechSynthesis.speak(utterance);
     }
 
     function toggleTTS() {
       if (!('speechSynthesis' in window)) {
-        alert('Text-to-speech is not supported in this browser. Please use Chrome, Edge, or Safari.');
+        alert('Text-to-speech is not supported in this browser.');
         return;
       }
       
       if (ttsActive) {
-        speechSynthesis.cancel();
-        ttsActive = false;
-        document.getElementById('ttsBtn').classList.remove('active');
-        document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
+        stopTTS();
         return;
       }
       
-      // Cancel any pending speech first
       speechSynthesis.cancel();
       
       const slide = document.getElementById('slide-' + currentSlide);
-      if (!slide) {
-        alert('No slide content found.');
-        return;
-      }
+      if (!slide) return;
       
-      // Get readable text from the slide - more comprehensive selection
+      // Get text content
       let textParts = [];
-      
-      // Get the title
       const title = slide.querySelector('h2');
       if (title) textParts.push(title.textContent.trim());
       
-      // Get all text content
-      slide.querySelectorAll('h3, h4, p, li, td').forEach(el => {
+      slide.querySelectorAll('h3, h4, p, li').forEach(el => {
         const text = el.textContent.trim();
-        if (text && text.length > 1) textParts.push(text);
+        if (text && text.length > 2) textParts.push(text);
       });
       
-      const fullText = textParts.join('. ').replace(/\\s+/g, ' ').replace(/\\.\\s*\\./g, '.').trim();
-      
-      if (!fullText || fullText.length < 5) {
+      if (textParts.length === 0) {
         alert('No readable content on this slide.');
         return;
       }
       
-      // Create utterance
-      ttsUtterance = new SpeechSynthesisUtterance(fullText);
-      ttsUtterance.rate = 0.9;
-      ttsUtterance.pitch = 1;
-      ttsUtterance.volume = 1;
-      ttsUtterance.lang = 'en-US';
+      // Split into smaller chunks (sentences) to avoid Chrome interruption bug
+      ttsQueue = [];
+      textParts.forEach(part => {
+        // Split by sentence endings
+        const sentences = part.split(/(?<=[.!?])\\s+/);
+        sentences.forEach(s => {
+          const cleaned = s.trim();
+          if (cleaned.length > 2) {
+            ttsQueue.push(cleaned);
+          }
+        });
+      });
       
-      // Try to get a good voice
-      const voices = speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        const preferredVoice = voices.find(v => v.lang === 'en-US' && v.localService) || 
-                              voices.find(v => v.lang.startsWith('en')) ||
-                              voices[0];
-        if (preferredVoice) ttsUtterance.voice = preferredVoice;
+      if (ttsQueue.length === 0) {
+        alert('No readable content on this slide.');
+        return;
       }
       
-      ttsUtterance.onstart = function() {
-        ttsActive = true;
-        document.getElementById('ttsBtn').classList.add('active');
-        document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
-      };
+      ttsActive = true;
+      ttsCurrentIndex = 0;
+      document.getElementById('ttsBtn').classList.add('active');
+      document.getElementById('ttsBtn').innerHTML = '⏹️ Stop';
       
-      ttsUtterance.onend = function() {
-        ttsActive = false;
-        document.getElementById('ttsBtn').classList.remove('active');
-        document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
-      };
-      
-      ttsUtterance.onerror = function(e) {
-        console.error('TTS Error:', e.error);
-        ttsActive = false;
-        document.getElementById('ttsBtn').classList.remove('active');
-        document.getElementById('ttsBtn').innerHTML = '🔊 Read Aloud';
-        if (e.error !== 'canceled') {
-          alert('Speech error: ' + e.error + '. Please try again.');
-        }
-      };
-      
-      // Small delay to ensure everything is ready
-      setTimeout(function() {
-        speechSynthesis.speak(ttsUtterance);
-      }, 100);
-    }
-
-    // Download Source Document
-    function downloadSourceDoc() {
-      alert('Source document download is available from your LMS or training administrator.\\n\\nContact your administrator to request the original SOP document.');
+      // Start speaking
+      setTimeout(speakNextChunk, 100);
     }
 
     window.onbeforeunload = function() {
