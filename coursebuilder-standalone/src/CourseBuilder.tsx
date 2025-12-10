@@ -8,6 +8,7 @@ import { extractTextFromWord, isWordDocument } from '../lib/wordExtractor';
 import { parseAPIError, ErrorDetails } from '../lib/errorHandler';
 import { testEdgeFunctionConnection, APITestResult } from '../lib/apiTester';
 import * as auditTrail from '../lib/auditTrail';
+import { extractColorsFromImage, validateLogoFile, LOGO_REQUIREMENTS, BrandColors, getDefaultBrandColors, LogoAnalysisResult } from '../lib/colorExtractor';
 import * as courseStorage from '../lib/courseStorage';
 import { StoredCourse } from '../lib/courseStorage';
 import ErrorModal from '../components/ErrorModal';
@@ -28,12 +29,15 @@ const EnhancedCourseBuilder = () => {
     passingScore: 80,
     maxAttempts: 3,
     scormVersion: '1.2',
-    brandingLogo: null,
+    brandingLogo: null as string | null,
+    brandColors: null as BrandColors | null,
     generationMode: 'strict', // strict = 100% accuracy
     questionMode: 'ai', // 'ai' or 'manual' or 'hybrid'
     includeQuiz: true, // true = include quiz, false = acknowledgment only
     questionCount: 5 // number of questions to include (1-10)
   });
+  const [logoAnalysis, setLogoAnalysis] = useState<LogoAnalysisResult | null>(null);
+  const [isAnalyzingLogo, setIsAnalyzingLogo] = useState(false);
   const [manualQuestions, setManualQuestions] = useState([]);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [showQuestionEditor, setShowQuestionEditor] = useState(false);
@@ -1185,12 +1189,40 @@ const EnhancedCourseBuilder = () => {
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith('image/')) {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file first
+    const validation = validateLogoFile(file);
+    if (!validation.valid) {
+      alert(`Logo Error:\n${validation.errors.join('\n')}`);
+      return;
+    }
+    
+    if (validation.warnings.length > 0) {
+      console.warn('Logo warnings:', validation.warnings);
+    }
+    
+    if (file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setConfig(prev => ({ ...prev, brandingLogo: e.target.result }));
+      reader.onload = async (event) => {
+        const imageData = event.target?.result as string;
+        setConfig(prev => ({ ...prev, brandingLogo: imageData }));
+        
+        // Extract colors from logo
+        setIsAnalyzingLogo(true);
+        try {
+          const analysis = await extractColorsFromImage(imageData);
+          setLogoAnalysis(analysis);
+          if (analysis.isValid && analysis.colors) {
+            setConfig(prev => ({ ...prev, brandColors: analysis.colors }));
+          }
+        } catch (error) {
+          console.error('Color extraction failed:', error);
+        } finally {
+          setIsAnalyzingLogo(false);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -2466,19 +2498,34 @@ const EnhancedCourseBuilder = () => {
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Company Logo (Optional)
             </label>
+            
+            {/* Logo Guidelines */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <p className="font-semibold text-blue-800 mb-1">📐 Logo Recommendations:</p>
+              <ul className="text-blue-700 space-y-0.5 text-xs">
+                <li>• <strong>Format:</strong> PNG with transparent background (best) or SVG</li>
+                <li>• <strong>Size:</strong> 200-800px wide, 50-200px tall (4:1 ratio ideal)</li>
+                <li>• <strong>Max file size:</strong> 2MB</li>
+                <li>• <strong>Colors:</strong> Bold, distinct colors work best for auto-theming</li>
+              </ul>
+            </div>
+            
             <div className="flex items-center gap-4">
               <button
                 onClick={() => logoInputRef.current?.click()}
                 className="px-4 py-2 bg-gray-100 border-2 border-gray-300 rounded-lg hover:bg-gray-200 transition-all"
               >
-                Choose Logo
+                {isAnalyzingLogo ? 'Analyzing...' : 'Choose Logo'}
               </button>
               {config.brandingLogo && (
                 <div className="flex items-center gap-2">
-                  <img src={config.brandingLogo} alt="Logo preview" className="h-12 w-12 object-contain border rounded" />
+                  <img src={config.brandingLogo} alt="Logo preview" className="h-12 w-auto object-contain border rounded bg-white p-1" />
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <button
-                    onClick={() => setConfig({...config, brandingLogo: null})}
+                    onClick={() => {
+                      setConfig({...config, brandingLogo: null, brandColors: null});
+                      setLogoAnalysis(null);
+                    }}
                     className="text-red-600 hover:text-red-700 text-sm"
                   >
                     Remove
@@ -2489,12 +2536,60 @@ const EnhancedCourseBuilder = () => {
             <input
               ref={logoInputRef}
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
               className="hidden"
               onChange={handleLogoUpload}
             />
+            
+            {/* Color Extraction Results */}
+            {logoAnalysis && logoAnalysis.isValid && config.brandColors && (
+              <div className="mt-4 p-4 bg-gradient-to-r from-gray-50 to-purple-50 border border-purple-200 rounded-lg">
+                <p className="font-semibold text-gray-800 mb-2">🎨 Extracted Brand Colors:</p>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 rounded-lg border-2 border-white shadow-md" 
+                      style={{ backgroundColor: config.brandColors.primary }}
+                      title="Primary Color"
+                    />
+                    <span className="text-xs text-gray-600">Primary</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 rounded-lg border-2 border-white shadow-md" 
+                      style={{ backgroundColor: config.brandColors.secondary }}
+                      title="Secondary Color"
+                    />
+                    <span className="text-xs text-gray-600">Accent</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 rounded-lg border-2 border-white shadow-md" 
+                      style={{ backgroundColor: config.brandColors.darkVariant }}
+                      title="Dark Variant"
+                    />
+                    <span className="text-xs text-gray-600">Dark</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 rounded-lg border-2 border-white shadow-md" 
+                      style={{ backgroundColor: config.brandColors.lightVariant }}
+                      title="Light Variant"
+                    />
+                    <span className="text-xs text-gray-600">Light</span>
+                  </div>
+                </div>
+                <p className="text-xs text-green-700">✓ These colors will be applied to your SCORM course design</p>
+                {logoAnalysis.warnings && logoAnalysis.warnings.length > 0 && (
+                  <div className="mt-2 text-xs text-orange-600">
+                    ⚠️ {logoAnalysis.warnings.join(' • ')}
+                  </div>
+                )}
+              </div>
+            )}
+            
             <p className="text-sm text-gray-500 mt-2">
-              Your logo will appear on the course title page
+              Your logo will appear on the course title page. Colors will be extracted to theme the course.
             </p>
           </div>
         </div>

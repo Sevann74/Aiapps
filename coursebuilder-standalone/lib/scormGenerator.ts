@@ -1,10 +1,12 @@
 import JSZip from 'jszip';
+import { BrandColors, getDefaultBrandColors } from './colorExtractor';
 
 interface CourseConfig {
   passingScore: number;
   maxAttempts: number;
   scormVersion: '1.2' | '2004';
   includeQuiz?: boolean;
+  brandColors?: BrandColors;
 }
 
 interface Question {
@@ -65,7 +67,8 @@ export function generateSingleSCOHTML(
   config: CourseConfig
 ): string {
   const { title, modules, quiz, logo, includeQuiz = true, sourceDocument } = courseData;
-  const { passingScore, maxAttempts } = config;
+  const { passingScore, maxAttempts, brandColors: configBrandColors } = config;
+  const brandColors = configBrandColors || getDefaultBrandColors();
   const hasSourceDoc = sourceDocument && sourceDocument.data;
 
   const totalSlides = modules.length + (includeQuiz ? 1 : 0) + 1;
@@ -694,12 +697,14 @@ export function generateSingleSCOHTML(
   <title>${escapeHtml(title)}</title>
   <style>
     :root {
-      --brand-navy: #2E3192;
-      --brand-cyan: #00C5B8;
-      --brand-dark-blue: #1a1f5c;
-      --shadow-sm: 0 4px 6px rgba(46, 49, 146, 0.1);
-      --shadow-md: 0 10px 30px rgba(46, 49, 146, 0.15);
-      --shadow-lg: 0 20px 60px rgba(46, 49, 146, 0.2);
+      --brand-navy: ${brandColors.primary};
+      --brand-cyan: ${brandColors.secondary};
+      --brand-dark-blue: ${brandColors.darkVariant};
+      --brand-light: ${brandColors.lightVariant};
+      --text-on-primary: ${brandColors.textOnPrimary};
+      --shadow-sm: 0 4px 6px ${brandColors.primary}1a;
+      --shadow-md: 0 10px 30px ${brandColors.primary}26;
+      --shadow-lg: 0 20px 60px ${brandColors.primary}33;
     }
 
     * {
