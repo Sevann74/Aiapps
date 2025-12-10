@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Send, Package } from 'lucide-react';
 import { signIn, signOut, createUser, type UserProfile } from './lib/authService';
+import { uploadDocument, downloadDocument } from './lib/storageService';
 
 // ============================================
 // SIMPLIFIED ICON COMPONENT
@@ -377,9 +378,19 @@ const StreamlinedCourseBuilder = () => {
       return;
     }
     
+    // Generate job ID first
+    const jobId = `J${String(jobs.length + 1).padStart(3, '0')}`;
+    
+    // Upload document to Supabase Storage
+    const uploadResult = await uploadDocument(uploadedFile, jobId, currentUser.id);
+    if (!uploadResult.success) {
+      alert(`Failed to upload document: ${uploadResult.error}`);
+      return;
+    }
+    
     // Create new job
     const newJob = {
-      id: `J${String(jobs.length + 1).padStart(3, '0')}`,
+      id: jobId,
       clientId: currentUser.id,
       clientName: currentUser.name,
       clientEmail: currentUser.email,
@@ -397,6 +408,7 @@ const StreamlinedCourseBuilder = () => {
       scormVersion: clientForm.scormVersion,
       comments: clientForm.comments,
       fileName: uploadedFile.name,
+      filePath: uploadResult.path,
       fileChecksum: fileChecksum,
       manualQuestions: clientForm.quizMode === 'manual' || clientForm.quizMode === 'hybrid' ? manualQuestions : [],
       companyLogo: companyLogo,
@@ -412,9 +424,9 @@ const StreamlinedCourseBuilder = () => {
         },
         {
           timestamp: new Date().toISOString(),
-          action: 'Email notification sent',
+          action: 'Document uploaded to secure storage',
           actor: 'system',
-          details: 'Sent to david.dergazarian@navigantlearning.com'
+          details: `Path: ${uploadResult.path}`
         }
       ]
     };
@@ -454,6 +466,7 @@ const StreamlinedCourseBuilder = () => {
   // ============================================
   // EMAIL NOTIFICATION (Simulated)
   // ============================================
+  
 
   const sendEmailNotification = (job, recipient) => {
     if (recipient === 'admin') {
@@ -644,7 +657,7 @@ Learning Conversion Hub
   // ADMIN ACTIONS
   // ============================================
   
-  const adminDownloadSOP = (job) => {
+  const adminDownloadSOP = async (job) => {
     // Add audit log
     const updatedJobs = jobs.map(j => {
       if (j.id === job.id) {
@@ -665,8 +678,20 @@ Learning Conversion Hub
     });
     setJobs(updatedJobs);
     
-    // Create a downloadable file (simulated)
-    const fileContent = `SOP Document: ${job.courseTitle}\n\nJob ID: ${job.id}\nSOP Number: ${job.sopNumber || 'N/A'}\nSubmitted: ${new Date(job.submittedAt).toLocaleString()}\nChecksum: ${job.fileChecksum}\n\nThis is a simulated SOP file download.\nIn production, this would download the actual uploaded PDF/DOCX file from cloud storage.`;
+    // Try to download from Supabase Storage if filePath exists
+    if (job.filePath) {
+      const result = await downloadDocument(job.filePath, job.fileName);
+      if (result.success) {
+        alert(`✅ SOP Downloaded\n\nFile: ${job.fileName}\n\nNext: Generate course using your CourseBuilder app, then upload preview or final SCORM.`);
+        return;
+      } else {
+        console.error('Download from storage failed:', result.error);
+        // Fall through to simulated download
+      }
+    }
+    
+    // Fallback: Create a simulated downloadable file (for old jobs without filePath)
+    const fileContent = `SOP Document: ${job.courseTitle}\n\nJob ID: ${job.id}\nSOP Number: ${job.sopNumber || 'N/A'}\nSubmitted: ${new Date(job.submittedAt).toLocaleString()}\nChecksum: ${job.fileChecksum}\n\nThis is a simulated SOP file download.\nThe original file was not stored in cloud storage.`;
     
     const blob = new Blob([fileContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
@@ -678,7 +703,7 @@ Learning Conversion Hub
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
     
-    alert(` SOP Downloaded\n\nFile: ${job.fileName}\nChecksum: ${job.fileChecksum}\n\nNext: Generate course using your CourseBuilder app, then upload preview or final SCORM.`);
+    alert(`⚠️ SOP Downloaded (Simulated)\n\nFile: ${job.fileName}\nChecksum: ${job.fileChecksum}\n\nNote: This job was created before cloud storage was enabled.\n\nNext: Generate course using your CourseBuilder app, then upload preview or final SCORM.`);
   };
   
   // Show in-app notification
