@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Send, Package } from 'lucide-react';
+import { signIn, signOut, type UserProfile } from './lib/authService';
 
 // ============================================
 // SIMPLIFIED ICON COMPONENT
@@ -283,22 +284,34 @@ const StreamlinedCourseBuilder = () => {
   // AUTHENTICATION
   // ============================================
   
-  const handleLogin = (e) => {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const user = mockUsers[loginEmail];
+    setIsLoggingIn(true);
     
-    if (user && user.password === loginPassword) {
-      setCurrentUser(user);
-      setIsAuthenticated(true);
-      setCurrentView(user.role === 'admin' ? 'admin-dashboard' : 'dashboard');
-      // Save session to localStorage for persistence
-      localStorage.setItem('coursebuilder_session', JSON.stringify({ isAuthenticated: true, user }));
-    } else {
-alert('Invalid credentials. Try:\nClient: sarah@abcpharma.com / demo123\nAdmin: david.dergazarian@navigantlearning.com / admin123');
+    try {
+      // Try Supabase auth first
+      const result = await signIn(loginEmail, loginPassword);
+      
+      if (result.success && result.user) {
+        setCurrentUser(result.user);
+        setIsAuthenticated(true);
+        setCurrentView(result.user.role === 'admin' ? 'admin-dashboard' : 'dashboard');
+        localStorage.setItem('coursebuilder_session', JSON.stringify({ isAuthenticated: true, user: result.user }));
+      } else {
+        alert(result.error || 'Invalid credentials. Try:\nClient: sarah@abcpharma.com / demo123\nAdmin: david.dergazarian@navigantlearning.com / admin123');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Login failed. Please try again.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
   
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     setIsAuthenticated(false);
     setCurrentUser(null);
     setCurrentView('dashboard');
