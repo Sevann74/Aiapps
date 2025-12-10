@@ -849,11 +849,11 @@ export function generateSingleSCOHTML(
       height: 56px;
       margin-bottom: 1.5rem;
       object-fit: contain;
-      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.08));
       animation: slideIn 0.5s ease-out;
-      background: white;
-      padding: 8px 12px;
-      border-radius: 8px;
+      background-color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     .slide h2 {
