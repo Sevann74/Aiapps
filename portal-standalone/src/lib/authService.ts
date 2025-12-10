@@ -121,7 +121,7 @@ async function getUserProfile(userId: string): Promise<UserProfile | null> {
   };
 }
 
-// Create new user (admin only)
+// Create new user (admin only) - uses signUp which works with anon key
 export async function createUser(
   email: string, 
   password: string, 
@@ -134,11 +134,17 @@ export async function createUser(
   }
 
   try {
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Create auth user using signUp (works with anon key)
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      email_confirm: true
+      options: {
+        data: {
+          name,
+          organization,
+          role
+        }
+      }
     });
 
     if (authError) {
@@ -162,11 +168,21 @@ export async function createUser(
 
     if (profileError) {
       console.error('Error creating profile:', profileError);
-      return { success: false, error: 'User created but profile failed' };
+      // Try to clean up - but user is already created in auth
+      return { success: false, error: `User created but profile failed: ${profileError.message}` };
     }
 
-    const profile = await getUserProfile(authData.user.id);
-    return { success: true, user: profile || undefined };
+    return { 
+      success: true, 
+      user: {
+        id: authData.user.id,
+        email,
+        name,
+        organization,
+        role,
+        createdAt: new Date().toISOString()
+      }
+    };
   } catch (err) {
     console.error('Create user error:', err);
     return { success: false, error: 'An unexpected error occurred' };
