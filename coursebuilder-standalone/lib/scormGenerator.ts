@@ -702,9 +702,9 @@ export function generateSingleSCOHTML(
       --brand-dark-blue: ${brandColors.darkVariant};
       --brand-light: ${brandColors.lightVariant};
       --text-on-primary: ${brandColors.textOnPrimary};
-      --shadow-sm: 0 4px 6px ${brandColors.primary}1a;
-      --shadow-md: 0 10px 30px ${brandColors.primary}26;
-      --shadow-lg: 0 20px 60px ${brandColors.primary}33;
+      --shadow-sm: 0 4px 6px ${brandColors.primary}10;
+      --shadow-md: 0 8px 20px ${brandColors.primary}15;
+      --shadow-lg: 0 12px 35px ${brandColors.primary}18;
     }
 
     * {
@@ -849,8 +849,11 @@ export function generateSingleSCOHTML(
       height: 56px;
       margin-bottom: 1.5rem;
       object-fit: contain;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.08));
       animation: slideIn 0.5s ease-out;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
     }
 
     .slide h2 {
