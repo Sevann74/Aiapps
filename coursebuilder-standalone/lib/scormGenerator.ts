@@ -850,10 +850,6 @@ export function generateSingleSCOHTML(
       margin-bottom: 1.5rem;
       object-fit: contain;
       animation: slideIn 0.5s ease-out;
-      background-color: #ffffff;
-      padding: 10px 16px;
-      border-radius: 6px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     .slide h2 {
