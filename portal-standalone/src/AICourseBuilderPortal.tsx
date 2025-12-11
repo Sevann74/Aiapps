@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Send, Package } from 'lucide-react';
 import { signIn, signOut, createUser, type UserProfile } from './lib/authService';
 import { uploadDocument, downloadDocument } from './lib/storageService';
+import { createJob, getJobs, updateJob } from './lib/jobsService';
 
 // ============================================
 // SIMPLIFIED ICON COMPONENT
@@ -276,9 +277,31 @@ const StreamlinedCourseBuilder = () => {
     ];
   });
   
-  // Save jobs to localStorage
+  // Load jobs from Supabase when authenticated
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  
   useEffect(() => {
-    localStorage.setItem('streamlinedCourseJobs', JSON.stringify(jobs));
+    const loadJobsFromSupabase = async () => {
+      if (!isAuthenticated || !currentUser) return;
+      setIsLoadingJobs(true);
+      try {
+        const result = await getJobs();
+        if (result.success && result.jobs && result.jobs.length > 0) {
+          setJobs(result.jobs);
+        }
+      } catch (error) {
+        console.error('Failed to load jobs:', error);
+      }
+      setIsLoadingJobs(false);
+    };
+    loadJobsFromSupabase();
+  }, [isAuthenticated, currentUser]);
+  
+  // Save jobs to localStorage as backup
+  useEffect(() => {
+    if (jobs.length > 0) {
+      localStorage.setItem('streamlinedCourseJobs', JSON.stringify(jobs));
+    }
   }, [jobs]);
   
   // ============================================
@@ -431,8 +454,14 @@ const StreamlinedCourseBuilder = () => {
       ]
     };
     
-    // Add to jobs
-    setJobs([newJob, ...jobs]);
+    // Save to Supabase and add to local state
+    const createResult = await createJob(newJob);
+    if (createResult.success && createResult.job) {
+      setJobs([createResult.job, ...jobs]);
+    } else {
+      console.error('Failed to save to Supabase:', createResult.error);
+      setJobs([newJob, ...jobs]);
+    }
     
     // Send email notifications (simulated)
     sendEmailNotification(newJob, 'admin');
