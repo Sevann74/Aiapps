@@ -32,6 +32,9 @@ export interface StoredCourse {
   status: 'draft' | 'generated' | 'exported' | 'completed';
   // For cleanup tracking
   sopContentCleared: boolean;
+  // Supabase sync
+  supabaseId?: string;
+  supabaseFilePath?: string;
 }
 
 const STORAGE_KEY = 'coursebuilder_saved_courses';

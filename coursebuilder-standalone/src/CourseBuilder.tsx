@@ -78,6 +78,8 @@ const EnhancedCourseBuilder = () => {
   const [clientFilter, setClientFilter] = useState('');
   const [uniqueClients, setUniqueClients] = useState<string[]>([]);
   const [currentSavedCourseId, setCurrentSavedCourseId] = useState<string | null>(null);
+  const [currentSupabaseCourseId, setCurrentSupabaseCourseId] = useState<string | null>(null);
+  const [supabaseFilePath, setSupabaseFilePath] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
 
   const fileInputRef = useRef(null);
@@ -102,12 +104,13 @@ const EnhancedCourseBuilder = () => {
     setUniqueClients(courseStorage.getUniqueClients());
   };
 
-  const handleSaveCourse = (status: StoredCourse['status'] = 'draft') => {
+  const handleSaveCourse = async (status: StoredCourse['status'] = 'draft') => {
     if (!clientName.trim()) {
       alert('Please enter a client name before saving.');
       return;
     }
 
+    // Save to localStorage first
     const savedCourse = courseStorage.saveCourse({
       id: currentSavedCourseId || undefined,
       clientName: clientName.trim(),
@@ -119,10 +122,51 @@ const EnhancedCourseBuilder = () => {
       documentVersion,
       verificationReport,
       status,
-      sopContentCleared: false
+      sopContentCleared: false,
+      supabaseId: currentSupabaseCourseId || undefined,
+      supabaseFilePath: supabaseFilePath || undefined
     });
 
     setCurrentSavedCourseId(savedCourse.id);
+
+    // Also save to Supabase
+    try {
+      const supabaseCourse = {
+        id: currentSupabaseCourseId || undefined,
+        client_name: clientName.trim(),
+        course_title: courseTitle || 'Untitled Course',
+        document_text: documentText,
+        course_data: courseData,
+        config: config,
+        gxp_fields: gxpFields,
+        document_version: documentVersion,
+        verification_report: verificationReport,
+        status: status,
+        sop_content_cleared: false,
+        file_path: supabaseFilePath
+      };
+
+      let result;
+      if (currentSupabaseCourseId) {
+        result = await coursesService.updateCourse(currentSupabaseCourseId, supabaseCourse);
+      } else {
+        result = await coursesService.createCourse(supabaseCourse);
+      }
+
+      if (result.success && result.course) {
+        setCurrentSupabaseCourseId(result.course.id);
+        // Update localStorage with Supabase ID
+        courseStorage.saveCourse({
+          ...savedCourse,
+          supabaseId: result.course.id
+        });
+        console.log('✅ Course saved to Supabase:', result.course.id);
+      }
+    } catch (err) {
+      console.error('Supabase save error:', err);
+      // Don't fail - localStorage save still worked
+    }
+
     refreshSavedCourses();
     alert(`✓ Course saved successfully!`);
   };
@@ -141,6 +185,8 @@ const EnhancedCourseBuilder = () => {
     setDocumentVersion(course.documentVersion);
     setVerificationReport(course.verificationReport);
     setCurrentSavedCourseId(course.id);
+    setCurrentSupabaseCourseId(course.supabaseId || null);
+    setSupabaseFilePath(course.supabaseFilePath || null);
     setShowSavedCourses(false);
 
     // Navigate to appropriate step
@@ -1169,6 +1215,18 @@ const EnhancedCourseBuilder = () => {
         ]
       };
       setCurrentError(errorDetails);
+    }
+
+    // Upload document to Supabase Storage
+    try {
+      const uploadResult = await coursesService.uploadCourseDocument(file, clientName.trim() || 'unknown');
+      if (uploadResult.success && uploadResult.path) {
+        setSupabaseFilePath(uploadResult.path);
+        console.log(' Document uploaded to Supabase Storage:', uploadResult.path);
+      }
+    } catch (err) {
+      console.error('Supabase upload error:', err);
+      // Don't fail - local processing still works
     }
 
     setIsProcessing(false);
@@ -3655,7 +3713,7 @@ const EnhancedCourseBuilder = () => {
                           </button>
                           {course.status !== 'completed' && (
                             <button
-                              onClick={() => handleCompleteAndCleanup(course.id)}
+                              onClick={() => handleCompleteAndCleanup(course.id, course.supabaseId)}
                               className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all font-semibold text-sm flex items-center gap-2"
                               title="Complete & Cleanup - Clears SOP content"
                             >
