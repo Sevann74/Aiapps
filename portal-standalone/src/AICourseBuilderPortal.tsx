@@ -488,8 +488,9 @@ const StreamlinedCourseBuilder = () => {
     setManualQuestions([]);
     setCompanyLogo(null);
     
-    // Show success message inline
+    // Show success message inline and scroll to top
     setSubmissionSuccess({ jobId: newJob.id, eta: newJob.eta });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
   // ============================================
