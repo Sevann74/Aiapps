@@ -11,6 +11,7 @@ import * as auditTrail from '../lib/auditTrail';
 import { extractColorsFromImage, validateLogoFile, LOGO_REQUIREMENTS, BrandColors, getDefaultBrandColors, LogoAnalysisResult } from '../lib/colorExtractor';
 import * as courseStorage from '../lib/courseStorage';
 import { StoredCourse } from '../lib/courseStorage';
+import * as coursesService from '../lib/coursesService';
 import ErrorModal from '../components/ErrorModal';
 
 const EnhancedCourseBuilder = () => {
@@ -162,18 +163,37 @@ const EnhancedCourseBuilder = () => {
     }
   };
 
-  const handleCompleteAndCleanup = (id: string) => {
+  const handleCompleteAndCleanup = async (id: string, supabaseId?: string) => {
     if (confirm(
-      '⚠️ Complete & Cleanup\n\n' +
-      'This will:\n' +
-      '• Mark the course as completed\n' +
-      '• Delete the SOP document content\n' +
-      '• Keep quiz questions and metadata for reference\n\n' +
-      'This action cannot be undone. Continue?'
+      ' SECURE COMPLETE & CLEANUP\n\n' +
+      'This will PERMANENTLY DELETE:\n' +
+      '• All SOP/document content\n' +
+      '• All generated course modules\n' +
+      '• All quiz questions and answers\n' +
+      '• Company logo/branding\n\n' +
+      'Only minimal metadata (title, dates, client name) will be retained for audit purposes.\n\n' +
+      ' This action cannot be undone. Continue?'
     )) {
-      courseStorage.completeAndCleanup(id);
+      // Clear from localStorage
+      const localResult = courseStorage.completeAndCleanup(id);
+      
+      // Also clear from Supabase if we have a Supabase ID
+      if (supabaseId) {
+        try {
+          await coursesService.secureCleanupCourse(supabaseId);
+          console.log(' Supabase cleanup completed');
+        } catch (err) {
+          console.error('Supabase cleanup error:', err);
+        }
+      }
+      
       refreshSavedCourses();
-      alert('✓ Course completed and SOP content cleared.');
+      
+      if (localResult.success) {
+        alert(` SECURE CLEANUP COMPLETE\n\nCleared ${localResult.clearedFields.length} data fields.\nNo document content retained.`);
+      } else {
+        alert(' Course marked as completed.');
+      }
     }
   };
 

@@ -129,26 +129,80 @@ export function updateCourseStatus(id: string, status: StoredCourse['status']): 
   return true;
 }
 
-// Complete & Cleanup - removes SOP content but keeps metadata and quiz
-export function completeAndCleanup(id: string): boolean {
+// Complete & Cleanup - SECURE DELETION of all SOP/document content
+// Keeps only minimal metadata for audit trail (no content retained)
+export function completeAndCleanup(id: string): { success: boolean; clearedFields: string[] } {
   const courses = getAllCourses();
   const index = courses.findIndex(c => c.id === id);
-  if (index === -1) return false;
+  if (index === -1) return { success: false, clearedFields: [] };
   
-  // Clear sensitive SOP content but keep quiz questions and metadata
-  courses[index].documentText = '[CONTENT CLEARED - Course Completed]';
-  courses[index].status = 'completed';
-  courses[index].sopContentCleared = true;
-  courses[index].updatedAt = new Date().toISOString();
+  const clearedFields: string[] = [];
+  const course = courses[index];
   
-  // Keep courseData but clear any raw text within it
-  if (courses[index].courseData) {
-    // Preserve modules structure but could clear detailed content if needed
-    // For now, we keep the course structure for reference
+  // 1. Clear the raw SOP document text
+  if (course.documentText && course.documentText !== '[CONTENT CLEARED]') {
+    course.documentText = '[CONTENT CLEARED]';
+    clearedFields.push('documentText');
   }
   
+  // 2. Clear all course content (modules, sections, quiz questions)
+  if (course.courseData) {
+    // Clear module content
+    if (course.courseData.modules) {
+      course.courseData.modules.forEach((module: any) => {
+        module.content = []; // Clear all section content
+        module.title = '[CLEARED]';
+      });
+      clearedFields.push('courseData.modules');
+    }
+    
+    // Clear quiz questions and answers
+    if (course.courseData.quiz) {
+      course.courseData.quiz.questions = [];
+      clearedFields.push('courseData.quiz');
+    }
+    
+    // Clear any embedded logo data
+    if (course.courseData.logo) {
+      course.courseData.logo = null;
+      clearedFields.push('courseData.logo');
+    }
+    
+    // Clear raw text if present
+    if (course.courseData.rawText) {
+      course.courseData.rawText = null;
+      clearedFields.push('courseData.rawText');
+    }
+    
+    // Clear title
+    if (course.courseData.title) {
+      course.courseData.title = '[CLEARED]';
+    }
+  }
+  
+  // 3. Clear branding logo from config
+  if (course.config?.brandingLogo) {
+    course.config.brandingLogo = null;
+    clearedFields.push('config.brandingLogo');
+  }
+  
+  // 4. Clear verification report content
+  if (course.verificationReport) {
+    course.verificationReport = { cleared: true, clearedAt: new Date().toISOString() };
+    clearedFields.push('verificationReport');
+  }
+  
+  // 5. Update status and tracking
+  course.status = 'completed';
+  course.sopContentCleared = true;
+  course.updatedAt = new Date().toISOString();
+  
+  // Save changes
   localStorage.setItem(STORAGE_KEY, JSON.stringify(courses));
-  return true;
+  
+  console.log(`🔒 SECURE CLEANUP: Course ${id} - Cleared ${clearedFields.length} fields:`, clearedFields);
+  
+  return { success: true, clearedFields };
 }
 
 // Export all courses as JSON (for backup)
