@@ -165,14 +165,15 @@ const EnhancedCourseBuilder = () => {
 
   const handleCompleteAndCleanup = async (id: string, supabaseId?: string) => {
     if (confirm(
-      ' SECURE COMPLETE & CLEANUP\n\n' +
+      '🔒 SECURE COMPLETE & CLEANUP\n\n' +
       'This will PERMANENTLY DELETE:\n' +
       '• All SOP/document content\n' +
       '• All generated course modules\n' +
-      '• All quiz questions and answers\n' +
-      '• Company logo/branding\n\n' +
-      'Only minimal metadata (title, dates, client name) will be retained for audit purposes.\n\n' +
-      ' This action cannot be undone. Continue?'
+      '• All quiz questions and answers\n\n' +
+      'KEPT for reuse:\n' +
+      '• Company logo/branding\n' +
+      '• Client name, dates (audit trail)\n\n' +
+      '⚠️ This action cannot be undone. Continue?'
     )) {
       // Clear from localStorage
       const localResult = courseStorage.completeAndCleanup(id);

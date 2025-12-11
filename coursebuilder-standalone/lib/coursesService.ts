@@ -216,14 +216,15 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
       }
     }
 
-    // Clear all sensitive content
+    // Clear all sensitive content BUT KEEP config (contains reusable logo)
     const { data, error } = await supabase!
       .from('courses')
       .update({
         document_text: null,
-        course_data: null,
+        course_data: null,  // Clears modules/quiz content
         verification_report: null,
         file_path: null,
+        // NOTE: config is NOT cleared - it contains the reusable company logo
         status: 'completed',
         sop_content_cleared: true,
         updated_at: new Date().toISOString()

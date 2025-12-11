@@ -162,11 +162,8 @@ export function completeAndCleanup(id: string): { success: boolean; clearedField
       clearedFields.push('courseData.quiz');
     }
     
-    // Clear any embedded logo data
-    if (course.courseData.logo) {
-      course.courseData.logo = null;
-      clearedFields.push('courseData.logo');
-    }
+    // KEEP logo - it's reused across courses for the client
+    // Logo is NOT cleared to allow reuse
     
     // Clear raw text if present
     if (course.courseData.rawText) {
@@ -180,11 +177,8 @@ export function completeAndCleanup(id: string): { success: boolean; clearedField
     }
   }
   
-  // 3. Clear branding logo from config
-  if (course.config?.brandingLogo) {
-    course.config.brandingLogo = null;
-    clearedFields.push('config.brandingLogo');
-  }
+  // 3. KEEP branding logo from config - it's reused across courses
+  // Logo is NOT cleared to allow reuse for this client
   
   // 4. Clear verification report content
   if (course.verificationReport) {
