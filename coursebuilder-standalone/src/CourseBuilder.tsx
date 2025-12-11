@@ -80,6 +80,7 @@ const EnhancedCourseBuilder = () => {
   const [currentSavedCourseId, setCurrentSavedCourseId] = useState<string | null>(null);
   const [currentSupabaseCourseId, setCurrentSupabaseCourseId] = useState<string | null>(null);
   const [supabaseFilePath, setSupabaseFilePath] = useState<string | null>(null);
+  const [supabaseDownloadablePdfPath, setSupabaseDownloadablePdfPath] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
 
   const fileInputRef = useRef(null);
@@ -143,7 +144,8 @@ const EnhancedCourseBuilder = () => {
         verification_report: verificationReport,
         status: status,
         sop_content_cleared: false,
-        file_path: supabaseFilePath
+        file_path: supabaseFilePath,
+        downloadable_pdf_path: supabaseDownloadablePdfPath
       };
 
       let result;
@@ -1307,7 +1309,7 @@ const EnhancedCourseBuilder = () => {
     }
   };
 
-  const handleDownloadablePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDownloadablePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       const reader = new FileReader();
@@ -1316,6 +1318,21 @@ const EnhancedCourseBuilder = () => {
         setDownloadablePdfName(file.name);
       };
       reader.readAsDataURL(file);
+
+      // Also upload to Supabase Storage
+      try {
+        const uploadResult = await coursesService.uploadCourseDocument(
+          file, 
+          clientName.trim() || 'unknown',
+          'downloadable_pdf'
+        );
+        if (uploadResult.success && uploadResult.path) {
+          setSupabaseDownloadablePdfPath(uploadResult.path);
+          console.log('✅ Downloadable PDF uploaded to Supabase Storage:', uploadResult.path);
+        }
+      } catch (err) {
+        console.error('Supabase PDF upload error:', err);
+      }
     } else if (file) {
       alert('Please upload a PDF file for the downloadable document.');
     }

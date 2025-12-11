@@ -8,7 +8,7 @@ export interface CourseRecord {
   user_id?: string;
   client_name: string;
   course_title: string;
-  document_text?: string;
+  document_text?: string | null;
   course_data?: any;
   config?: any;
   gxp_fields?: any;
@@ -16,7 +16,8 @@ export interface CourseRecord {
   verification_report?: any;
   status: 'draft' | 'generated' | 'exported' | 'completed';
   sop_content_cleared: boolean;
-  file_path?: string;
+  file_path?: string | null;
+  downloadable_pdf_path?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -191,10 +192,10 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
   }
 
   try {
-    // First get the course to check for file_path
+    // First get the course to check for file paths
     const { data: course, error: fetchError } = await supabase!
       .from('coursebuilder_courses')
-      .select('file_path')
+      .select('file_path, downloadable_pdf_path')
       .eq('id', id)
       .single();
 
@@ -203,16 +204,29 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
       return { success: false, error: fetchError.message };
     }
 
-    // Delete file from storage if exists
+    // Delete source document from storage if exists
     if (course?.file_path) {
       const { error: storageError } = await supabase!.storage
         .from('documents')
         .remove([course.file_path]);
       
       if (storageError) {
-        console.warn('Warning: Could not delete file from storage:', storageError);
+        console.warn('Warning: Could not delete source document from storage:', storageError);
       } else {
-        console.log('✅ Document deleted from Supabase Storage');
+        console.log('✅ Source document deleted from Supabase Storage');
+      }
+    }
+
+    // Delete downloadable PDF from storage if exists
+    if (course?.downloadable_pdf_path) {
+      const { error: storageError } = await supabase!.storage
+        .from('documents')
+        .remove([course.downloadable_pdf_path]);
+      
+      if (storageError) {
+        console.warn('Warning: Could not delete downloadable PDF from storage:', storageError);
+      } else {
+        console.log('✅ Downloadable PDF deleted from Supabase Storage');
       }
     }
 
@@ -224,6 +238,7 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
         course_data: null,  // Clears modules/quiz content
         verification_report: null,
         file_path: null,
+        downloadable_pdf_path: null,
         // NOTE: config is NOT cleared - it contains the reusable company logo
         status: 'completed',
         sop_content_cleared: true,
@@ -249,7 +264,8 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
 // Upload document to Supabase Storage
 export async function uploadCourseDocument(
   file: File, 
-  courseId: string
+  clientName: string,
+  fileType: 'source_document' | 'downloadable_pdf' = 'source_document'
 ): Promise<{ success: boolean; path?: string; error?: string }> {
   if (!isSupabaseConfigured()) {
     return { success: false, error: 'Supabase not configured' };
@@ -259,10 +275,11 @@ export async function uploadCourseDocument(
     const { data: { user } } = await supabase!.auth.getUser();
     const userId = user?.id || 'anonymous';
     
-    // Create unique file path
+    // Create unique file path with file type prefix
     const timestamp = Date.now();
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `courses/${userId}/${courseId}/${timestamp}_${sanitizedName}`;
+    const sanitizedClient = clientName.replace(/[^a-zA-Z0-9]/g, '_');
+    const filePath = `courses/${sanitizedClient}/${fileType}/${timestamp}_${sanitizedName}`;
 
     const { data, error } = await supabase!.storage
       .from('documents')
