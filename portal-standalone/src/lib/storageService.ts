@@ -31,7 +31,7 @@ export async function uploadDocument(
       .from(BUCKET_NAME)
       .upload(filePath, file, {
         cacheControl: '3600',
-        upsert: false // Don't overwrite existing files
+        upsert: true // Allow overwriting existing files
       });
 
     if (error) {
