@@ -62,7 +62,7 @@ export async function createCourse(course: Partial<CourseRecord>): Promise<Cours
     };
 
     const { data, error } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .insert(courseData)
       .select()
       .single();
@@ -88,7 +88,7 @@ export async function getCourses(): Promise<CourseResponse> {
 
   try {
     const { data, error } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .select('*')
       .order('updated_at', { ascending: false });
 
@@ -112,7 +112,7 @@ export async function getCourseById(id: string): Promise<CourseResponse> {
 
   try {
     const { data, error } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .select('*')
       .eq('id', id)
       .single();
@@ -137,7 +137,7 @@ export async function updateCourse(id: string, updates: Partial<CourseRecord>): 
 
   try {
     const { data, error } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .update({
         ...updates,
         updated_at: new Date().toISOString()
@@ -167,7 +167,7 @@ export async function deleteCourse(id: string): Promise<CourseResponse> {
 
   try {
     const { error } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .delete()
       .eq('id', id);
 
@@ -193,7 +193,7 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
   try {
     // First get the course to check for file_path
     const { data: course, error: fetchError } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .select('file_path')
       .eq('id', id)
       .single();
@@ -218,7 +218,7 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
 
     // Clear all sensitive content BUT KEEP config (contains reusable logo)
     const { data, error } = await supabase!
-      .from('courses')
+      .from('coursebuilder_courses')
       .update({
         document_text: null,
         course_data: null,  // Clears modules/quiz content
