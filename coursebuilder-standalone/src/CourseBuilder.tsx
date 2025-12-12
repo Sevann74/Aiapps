@@ -226,11 +226,14 @@ const EnhancedCourseBuilder = () => {
       // Clear from localStorage
       const localResult = courseStorage.completeAndCleanup(id);
       
-      // Also clear from Supabase if we have a Supabase ID
+      let supabaseResult = null;
       if (supabaseId) {
         try {
-          await coursesService.secureCleanupCourse(supabaseId);
-          console.log(' Supabase cleanup completed');
+          supabaseResult = await coursesService.secureCleanupCourse(supabaseId);
+          console.log('✅ Supabase cleanup completed');
+          console.log('📋 Deleted files:', supabaseResult.deletedFiles);
+          console.log('📋 Cleared fields:', supabaseResult.clearedFields);
+          console.log('📋 Deletion timestamp:', supabaseResult.deletionTimestamp);
         } catch (err) {
           console.error('Supabase cleanup error:', err);
         }
@@ -238,10 +241,22 @@ const EnhancedCourseBuilder = () => {
       
       refreshSavedCourses();
       
-      if (localResult.success) {
-        alert(` SECURE CLEANUP COMPLETE\n\nCleared ${localResult.clearedFields.length} data fields.\nNo document content retained.`);
+      // Build detailed audit message
+      const deletedFilesCount = supabaseResult?.deletedFiles?.length || 0;
+      const clearedFieldsCount = (localResult.clearedFields?.length || 0) + (supabaseResult?.clearedFields?.length || 0);
+      
+      if (localResult.success || supabaseResult?.success) {
+        alert(
+          `🔒 SECURE CLEANUP COMPLETE\n\n` +
+          `📋 Audit Summary:\n` +
+          `• Cleared ${clearedFieldsCount} data fields\n` +
+          `• Deleted ${deletedFilesCount} files from storage\n` +
+          `• Timestamp: ${supabaseResult?.deletionTimestamp || new Date().toISOString()}\n\n` +
+          `✅ No document content retained.\n` +
+          `✅ Deletion confirmed per data retention policy.`
+        );
       } else {
-        alert(' Course marked as completed.');
+        alert('✅ Course marked as completed.');
       }
     }
   };

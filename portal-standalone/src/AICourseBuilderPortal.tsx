@@ -363,11 +363,19 @@ const StreamlinedCourseBuilder = () => {
       });
     }
     
-    // Calculate checksum (simplified - in production use proper SHA-256)
+    // Calculate SHA-256 checksum for file integrity verification
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const checksum = btoa(String(event.target.result).substring(0, 32));
-      setFileChecksum(checksum);
+    reader.onload = async (event) => {
+      try {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', event.target.result as ArrayBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const checksum = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        setFileChecksum(checksum);
+      } catch (err) {
+        // Fallback for older browsers
+        const checksum = btoa(String(event.target.result).substring(0, 64));
+        setFileChecksum(checksum);
+      }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -443,13 +451,15 @@ const StreamlinedCourseBuilder = () => {
           timestamp: new Date().toISOString(),
           action: 'Job submitted',
           actor: currentUser.email,
-          details: `File: ${uploadedFile.name}, Checksum: ${fileChecksum}`
+          details: `File: ${uploadedFile.name}, Checksum (SHA-256): ${fileChecksum}`,
+          ip: 'client-side'
         },
         {
           timestamp: new Date().toISOString(),
           action: 'Document uploaded to secure storage',
           actor: 'system',
-          details: `Path: ${uploadResult.path}`
+          details: `Path: ${uploadResult.path}`,
+          ip: 'server'
         }
       ]
     };

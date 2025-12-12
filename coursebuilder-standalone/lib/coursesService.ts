@@ -187,10 +187,21 @@ export async function deleteCourse(id: string): Promise<CourseResponse> {
 }
 
 // Secure cleanup - clear all content but keep metadata
-export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
+// Returns deletion details for audit trail compliance
+export interface CleanupResult extends CourseResponse {
+  deletedFiles?: string[];
+  clearedFields?: string[];
+  deletionTimestamp?: string;
+}
+
+export async function secureCleanupCourse(id: string): Promise<CleanupResult> {
   if (!isSupabaseConfigured()) {
     return { success: false, error: 'Supabase not configured' };
   }
+
+  const deletedFiles: string[] = [];
+  const clearedFields: string[] = [];
+  const deletionTimestamp = new Date().toISOString();
 
   try {
     // First get the course to check for file paths
@@ -214,6 +225,7 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
       if (storageError) {
         console.warn('Warning: Could not delete source document from storage:', storageError);
       } else {
+        deletedFiles.push(course.file_path);
         console.log('✅ Source document deleted from Supabase Storage');
       }
     }
@@ -227,6 +239,7 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
       if (storageError) {
         console.warn('Warning: Could not delete downloadable PDF from storage:', storageError);
       } else {
+        deletedFiles.push(course.downloadable_pdf_path);
         console.log('✅ Downloadable PDF deleted from Supabase Storage');
       }
     }
@@ -243,7 +256,7 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
         // NOTE: config is NOT cleared - it contains the reusable company logo
         status: 'completed',
         sop_content_cleared: true,
-        updated_at: new Date().toISOString()
+        updated_at: deletionTimestamp
       })
       .eq('id', id)
       .select()
@@ -254,8 +267,21 @@ export async function secureCleanupCourse(id: string): Promise<CourseResponse> {
       return { success: false, error: error.message };
     }
 
+    // Track cleared fields for audit
+    clearedFields.push('document_text', 'course_data.modules', 'course_data.quiz', 'verification_report', 'file_path', 'downloadable_pdf_path');
+
     console.log('🔒 SECURE CLEANUP: Course content cleared from Supabase:', id);
-    return { success: true, course: data };
+    console.log('📋 Audit: Deleted files:', deletedFiles);
+    console.log('📋 Audit: Cleared fields:', clearedFields);
+    console.log('📋 Audit: Deletion timestamp:', deletionTimestamp);
+    
+    return { 
+      success: true, 
+      course: data,
+      deletedFiles,
+      clearedFields,
+      deletionTimestamp
+    };
   } catch (err) {
     console.error('Error cleaning up course:', err);
     return { success: false, error: 'Failed to cleanup course' };
