@@ -58,6 +58,7 @@ export async function createCourse(course: Partial<CourseRecord>): Promise<Cours
       status: course.status || 'draft',
       sop_content_cleared: false,
       file_path: course.file_path || null,
+      downloadable_pdf_path: course.downloadable_pdf_path || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
