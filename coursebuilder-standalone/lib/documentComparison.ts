@@ -52,7 +52,7 @@ export function compareDocumentVersions(
       addedSections.push({ sectionNumber: current.number, heading: current.heading, changeDescriptor: 'New section' });
     } else if (normalizeContent(current.content) !== normalizeContent(previous.content)) {
       // Section exists in both but content differs = updated
-      const changeDescriptor = detectChangeType(current.content, previous.content);
+      const changeDescriptor = detectChangeType();
       updatedSections.push({ sectionNumber: current.number, heading: current.heading, changeDescriptor });
     }
   }
@@ -146,51 +146,11 @@ function normalizeContent(content: string): string {
 }
 
 /**
- * Detect the type of change between two section contents
- * Returns a neutral descriptor like "Procedure steps updated", "Table structure updated"
+ * Returns a simple, accurate descriptor for updated sections
+ * Using generic descriptor to avoid inaccurate detection
  */
-function detectChangeType(currentContent: string, previousContent: string): string {
-  // Check for table changes
-  const currentHasTable = /\|.*\||\t.*\t|table/i.test(currentContent);
-  const previousHasTable = /\|.*\||\t.*\t|table/i.test(previousContent);
-  if (currentHasTable || previousHasTable) {
-    return 'Table structure updated';
-  }
-  
-  // Check for numbered procedure steps (1., 2., 3. format)
-  const currentSteps = (currentContent.match(/^\s*\d+\.\s+/gm) || []).length;
-  const previousSteps = (previousContent.match(/^\s*\d+\.\s+/gm) || []).length;
-  if (currentSteps > 0 || previousSteps > 0) {
-    if (currentSteps !== previousSteps) {
-      return 'Procedure steps updated';
-    }
-    // Check if step order changed
-    const currentStepTexts = currentContent.match(/^\s*\d+\.\s+.+$/gm) || [];
-    const previousStepTexts = previousContent.match(/^\s*\d+\.\s+.+$/gm) || [];
-    if (currentStepTexts.length === previousStepTexts.length && currentStepTexts.length > 0) {
-      let orderChanged = false;
-      for (let i = 0; i < currentStepTexts.length; i++) {
-        if (normalizeContent(currentStepTexts[i]) !== normalizeContent(previousStepTexts[i])) {
-          orderChanged = true;
-          break;
-        }
-      }
-      if (orderChanged) {
-        return 'Sequence revised';
-      }
-    }
-    return 'Procedure steps updated';
-  }
-  
-  // Check for bullet list changes
-  const currentBullets = (currentContent.match(/^[\s]*[-•●]\s+/gm) || []).length;
-  const previousBullets = (previousContent.match(/^[\s]*[-•●]\s+/gm) || []).length;
-  if (currentBullets > 0 || previousBullets > 0) {
-    return 'List items updated';
-  }
-  
-  // Default descriptor
-  return 'Content revised';
+function detectChangeType(): string {
+  return 'Content updated';
 }
 
 /**
