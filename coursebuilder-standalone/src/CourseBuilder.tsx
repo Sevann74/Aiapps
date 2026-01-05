@@ -13,6 +13,7 @@ import * as courseStorage from '../lib/courseStorage';
 import { StoredCourse } from '../lib/courseStorage';
 import * as coursesService from '../lib/coursesService';
 import ErrorModal from '../components/ErrorModal';
+import { compareDocumentVersions, ChangeSummary } from '../lib/documentComparison';
 
 const EnhancedCourseBuilder = () => {
   const [step, setStep] = useState('upload');
@@ -83,10 +84,17 @@ const EnhancedCourseBuilder = () => {
   const [supabaseDownloadablePdfPath, setSupabaseDownloadablePdfPath] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
 
+  // VERSION COMPARISON STATE
+  const [previousVersionFile, setPreviousVersionFile] = useState<File | null>(null);
+  const [previousDocumentText, setPreviousDocumentText] = useState('');
+  const [previousPdfExtractionResult, setPreviousPdfExtractionResult] = useState<PDFExtractionResult | null>(null);
+  const [changeSummary, setChangeSummary] = useState<ChangeSummary | null>(null);
+
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const logoInputRef = useRef(null);
   const pdfInputRef = useRef(null); // For downloadable PDF upload
+  const previousFileInputRef = useRef(null); // For previous version document upload
 
   // ============================================
   // SAVED COURSES FUNCTIONS
@@ -1249,6 +1257,59 @@ const EnhancedCourseBuilder = () => {
     setIsProcessing(false);
   };
 
+  // Handle previous version document upload for version comparison
+  const handlePreviousVersionUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPreviousVersionFile(file);
+    setIsProcessing(true);
+    setProcessingStage('Extracting text from previous version...');
+
+    try {
+      let extractedText = '';
+      let extractionResult: PDFExtractionResult | null = null;
+
+      if (isWordDocument(file)) {
+        const result = await extractTextFromWord(file);
+        extractionResult = {
+          text: result.text,
+          pageCount: Math.ceil(result.characterCount / 3000),
+          characterCount: result.characterCount,
+          wordCount: result.wordCount,
+          isValid: result.isValid,
+          errors: result.errors,
+          warnings: result.warnings
+        };
+        extractedText = result.text;
+      } else if (file.type === 'application/pdf') {
+        const result = await extractTextFromPDF(file);
+        extractionResult = result;
+        extractedText = result.text;
+      }
+
+      if (extractionResult?.isValid && extractedText) {
+        setPreviousDocumentText(extractedText);
+        setPreviousPdfExtractionResult(extractionResult);
+        
+        // If we already have current document text, run comparison
+        if (documentText) {
+          const summary = compareDocumentVersions(documentText, extractedText);
+          setChangeSummary(summary);
+          console.log(' Version comparison complete:', summary);
+        }
+      } else {
+        alert('Failed to extract text from previous version document. Please try a different file.');
+        setPreviousVersionFile(null);
+      }
+    } catch (error) {
+      console.error('Previous version extraction error:', error);
+      alert('Error processing previous version document.');
+      setPreviousVersionFile(null);
+    }
+
+    setIsProcessing(false);
+  };
 
   const testAPIConnection = async () => {
     setIsTestingAPI(true);
@@ -2060,6 +2121,70 @@ const EnhancedCourseBuilder = () => {
                 </div>
               </details>
             )}
+
+            {/* Previous Version Upload Section - for version comparison */}
+            <div className="mb-6 p-4 bg-purple-50 border-2 border-purple-300 rounded-lg">
+              <h4 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                📋 Previous Document Version (Optional)
+              </h4>
+              <p className="text-sm text-purple-800 mb-3">
+                Upload a previous version to generate a "What Changed" section at the start of the course.
+              </p>
+              <div 
+                className="border-2 border-dashed border-purple-400 rounded-lg p-4 text-center cursor-pointer hover:border-purple-500 hover:bg-purple-100 transition-all"
+                onClick={() => previousFileInputRef.current?.click()}
+              >
+                {previousVersionFile ? (
+                  <div className="flex items-center justify-center gap-2 text-purple-900">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <span className="font-medium">{previousVersionFile.name}</span>
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setPreviousVersionFile(null); 
+                        setPreviousDocumentText('');
+                        setPreviousPdfExtractionResult(null);
+                        setChangeSummary(null);
+                      }}
+                      className="ml-2 text-red-600 hover:text-red-800 text-sm"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload className="w-8 h-8 text-purple-500 mx-auto mb-2" />
+                    <p className="text-purple-700 font-medium">Click to upload previous version</p>
+                    <p className="text-xs text-purple-600 mt-1">PDF or Word (.docx)</p>
+                  </div>
+                )}
+                <input
+                  ref={previousFileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="hidden"
+                  onChange={handlePreviousVersionUpload}
+                />
+              </div>
+              {changeSummary && changeSummary.hasChanges && (
+                <div className="mt-3 p-3 bg-white rounded-lg border border-purple-200">
+                  <p className="text-sm font-semibold text-purple-900 mb-2">📊 Changes Detected:</p>
+                  <ul className="text-xs text-purple-800 space-y-1">
+                    <li>• {changeSummary.updatedSections.length} section(s) updated</li>
+                    <li>• {changeSummary.addedSections.length} section(s) added</li>
+                    <li>• {changeSummary.removedSections.length} section(s) removed</li>
+                  </ul>
+                  <p className="text-xs text-purple-600 mt-2 italic">
+                    A "What Changed" section will be added to the course.
+                  </p>
+                </div>
+              )}
+              {changeSummary && !changeSummary.hasChanges && (
+                <p className="mt-2 text-xs text-purple-600 italic">
+                  ℹ️ No structural changes detected between document versions.
+                </p>
+              )}
+            </div>
 
             {/* Downloadable PDF Upload Section */}
             <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">

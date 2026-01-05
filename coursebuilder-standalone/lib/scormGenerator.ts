@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { BrandColors, getDefaultBrandColors } from './colorExtractor';
+import { ChangeSummary } from './documentComparison';
 
 interface CourseConfig {
   passingScore: number;
@@ -41,6 +42,7 @@ interface CourseData {
     name: string;
     data: string; // base64 encoded PDF
   } | null;
+  changeSummary?: ChangeSummary | null; // Version comparison summary
 }
 
 function escapeXml(str: string): string {
@@ -66,12 +68,17 @@ export function generateSingleSCOHTML(
   courseData: CourseData,
   config: CourseConfig
 ): string {
-  const { title, modules, quiz, logo, includeQuiz = true, sourceDocument } = courseData;
+  const { title, modules, quiz, logo, includeQuiz = true, sourceDocument, changeSummary } = courseData;
   const { passingScore, maxAttempts, brandColors: configBrandColors } = config;
   const brandColors = configBrandColors || getDefaultBrandColors();
   const hasSourceDoc = sourceDocument && sourceDocument.data;
+  const hasChangeSummary = changeSummary && changeSummary.hasChanges;
 
-  const totalSlides = modules.length + (includeQuiz ? 1 : 0) + 1;
+  // Add 1 for "What Changed" slide if we have a change summary
+  const totalSlides = modules.length + (includeQuiz ? 1 : 0) + 1 + (hasChangeSummary ? 1 : 0);
+  
+  // Slide index offset - if we have a change summary, modules start at index 1
+  const moduleSlideOffset = hasChangeSummary ? 1 : 0;
 
   function formatContent(text: string): string {
     // Check for JSON table format first: {"columns":[...],"rows":[...]}
@@ -511,9 +518,10 @@ export function generateSingleSCOHTML(
   };
 
   const moduleSlidesHTML = modules.map((module, index) => {
+    const slideIndex = index + moduleSlideOffset; // Offset for "What Changed" slide
     const sectionsHTML = module.content.map((section) => {
       const isInteractive = section.type === 'callout-important' || section.type === 'callout-key';
-      const checkboxId = isInteractive ? `checkbox-${index}-${checkboxCounter++}` : null;
+      const checkboxId = isInteractive ? `checkbox-${slideIndex}-${checkboxCounter++}` : null;
       const isTable = section.type === 'table' || isTableContent(section.body);
       const { icon } = getSectionStyle(section.type || 'text', section.heading || '');
       const headingLower = (section.heading || '').toLowerCase();
@@ -594,8 +602,8 @@ export function generateSingleSCOHTML(
     }).join('\n');
 
     return `
-      <section class="slide" id="slide-${index}" style="${index === 0 ? 'display: block;' : 'display: none;'}">
-        <button class="bookmark-btn" id="bookmark-btn-${index}" onclick="toggleBookmark(${index})" title="Mark for Review">🔖 Mark for Review</button>
+      <section class="slide" id="slide-${slideIndex}" style="${slideIndex === 0 ? 'display: block;' : 'display: none;'}">
+        <button class="bookmark-btn" id="bookmark-btn-${slideIndex}" onclick="toggleBookmark(${slideIndex})" title="Mark for Review">🔖 Mark for Review</button>
         ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
         <h2>${escapeHtml(module.title)}</h2>
 
@@ -606,9 +614,56 @@ export function generateSingleSCOHTML(
     `;
   }).join('\n');
 
+  // Generate "What Changed" slide HTML if we have a change summary
+  const whatChangedSlideHTML = hasChangeSummary ? `
+    <section class="slide what-changed-slide" id="slide-0" style="display: block;">
+      ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
+      <h2>📋 What Changed Since the Previous Version</h2>
+      
+      <div class="what-changed-content">
+        ${changeSummary!.updatedSections.length > 0 ? `
+        <div class="change-section">
+          <h3>Updated Sections:</h3>
+          <ul>
+            ${changeSummary!.updatedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('\n            ')}
+          </ul>
+        </div>
+        ` : ''}
+        
+        ${changeSummary!.addedSections.length > 0 ? `
+        <div class="change-section">
+          <h3>Added Sections:</h3>
+          <ul>
+            ${changeSummary!.addedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('\n            ')}
+          </ul>
+        </div>
+        ` : ''}
+        
+        ${changeSummary!.removedSections.length > 0 ? `
+        <div class="change-section">
+          <h3>Removed Sections:</h3>
+          <ul>
+            ${changeSummary!.removedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('\n            ')}
+          </ul>
+        </div>
+        ` : `
+        <div class="change-section">
+          <h3>Removed Sections:</h3>
+          <p>None</p>
+        </div>
+        `}
+        
+        <div class="change-footer">
+          <p><em>This section summarizes structural differences between document versions. The full SOP content that follows remains authoritative.</em></p>
+        </div>
+      </div>
+    </section>
+  ` : '';
+
+  const quizSlideIndex = modules.length + moduleSlideOffset;
   const quizSlideHTML = includeQuiz ? `
-    <section class="slide quiz-slide" id="slide-${modules.length}" style="display: none;">
-      <button class="bookmark-btn" id="bookmark-btn-${modules.length}" onclick="toggleBookmark(${modules.length})" title="Mark for Review">🔖 Mark for Review</button>
+    <section class="slide quiz-slide" id="slide-${quizSlideIndex}" style="display: none;">
+      <button class="bookmark-btn" id="bookmark-btn-${quizSlideIndex}" onclick="toggleBookmark(${quizSlideIndex})" title="Mark for Review">🔖 Mark for Review</button>
       ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
       <h2><span class="section-icon">📝</span> Final Assessment</h2>
       <p class="quiz-info"><span class="info-icon">ℹ️</span> Passing Score: ${passingScore}% | Maximum Attempts: ${maxAttempts}</p>
@@ -1540,6 +1595,69 @@ export function generateSingleSCOHTML(
       background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
     }
 
+    /* What Changed slide styling */
+    .what-changed-slide {
+      background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%);
+    }
+
+    .what-changed-content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .change-section {
+      background: white;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      border-left: 4px solid #8b5cf6;
+    }
+
+    .change-section h3 {
+      color: #6d28d9;
+      margin: 0 0 1rem 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .change-section ul {
+      margin: 0;
+      padding-left: 1.5rem;
+      list-style-type: disc;
+    }
+
+    .change-section li {
+      color: #374151;
+      margin-bottom: 0.5rem;
+      line-height: 1.5;
+    }
+
+    .change-section p {
+      color: #6b7280;
+      margin: 0;
+    }
+
+    .change-footer {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin-top: 2rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    .change-footer p {
+      color: #6b7280;
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    .toc-changes {
+      color: #7c3aed !important;
+      font-weight: 500;
+    }
+
     .quiz-question {
       margin-bottom: 2rem;
       padding: 2rem;
@@ -2079,8 +2197,9 @@ export function generateSingleSCOHTML(
       <button onclick="toggleTOC()" class="toc-close">✕</button>
     </div>
     <div class="toc-content">
-      ${modules.map((m, i) => `<div class="toc-item" data-slide="${i}" onclick="navigateToSlide(${i})">${i + 1}. ${escapeHtml(m.title)}</div>`).join('\n      ')}
-      ${includeQuiz ? `<div class="toc-item toc-quiz" data-slide="${modules.length}" onclick="navigateToSlide(${modules.length})">📝 Final Assessment</div>` : ''}
+      ${hasChangeSummary ? `<div class="toc-item toc-changes" data-slide="0" onclick="navigateToSlide(0)">📋 What Changed</div>` : ''}
+      ${modules.map((m, i) => `<div class="toc-item" data-slide="${i + moduleSlideOffset}" onclick="navigateToSlide(${i + moduleSlideOffset})">${i + 1}. ${escapeHtml(m.title)}</div>`).join('\n      ')}
+      ${includeQuiz ? `<div class="toc-item toc-quiz" data-slide="${quizSlideIndex}" onclick="navigateToSlide(${quizSlideIndex})">📝 Final Assessment</div>` : ''}
       <div class="toc-item toc-ack" data-slide="${totalSlides - 1}" onclick="navigateToSlide(${totalSlides - 1})">🎓 Acknowledgment</div>
       <div class="bookmarks-section" id="bookmarksSection">
         <div class="bookmarks-title">🔖 Marked for Review</div>
@@ -2090,6 +2209,7 @@ export function generateSingleSCOHTML(
   </div>
 
   <main class="course-content">
+    ${whatChangedSlideHTML}
     ${moduleSlidesHTML}
     ${quizSlideHTML}
     ${acknowledgmentSlideHTML}
