@@ -893,22 +893,22 @@ const EnhancedCourseBuilder = () => {
           ${courseData.changeSummary.updatedSections.length > 0 ? `
           <div style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #8b5cf6;">
             <h3 style="color: #6d28d9; margin: 0 0 1rem 0;">Updated Sections:</h3>
-            <ul style="margin: 0; padding-left: 1.5rem;">
-              ${courseData.changeSummary.updatedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('')}
+            <ul style="margin: 0; padding-left: 0; list-style: none;">
+              ${courseData.changeSummary.updatedSections.map(s => `<li style="margin-bottom: 0.75rem;"><strong>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</strong>${s.changeDescriptor ? `<br/><span style="color: #6b7280; font-size: 0.9em; margin-left: 0;">${escapeHtml(s.changeDescriptor)}</span>` : ''}</li>`).join('')}
             </ul>
           </div>` : ''}
           ${courseData.changeSummary.addedSections.length > 0 ? `
           <div style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #10b981;">
             <h3 style="color: #059669; margin: 0 0 1rem 0;">Added Sections:</h3>
-            <ul style="margin: 0; padding-left: 1.5rem;">
-              ${courseData.changeSummary.addedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('')}
+            <ul style="margin: 0; padding-left: 0; list-style: none;">
+              ${courseData.changeSummary.addedSections.map(s => `<li style="margin-bottom: 0.75rem;"><strong>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</strong>${s.changeDescriptor ? `<br/><span style="color: #6b7280; font-size: 0.9em; margin-left: 0;">${escapeHtml(s.changeDescriptor)}</span>` : ''}</li>`).join('')}
             </ul>
           </div>` : ''}
           ${courseData.changeSummary.removedSections.length > 0 ? `
           <div style="background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #ef4444;">
             <h3 style="color: #dc2626; margin: 0 0 1rem 0;">Removed Sections:</h3>
-            <ul style="margin: 0; padding-left: 1.5rem;">
-              ${courseData.changeSummary.removedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('')}
+            <ul style="margin: 0; padding-left: 0; list-style: none;">
+              ${courseData.changeSummary.removedSections.map(s => `<li style="margin-bottom: 0.75rem;"><strong>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</strong></li>`).join('')}
             </ul>
           </div>` : ''}
           <div style="background: #f9fafb; border-radius: 8px; padding: 1rem 1.5rem; margin-top: 2rem; border: 1px solid #e5e7eb;">

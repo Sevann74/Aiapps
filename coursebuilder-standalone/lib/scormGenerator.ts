@@ -624,8 +624,8 @@ export function generateSingleSCOHTML(
         ${changeSummary!.updatedSections.length > 0 ? `
         <div class="change-section">
           <h3>Updated Sections:</h3>
-          <ul>
-            ${changeSummary!.updatedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('\n            ')}
+          <ul class="change-list">
+            ${changeSummary!.updatedSections.map(s => `<li><strong>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</strong>${s.changeDescriptor ? `<br/><span class="change-descriptor">${escapeHtml(s.changeDescriptor)}</span>` : ''}</li>`).join('\n            ')}
           </ul>
         </div>
         ` : ''}
@@ -633,8 +633,8 @@ export function generateSingleSCOHTML(
         ${changeSummary!.addedSections.length > 0 ? `
         <div class="change-section">
           <h3>Added Sections:</h3>
-          <ul>
-            ${changeSummary!.addedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('\n            ')}
+          <ul class="change-list">
+            ${changeSummary!.addedSections.map(s => `<li><strong>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</strong>${s.changeDescriptor ? `<br/><span class="change-descriptor">${escapeHtml(s.changeDescriptor)}</span>` : ''}</li>`).join('\n            ')}
           </ul>
         </div>
         ` : ''}
@@ -642,16 +642,11 @@ export function generateSingleSCOHTML(
         ${changeSummary!.removedSections.length > 0 ? `
         <div class="change-section">
           <h3>Removed Sections:</h3>
-          <ul>
-            ${changeSummary!.removedSections.map(s => `<li>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</li>`).join('\n            ')}
+          <ul class="change-list">
+            ${changeSummary!.removedSections.map(s => `<li><strong>Section ${escapeHtml(s.sectionNumber)} – ${escapeHtml(s.heading)}</strong></li>`).join('\n            ')}
           </ul>
         </div>
-        ` : `
-        <div class="change-section">
-          <h3>Removed Sections:</h3>
-          <p>None</p>
-        </div>
-        `}
+        ` : ''}
         
         <div class="change-footer">
           <p><em>This section summarizes structural differences between document versions. The full SOP content that follows remains authoritative.</em></p>
@@ -1630,8 +1625,19 @@ export function generateSingleSCOHTML(
 
     .change-section li {
       color: #374151;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.75rem;
       line-height: 1.5;
+    }
+
+    .change-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .change-descriptor {
+      color: #6b7280;
+      font-size: 0.9em;
+      font-style: normal;
     }
 
     .change-section p {
