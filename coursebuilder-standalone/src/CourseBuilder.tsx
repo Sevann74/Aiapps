@@ -2973,77 +2973,110 @@ const EnhancedCourseBuilder = () => {
         {/* Content Verification Report */}
         {contentVerification && (
           <div className={`rounded-2xl shadow-xl p-8 mb-8 ${
-            contentVerification.isComplete
+            contentVerification.overallStatus === 'pass'
               ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200'
-              : 'bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200'
+              : contentVerification.overallStatus === 'warning'
+              ? 'bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200'
+              : 'bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200'
           }`}>
             <div className="flex items-center gap-4 mb-6">
-              {contentVerification.isComplete ? (
+              {contentVerification.overallStatus === 'pass' ? (
                 <CheckCircle className="w-12 h-12 text-green-600" />
-              ) : (
+              ) : contentVerification.overallStatus === 'warning' ? (
                 <AlertCircle className="w-12 h-12 text-yellow-600" />
+              ) : (
+                <AlertCircle className="w-12 h-12 text-red-600" />
               )}
               <div>
                 <h2 className="text-3xl font-bold text-gray-900">📊 Content Verification Report</h2>
-                <p className={`text-lg ${contentVerification.isComplete ? 'text-green-700' : 'text-yellow-700'}`}>
-                  {contentVerification.isComplete 
+                <p className={`text-lg ${
+                  contentVerification.overallStatus === 'pass' ? 'text-green-700' : 
+                  contentVerification.overallStatus === 'warning' ? 'text-yellow-700' : 'text-red-700'
+                }`}>
+                  {contentVerification.overallStatus === 'pass' 
                     ? '✅ All content verified - ready for export'
-                    : '⚠️ Some content may be missing - please review below'}
+                    : contentVerification.overallStatus === 'warning'
+                    ? '⚠️ Review recommended before export'
+                    : '❌ Content verification issues detected'}
                 </p>
               </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
-                <p className="text-sm text-gray-600 mb-1">Sections Found</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {contentVerification.sectionsFound}/{contentVerification.sectionsTotal}
+              {/* Module Count */}
+              <div className={`bg-white rounded-lg p-4 border-2 ${
+                contentVerification.moduleCountStatus === 'pass' ? 'border-green-200' :
+                contentVerification.moduleCountStatus === 'warning' ? 'border-yellow-200' : 'border-red-200'
+              }`}>
+                <p className="text-sm text-gray-600 mb-1">Modules Generated</p>
+                <p className={`text-3xl font-bold ${
+                  contentVerification.moduleCountStatus === 'pass' ? 'text-green-600' :
+                  contentVerification.moduleCountStatus === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {contentVerification.moduleCount}
                 </p>
-              </div>
-              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
-                <p className="text-sm text-gray-600 mb-1">Content Volume</p>
-                <p className="text-3xl font-bold text-blue-600">{contentVerification.contentPercentage}%</p>
                 <p className="text-xs text-gray-500">
-                  {contentVerification.outputCharCount.toLocaleString()} / {contentVerification.sourceCharCount.toLocaleString()} chars
+                  {contentVerification.moduleCountStatus === 'pass' ? '✓ Good' : 
+                   contentVerification.moduleCountStatus === 'warning' ? '⚠ Low' : '✗ None'}
                 </p>
               </div>
-              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
-                <p className="text-sm text-gray-600 mb-1">Key Terms Found</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {contentVerification.keyTermsFound}/{contentVerification.keyTermsTotal}
+
+              {/* Word Count Ratio */}
+              <div className={`bg-white rounded-lg p-4 border-2 ${
+                contentVerification.wordCountStatus === 'pass' ? 'border-green-200' :
+                contentVerification.wordCountStatus === 'warning' ? 'border-yellow-200' : 'border-red-200'
+              }`}>
+                <p className="text-sm text-gray-600 mb-1">Word Count Ratio</p>
+                <p className={`text-3xl font-bold ${
+                  contentVerification.wordCountStatus === 'pass' ? 'text-green-600' :
+                  contentVerification.wordCountStatus === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {contentVerification.wordCountRatio}%
+                </p>
+                <p className="text-xs text-gray-500">
+                  {contentVerification.outputWordCount.toLocaleString()} / {contentVerification.sourceWordCount.toLocaleString()} words
+                </p>
+              </div>
+
+              {/* Title Verification */}
+              <div className={`bg-white rounded-lg p-4 border-2 ${
+                contentVerification.titleVerificationStatus === 'pass' ? 'border-green-200' :
+                contentVerification.titleVerificationStatus === 'warning' ? 'border-yellow-200' : 'border-red-200'
+              }`}>
+                <p className="text-sm text-gray-600 mb-1">Titles Verified</p>
+                <p className={`text-3xl font-bold ${
+                  contentVerification.titleVerificationStatus === 'pass' ? 'text-green-600' :
+                  contentVerification.titleVerificationStatus === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {contentVerification.titlesFoundInSource}/{contentVerification.moduleTitles.length}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {contentVerification.titleVerificationStatus === 'pass' ? '✓ All found in source' : 
+                   contentVerification.titleVerificationStatus === 'warning' ? '⚠ Some not found' : '✗ Many not found'}
                 </p>
               </div>
             </div>
 
-            {/* Missing Content List */}
-            {contentVerification.missingContent.length > 0 && (
+            {/* Missing Titles List */}
+            {contentVerification.missingTitles.length > 0 && (
               <div className="bg-white rounded-xl p-6 border-2 border-yellow-200">
-                <h3 className="font-bold text-gray-900 mb-4">⚠️ Potentially Missing Content (please verify):</h3>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {contentVerification.missingContent.slice(0, 15).map((item, idx) => (
-                    <div key={idx} className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <p className="font-medium text-gray-900">• "{item.text}"</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Found in: {item.sourceSection} | Type: {item.type === 'section' ? 'Section Heading' : 'Key Term'}
-                      </p>
+                <h3 className="font-bold text-gray-900 mb-4">⚠️ Module titles not found in source (may be AI-generated):</h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {contentVerification.missingTitles.map((title, idx) => (
+                    <div key={idx} className="p-2 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <p className="font-medium text-gray-900">• {title}</p>
                     </div>
                   ))}
-                  {contentVerification.missingContent.length > 15 && (
-                    <p className="text-sm text-gray-500 italic">
-                      ... and {contentVerification.missingContent.length - 15} more items
-                    </p>
-                  )}
                 </div>
                 <p className="mt-4 text-sm text-gray-600">
-                  💡 Review the generated content below to verify these items are included. 
-                  Minor formatting differences may cause false positives.
+                  💡 These titles may have been generated by AI. Review the content to ensure accuracy.
                 </p>
               </div>
             )}
 
-            {contentVerification.missingContent.length === 0 && (
+            {contentVerification.overallStatus === 'pass' && (
               <div className="bg-green-50 rounded-xl p-6 border-2 border-green-200">
-                <p className="text-green-800 font-medium">✅ No missing content detected. All sections and key terms verified.</p>
+                <p className="text-green-800 font-medium">✅ All verification checks passed. Content is ready for export.</p>
               </div>
             )}
           </div>
