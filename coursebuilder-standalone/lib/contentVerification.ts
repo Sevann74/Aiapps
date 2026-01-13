@@ -34,7 +34,7 @@ interface Module {
 
 /**
  * Extract section headings from source document text
- * Matches patterns like: "1.0 Purpose", "2.1.3 Procedure", "Section 5: Title"
+ * Matches numbered patterns, "Section X:" format, and common document section names
  */
 function extractSectionHeadings(text: string): string[] {
   const headings: string[] = [];
@@ -55,6 +55,36 @@ function extractSectionHeadings(text: string): string[] {
     const heading = `Section ${match[1]}: ${match[2].trim()}`;
     if (!headings.includes(heading)) {
       headings.push(heading);
+    }
+  }
+  
+  // Pattern 3: Common document section names (Purpose, Scope, Procedures, etc.)
+  const commonSections = [
+    'Purpose', 'Scope', 'Objective', 'Objectives', 'Background',
+    'Definitions', 'Key Terms', 'Glossary', 'Terminology',
+    'Responsibilities', 'Roles and Responsibilities', 'Applicable Groups',
+    'Procedures', 'Process', 'Workflow', 'Steps',
+    'Requirements', 'Specifications', 'Criteria',
+    'References', 'Related Documents', 'Attachments', 'Appendix', 'Appendices',
+    'Revision History', 'Document History', 'Change History',
+    'Policies', 'Policy', 'Guidelines', 'Guidance',
+    'Introduction', 'Overview', 'Summary', 'Conclusion',
+    'Training', 'Compliance', 'Quality', 'Safety',
+    'Initiation', 'Execution', 'Closure', 'Activities',
+    'Non-Interventional Clinical Activity', 'Clinical Activities',
+    'Pharmacovigilance', 'Adverse Events', 'Safety Reporting'
+  ];
+  
+  for (const section of commonSections) {
+    // Match section name at start of line, possibly with colon
+    const escapedSection = section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const sectionRegex = new RegExp(`(?:^|\\n)\\s*(${escapedSection}s?)\\s*(?::|\\n|$)`, 'gim');
+    while ((match = sectionRegex.exec(text)) !== null) {
+      const heading = match[1].trim();
+      // Avoid duplicates (case-insensitive)
+      if (!headings.some(h => h.toLowerCase() === heading.toLowerCase())) {
+        headings.push(heading);
+      }
     }
   }
   
@@ -130,16 +160,47 @@ function normalizeText(text: string): string {
 
 /**
  * Get all text content from generated modules
+ * Robust extraction with defensive checks
  */
 function getModulesText(modules: Module[]): string {
+  if (!modules || !Array.isArray(modules)) {
+    console.warn('getModulesText: modules is not an array', modules);
+    return '';
+  }
+  
   let text = '';
   for (const module of modules) {
-    text += module.title + ' ';
-    for (const section of module.content) {
-      text += (section.heading || '') + ' ';
-      text += (section.body || '') + ' ';
+    if (!module) continue;
+    
+    // Add module title
+    text += (module.title || '') + ' ';
+    
+    // Add module content
+    if (Array.isArray(module.content)) {
+      for (const section of module.content) {
+        if (!section) continue;
+        text += (section.heading || '') + ' ';
+        text += (section.body || '') + ' ';
+      }
     }
+    
+    // Also check for alternative content structures
+    // Some modules might have 'sections' instead of 'content'
+    const anyModule = module as any;
+    if (Array.isArray(anyModule.sections)) {
+      for (const section of anyModule.sections) {
+        if (!section) continue;
+        text += (section.heading || section.title || '') + ' ';
+        text += (section.body || section.content || section.text || '') + ' ';
+      }
+    }
+    
+    // Check for direct body/text on module
+    if (anyModule.body) text += anyModule.body + ' ';
+    if (anyModule.text) text += anyModule.text + ' ';
+    if (anyModule.description) text += anyModule.description + ' ';
   }
+  
   return text;
 }
 
@@ -153,14 +214,17 @@ function findSourceSection(text: string, term: string): string {
   
   if (index === -1) return 'Unknown section';
   
+  // Common section names to look for
+  const commonSectionNames = /^(Purpose|Scope|Objectives?|Background|Definitions|Key Terms|Glossary|Responsibilities|Applicable Groups|Procedures?|Process|Requirements|References|Related Documents|Attachments|Revision History|Policies?|Guidelines|Introduction|Overview|Summary|Conclusion|Training|Compliance|Quality|Safety|Initiation|Execution|Closure|Activities|Pharmacovigilance|Clinical Activities)\s*:?$/i;
+  
   // Look backwards for a section heading
   const textBefore = text.substring(0, index);
   const lines = textBefore.split('\n');
   
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
-    // Check if line looks like a section heading
-    if (/^\d+(?:\.\d+)*\s+[A-Z]/.test(line) || /^Section\s+\d+/i.test(line)) {
+    // Check if line looks like a section heading (numbered or common name)
+    if (/^\d+(?:\.\d+)*\s+[A-Z]/.test(line) || /^Section\s+\d+/i.test(line) || commonSectionNames.test(line)) {
       return line.substring(0, 60) + (line.length > 60 ? '...' : '');
     }
   }
