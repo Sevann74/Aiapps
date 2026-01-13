@@ -14,6 +14,7 @@ import { StoredCourse } from '../lib/courseStorage';
 import * as coursesService from '../lib/coursesService';
 import ErrorModal from '../components/ErrorModal';
 import { compareDocumentVersions, ChangeSummary } from '../lib/documentComparison';
+import { verifyContentCompleteness, VerificationResult } from '../lib/contentVerification';
 
 const EnhancedCourseBuilder = () => {
   const [step, setStep] = useState('upload');
@@ -45,6 +46,7 @@ const EnhancedCourseBuilder = () => {
   const [showQuestionEditor, setShowQuestionEditor] = useState(false);
   const [courseData, setCourseData] = useState(null);
   const [verificationReport, setVerificationReport] = useState(null);
+  const [contentVerification, setContentVerification] = useState<VerificationResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState('');
   const [showPreview, setShowPreview] = useState(false);
@@ -1785,6 +1787,11 @@ const EnhancedCourseBuilder = () => {
         : [];
       const modules = await generateModulesFromDocument(documentText, facts);
 
+      // STEP 5: Verify content completeness
+      setProcessingStage('Verifying content completeness...');
+      const contentVerificationResult = verifyContentCompleteness(documentText, modules);
+      setContentVerification(contentVerificationResult);
+
       const course = {
         title: courseTitle,
         logo: config.brandingLogo,
@@ -2960,6 +2967,85 @@ const EnhancedCourseBuilder = () => {
               <p className="font-bold text-orange-900">You have unsaved content edits</p>
               <p className="text-sm text-orange-800">Export your SCORM package to save all changes permanently.</p>
             </div>
+          </div>
+        )}
+
+        {/* Content Verification Report */}
+        {contentVerification && (
+          <div className={`rounded-2xl shadow-xl p-8 mb-8 ${
+            contentVerification.isComplete
+              ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200'
+              : 'bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200'
+          }`}>
+            <div className="flex items-center gap-4 mb-6">
+              {contentVerification.isComplete ? (
+                <CheckCircle className="w-12 h-12 text-green-600" />
+              ) : (
+                <AlertCircle className="w-12 h-12 text-yellow-600" />
+              )}
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">📊 Content Verification Report</h2>
+                <p className={`text-lg ${contentVerification.isComplete ? 'text-green-700' : 'text-yellow-700'}`}>
+                  {contentVerification.isComplete 
+                    ? '✅ All content verified - ready for export'
+                    : '⚠️ Some content may be missing - please review below'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-sm text-gray-600 mb-1">Sections Found</p>
+                <p className="text-3xl font-bold text-blue-600">
+                  {contentVerification.sectionsFound}/{contentVerification.sectionsTotal}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-sm text-gray-600 mb-1">Content Volume</p>
+                <p className="text-3xl font-bold text-blue-600">{contentVerification.contentPercentage}%</p>
+                <p className="text-xs text-gray-500">
+                  {contentVerification.outputCharCount.toLocaleString()} / {contentVerification.sourceCharCount.toLocaleString()} chars
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-sm text-gray-600 mb-1">Key Terms Found</p>
+                <p className="text-3xl font-bold text-blue-600">
+                  {contentVerification.keyTermsFound}/{contentVerification.keyTermsTotal}
+                </p>
+              </div>
+            </div>
+
+            {/* Missing Content List */}
+            {contentVerification.missingContent.length > 0 && (
+              <div className="bg-white rounded-xl p-6 border-2 border-yellow-200">
+                <h3 className="font-bold text-gray-900 mb-4">⚠️ Potentially Missing Content (please verify):</h3>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {contentVerification.missingContent.slice(0, 15).map((item, idx) => (
+                    <div key={idx} className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <p className="font-medium text-gray-900">• "{item.text}"</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Found in: {item.sourceSection} | Type: {item.type === 'section' ? 'Section Heading' : 'Key Term'}
+                      </p>
+                    </div>
+                  ))}
+                  {contentVerification.missingContent.length > 15 && (
+                    <p className="text-sm text-gray-500 italic">
+                      ... and {contentVerification.missingContent.length - 15} more items
+                    </p>
+                  )}
+                </div>
+                <p className="mt-4 text-sm text-gray-600">
+                  💡 Review the generated content below to verify these items are included. 
+                  Minor formatting differences may cause false positives.
+                </p>
+              </div>
+            )}
+
+            {contentVerification.missingContent.length === 0 && (
+              <div className="bg-green-50 rounded-xl p-6 border-2 border-green-200">
+                <p className="text-green-800 font-medium">✅ No missing content detected. All sections and key terms verified.</p>
+              </div>
+            )}
           </div>
         )}
 
