@@ -1139,6 +1139,11 @@ const EnhancedCourseBuilder = () => {
       document.getElementById('slide-' + currentSlide).style.display = 'none';
       currentSlide = slideIndex;
       document.getElementById('slide-' + currentSlide).style.display = 'block';
+      // Show 'What Changed' section only on first slide
+      const whatChanged = document.getElementById('slide-whatchanged');
+      if (whatChanged) {
+        whatChanged.style.display = (currentSlide === 0) ? 'block' : 'none';
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
       updateProgress();
       updateNavigation();
