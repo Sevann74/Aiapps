@@ -359,6 +359,12 @@ const EnhancedCourseBuilder = () => {
       return div.innerHTML;
     };
 
+    // Convert URLs in text to clickable hyperlinks
+    const linkifyUrls = (text: string): string => {
+      const urlPattern = /(https?:\/\/[^\s<>"']+)/gi;
+      return text.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">${url}</a>`);
+    };
+
     const formatContent = (text: string): string => {
       // Check for JSON table format first: {"columns":[...],"rows":[...]}
       const trimmedText = text.trim();
@@ -375,7 +381,7 @@ const EnhancedCourseBuilder = () => {
               html += '<tr>';
               tableData.columns.forEach((col: string) => {
                 const value = row[col];
-                html += `<td>${value !== null && value !== undefined ? escapeHtml(String(value)) : ''}</td>`;
+                html += `<td>${value !== null && value !== undefined ? linkifyUrls(escapeHtml(String(value))) : ''}</td>`;
               });
               html += '</tr>';
             });
@@ -410,9 +416,9 @@ const EnhancedCourseBuilder = () => {
             // Check if it's a definition (Term: Definition)
             const defMatch = trimmed.match(/^([^:]+):\s*(.+)$/);
             if (defMatch) {
-              return `<p><strong>${escapeHtml(defMatch[1])}:</strong> ${escapeHtml(defMatch[2])}</p>`;
+              return `<p><strong>${escapeHtml(defMatch[1])}:</strong> ${linkifyUrls(escapeHtml(defMatch[2]))}</p>`;
             }
-            return `<p>${escapeHtml(trimmed)}</p>`;
+            return `<p>${linkifyUrls(escapeHtml(trimmed))}</p>`;
           }).join('\n');
         }
       }
@@ -470,9 +476,9 @@ const EnhancedCourseBuilder = () => {
           html += '<div class="record-card">';
           record.forEach((field, idx) => {
             if (idx === 0) {
-              html += `<div class="record-title">${escapeHtml(field.value)}</div>`;
+              html += `<div class="record-title">${linkifyUrls(escapeHtml(field.value))}</div>`;
             } else {
-              html += `<div class="record-field"><span class="field-label">${escapeHtml(field.key)}:</span> ${escapeHtml(field.value)}</div>`;
+              html += `<div class="record-field"><span class="field-label">${escapeHtml(field.key)}:</span> ${linkifyUrls(escapeHtml(field.value))}</div>`;
             }
           });
           html += '</div>';
@@ -511,7 +517,7 @@ const EnhancedCourseBuilder = () => {
         dataRows.forEach(row => {
           html += '<tr>';
           headers.forEach((_, idx) => {
-            html += `<td>${escapeHtml(row[idx] || '')}</td>`;
+            html += `<td>${linkifyUrls(escapeHtml(row[idx] || ''))}</td>`;
           });
           html += '</tr>';
         });
@@ -592,7 +598,7 @@ const EnhancedCourseBuilder = () => {
 
         tableRows.forEach(row => {
           tableHtml += '<tr>';
-          row.forEach(cell => { tableHtml += `<td>${escapeHtml(cell)}</td>`; });
+          row.forEach(cell => { tableHtml += `<td>${linkifyUrls(escapeHtml(cell))}</td>`; });
           tableHtml += '</tr>';
         });
 
@@ -668,7 +674,7 @@ const EnhancedCourseBuilder = () => {
         dataRows.forEach(row => {
           tableHtml += '<tr>';
           for (let i = 0; i < numColumns; i++) {
-            tableHtml += `<td>${escapeHtml(row[i] || '')}</td>`;
+            tableHtml += `<td>${linkifyUrls(escapeHtml(row[i] || ''))}</td>`;
           }
           tableHtml += '</tr>';
         });
@@ -698,7 +704,7 @@ const EnhancedCourseBuilder = () => {
             const trimmed = line.trim();
             if (bulletPattern.test(trimmed)) {
               const cleanText = trimmed.replace(bulletPattern, '');
-              return `<li>${escapeHtml(cleanText)}</li>`;
+              return `<li>${linkifyUrls(escapeHtml(cleanText))}</li>`;
             } else if (trimmed.length > 0) {
               return trimmed;
             }
@@ -720,7 +726,7 @@ const EnhancedCourseBuilder = () => {
                 formatted.push(`<ul>${currentList.join('')}</ul>`);
                 currentList = [];
               }
-              formatted.push(`<p>${escapeHtml(item)}</p>`);
+              formatted.push(`<p>${linkifyUrls(escapeHtml(item))}</p>`);
             }
           }
 
@@ -735,7 +741,7 @@ const EnhancedCourseBuilder = () => {
       } else {
         return lines
           .filter(line => line.trim().length > 0)
-          .map(line => `<p>${escapeHtml(line.trim())}</p>`)
+          .map(line => `<p>${linkifyUrls(escapeHtml(line.trim()))}</p>`)
           .join('');
       }
     };
