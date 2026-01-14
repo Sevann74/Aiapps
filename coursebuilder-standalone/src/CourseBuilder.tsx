@@ -786,10 +786,10 @@ const EnhancedCourseBuilder = () => {
         if (isTable) {
           return `
       <div class="content-card card-table">
-        <h3 class="card-title card-title-blue">
+        <div class="card-header card-title-blue">
           <span class="title-icon icon-blue">${icon}</span>
-          ${section.heading ? escapeHtml(section.heading) : 'Reference'}
-        </h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Reference Table'}</h3>
+        </div>
         <div class="table-wrapper">
           ${formatContent(section.body)}
         </div>
@@ -800,10 +800,10 @@ const EnhancedCourseBuilder = () => {
         if (isImportant) {
           return `
       <div class="content-card card-important">
-        <h3 class="card-title card-title-red">
+        <div class="card-header card-title-red">
           <span class="title-icon icon-red">${icon}</span>
-          ${section.heading ? escapeHtml(section.heading) : 'Important'}
-        </h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Important'}</h3>
+        </div>
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
@@ -814,10 +814,10 @@ const EnhancedCourseBuilder = () => {
         if (shouldExpand) {
           return `
       <div class="content-card card-procedure">
-        <h3 class="card-title card-title-green">
+        <div class="card-header card-title-green">
           <span class="title-icon icon-green">${icon}</span>
-          ${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}
-        </h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
+        </div>
         <div class="procedure-expand" onclick="toggleProcedure('${procedureId}')">
           <span class="expand-text">Click to view ${stepCount} steps</span>
           <span class="expand-arrow" id="${procedureId}-toggle">▼</span>
@@ -832,10 +832,10 @@ const EnhancedCourseBuilder = () => {
         if (isProcedure) {
           return `
       <div class="content-card card-procedure">
-        <h3 class="card-title card-title-green">
+        <div class="card-header card-title-green">
           <span class="title-icon icon-green">${icon}</span>
-          ${section.heading ? escapeHtml(section.heading) : 'Procedure'}
-        </h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure'}</h3>
+        </div>
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
@@ -846,10 +846,10 @@ const EnhancedCourseBuilder = () => {
         if (isDefinition) {
           return `
       <div class="content-card card-definition">
-        <h3 class="card-title card-title-amber">
+        <div class="card-header card-title-amber">
           <span class="title-icon icon-amber">${icon}</span>
-          ${section.heading ? escapeHtml(section.heading) : 'Definition'}
-        </h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Definition'}</h3>
+        </div>
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
@@ -860,10 +860,10 @@ const EnhancedCourseBuilder = () => {
         if (isNote) {
           return `
       <div class="content-card card-note">
-        <h3 class="card-title card-title-purple">
+        <div class="card-header card-title-purple">
           <span class="title-icon icon-purple">${icon}</span>
-          ${section.heading ? escapeHtml(section.heading) : 'Note'}
-        </h3>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Note'}</h3>
+        </div>
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
@@ -873,7 +873,7 @@ const EnhancedCourseBuilder = () => {
         // Plain text - clean white card, NO icon
         return `
       <div class="content-card card-text">
-        ${section.heading ? `<div class="card-header-text"><span class="header-icon-text">📄</span><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
+        ${section.heading ? `<div class="card-header card-title-gray"><span class="title-icon icon-gray">📄</span><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
