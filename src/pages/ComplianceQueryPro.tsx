@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, FileText, CheckCircle, AlertCircle, TrendingUp, Table, Sparkles, Filter, Download, Share2, BookOpen, Database, BarChart3, Eye, Clock, Shield, Zap, Brain, GitCompare, Copy, ExternalLink, MessageSquare, Send, Mic, User, Bot, Trash2, Star, MessageCircle, RefreshCw, Info, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Search, FileText, CheckCircle, AlertCircle, TrendingUp, Table, Sparkles, Filter, Download, Share2, BookOpen, Database, BarChart3, Eye, Clock, Shield, Zap, Brain, GitCompare, Copy, ExternalLink, MessageSquare, Send, Mic, User, Bot, Trash2, Star, MessageCircle, RefreshCw, Info, ArrowRight, AlertTriangle, GraduationCap } from 'lucide-react';
 import SOPUploader from '../components/SOPUploader';
 import { complianceQueryService, type Document } from '../lib/complianceQueryService';
 import { processDocuments, createMockDocument } from '../lib/documentProcessor';
+import ImpactTrainingPanel from '../components/ImpactTrainingPanel';
 
 // ============================================
-// COMPLETE APP WITH 3 MODES:
+// COMPLETE APP WITH 4 MODES:
 // 1. Search Mode
 // 2. Chat Mode
 // 3. SOP Comparison Mode
+// 4. Impact & Training Mode (NEW)
 // ============================================
 
 const MOCK_DOCUMENTS = [
@@ -599,7 +601,7 @@ export default function ComplianceQueryProComplete() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* 3-Mode Toggle */}
+              {/* 4-Mode Toggle */}
               <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-lg">
                 <button
                   onClick={() => setActiveMode('search')}
@@ -638,6 +640,17 @@ export default function ComplianceQueryProComplete() {
                 >
                   <GitCompare className="w-4 h-4" />
                   Compare SOPs
+                </button>
+                <button
+                  onClick={() => setActiveMode('impact')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                    activeMode === 'impact'
+                      ? 'bg-white text-emerald-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  Impact & Training
                 </button>
               </div>
               
@@ -1403,6 +1416,15 @@ export default function ComplianceQueryProComplete() {
               </div>
             )}
           </div>
+        )}
+
+        {/* IMPACT & TRAINING MODE */}
+        {activeMode === 'impact' && (
+          <ImpactTrainingPanel
+            comparisonResult={comparisonResult}
+            auditTrail={auditTrail}
+            onAuditEntry={addAuditEntry}
+          />
         )}
       </div>
 

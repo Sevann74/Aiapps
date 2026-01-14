@@ -74,6 +74,13 @@ const EnhancedCourseBuilder = () => {
   } | null>(null);
   const [showContentEditor, setShowContentEditor] = useState(false);
   const [hasUnsavedEdits, setHasUnsavedEdits] = useState(false);
+  // STATE FOR MODULE TITLE EDITING
+  const [editingModuleTitle, setEditingModuleTitle] = useState<{
+    moduleIndex: number;
+    title: string;
+    duration: string;
+  } | null>(null);
+  const [showModuleTitleEditor, setShowModuleTitleEditor] = useState(false);
 
   // SAVED COURSES STATE
   const [showSavedCourses, setShowSavedCourses] = useState(false);
@@ -1492,9 +1499,40 @@ const EnhancedCourseBuilder = () => {
   };
 
   const hasContentChanged = () => {
-    if (!editingContent) return false;
+    if (!editingContent || !courseData) return false;
     const original = courseData.modules[editingContent.moduleIndex].content[editingContent.sectionIndex];
     return JSON.stringify(original) !== JSON.stringify(editingContent.section);
+  };
+  // ============================================
+  // MODULE TITLE EDITING FUNCTIONS
+  // ============================================
+
+  const openModuleTitleEditor = (moduleIndex: number) => {
+    if (!courseData) return;
+    const module = courseData.modules[moduleIndex];
+    setEditingModuleTitle({
+      moduleIndex,
+      title: module.title,
+      duration: module.duration || ''
+    });
+    setShowModuleTitleEditor(true);
+  };
+
+  const saveModuleTitleEdit = () => {
+    if (!editingModuleTitle || !courseData) return;
+    const updatedCourseData = { ...courseData };
+    updatedCourseData.modules[editingModuleTitle.moduleIndex].title = editingModuleTitle.title;
+    updatedCourseData.modules[editingModuleTitle.moduleIndex].duration = editingModuleTitle.duration;
+    setCourseData(updatedCourseData);
+    setShowModuleTitleEditor(false);
+    setEditingModuleTitle(null);
+    setHasUnsavedEdits(true);
+    alert('Module title updated! Do not forget to export your SCORM package to save changes.');
+  };
+
+  const cancelModuleTitleEdit = () => {
+    setShowModuleTitleEditor(false);
+    setEditingModuleTitle(null);
   };
 
   // ============================================
@@ -3526,7 +3564,17 @@ const EnhancedCourseBuilder = () => {
                   </div>
 
                   <div className="px-8 py-8">
-                    <h2 className="text-3xl font-bold text-gray-900 mb-6">{courseData.modules[previewModule].title}</h2>
+                    {/* Module Title - with edit button */}
+                    <div className="relative group inline-block mb-6">
+                      <button
+                        onClick={() => openModuleTitleEditor(previewModule)}
+                        className="absolute -left-10 top-1 bg-purple-600 text-white p-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-purple-700"
+                        title="Edit module title and duration"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <h2 className="text-3xl font-bold text-gray-900">{courseData.modules[previewModule].title}</h2>
+                    </div>
                     <p className="text-gray-600 mb-8"><strong>Estimated Duration:</strong> {courseData.modules[previewModule].duration}</p>
 
                     {courseData.modules[previewModule].content.map((section, sectionIdx) => (
@@ -4059,6 +4107,40 @@ const EnhancedCourseBuilder = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Module Title Editor Modal */}
+      {showModuleTitleEditor && editingModuleTitle && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <h3 className="text-xl font-bold mb-4">Edit Module Title</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Module Title</label>
+                <input
+                  type="text"
+                  value={editingModuleTitle.title}
+                  onChange={(e) => setEditingModuleTitle({...editingModuleTitle, title: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Estimated Duration</label>
+                <input
+                  type="text"
+                  value={editingModuleTitle.duration}
+                  onChange={(e) => setEditingModuleTitle({...editingModuleTitle, duration: e.target.value})}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                  placeholder="e.g., 10 minutes"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={cancelModuleTitleEdit} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancel</button>
+              <button onClick={saveModuleTitleEdit} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Save</button>
             </div>
           </div>
         </div>
