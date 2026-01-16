@@ -807,7 +807,7 @@ Learning Conversion Hub
     
     // Read the HTML preview file content
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const htmlContent = event.target?.result as string;
       
       // Build audit log entries
@@ -836,7 +836,22 @@ Learning Conversion Hub
         details: `Email sent to ${job.clientEmail}`
       });
       
-      // Update job
+      // Update job in Supabase
+      const jobUpdates = {
+        status: 'pending_review',
+        previewFileName: previewFile.name,
+        previewContent: htmlContent,
+        ...(scormFile && { scormFileName: scormFile.name })
+      };
+      
+      const result = await updateJob(job.id, jobUpdates, currentUser.id, 'Preview uploaded and client notified');
+      if (!result.success) {
+        console.error('Failed to update job in database:', result.error);
+        showNotification('error', 'Update Failed', 'Files uploaded but status update failed. Please refresh.');
+        return;
+      }
+      
+      // Update local state
       const updatedJobs = jobs.map(j => {
         if (j.id === job.id) {
           return {
