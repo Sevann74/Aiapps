@@ -2236,6 +2236,7 @@ export function generateSingleSCOHTML(
     const TOTAL_SLIDES = ${totalSlides};
     const HAS_QUIZ = ${includeQuiz};
     const NUM_MODULES = ${modules.length};
+    const QUIZ_SLIDE_INDEX = ${quizSlideIndex};
     const PASSING_SCORE = ${passingScore};
     const MAX_ATTEMPTS = ${maxAttempts};
 
@@ -2359,7 +2360,7 @@ export function generateSingleSCOHTML(
       prevBtn.disabled = (currentSlide === 0);
 
       // Hide entire navigation on quiz slide - user must use quiz buttons to proceed
-      if (currentSlide === NUM_MODULES && HAS_QUIZ) {
+      if (currentSlide === QUIZ_SLIDE_INDEX && HAS_QUIZ) {
         navContainer.style.display = 'none';
       } else if (currentSlide === TOTAL_SLIDES - 1) {
         // Last slide (acknowledgment) - hide next, show prev
