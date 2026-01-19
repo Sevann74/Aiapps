@@ -30,10 +30,8 @@ const isSupabaseConfigured = (): boolean => {
 
 // Sign in with email and password
 export async function signIn(email: string, password: string): Promise<AuthResponse> {
-  // If Supabase not configured, fall back to mock auth
   if (!isSupabaseConfigured()) {
-    console.log('Supabase not configured, using mock auth');
-    return mockSignIn(email, password);
+    return { success: false, error: 'Authentication service not configured. Please contact support.' };
   }
 
   try {
@@ -54,7 +52,7 @@ export async function signIn(email: string, password: string): Promise<AuthRespo
     const profile = await getUserProfile(data.user.id);
     
     if (!profile) {
-      return { success: false, error: 'User profile not found' };
+      return { success: false, error: 'User profile not found. Please contact support.' };
     }
 
     return { success: true, user: profile };
@@ -224,45 +222,3 @@ export function onAuthStateChange(callback: (user: UserProfile | null) => void):
   return () => subscription.unsubscribe();
 }
 
-// ============================================
-// MOCK AUTH (for development without Supabase)
-// ============================================
-
-const mockUsers: Record<string, { password: string; profile: UserProfile }> = {
-  'sarah@abcpharma.com': {
-    password: 'demo123',
-    profile: {
-      id: 'client-001',
-      email: 'sarah@abcpharma.com',
-      name: 'Sarah Johnson',
-      organization: 'ABC Pharma',
-      role: 'client',
-      createdAt: '2025-01-01T00:00:00Z'
-    }
-  },
-  'david.dergazarian@navigantlearning.com': {
-    password: 'admin123',
-    profile: {
-      id: 'admin-001',
-      email: 'david.dergazarian@navigantlearning.com',
-      name: 'David Dergazarian',
-      organization: 'Navigant Learning',
-      role: 'admin',
-      createdAt: '2025-01-01T00:00:00Z'
-    }
-  }
-};
-
-function mockSignIn(email: string, password: string): AuthResponse {
-  const user = mockUsers[email.toLowerCase()];
-  
-  if (!user) {
-    return { success: false, error: 'User not found' };
-  }
-  
-  if (user.password !== password) {
-    return { success: false, error: 'Invalid password' };
-  }
-  
-  return { success: true, user: user.profile };
-}
