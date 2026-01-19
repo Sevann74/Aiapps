@@ -286,12 +286,7 @@ const StreamlinedCourseBuilder = () => {
     loadJobsFromSupabase();
   }, [isAuthenticated, currentUser]);
   
-  // Save jobs to localStorage as backup
-  useEffect(() => {
-    if (jobs.length > 0) {
-      localStorage.setItem('streamlinedCourseJobs', JSON.stringify(jobs));
-    }
-  }, [jobs]);
+  // Jobs are persisted to Supabase - no localStorage backup needed
   
   // ============================================
   // AUTHENTICATION
