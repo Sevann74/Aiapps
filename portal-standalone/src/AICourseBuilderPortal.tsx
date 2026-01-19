@@ -108,26 +108,21 @@ const StreamlinedCourseBuilder = () => {
   });
   const clientLogoInputRef = useRef<HTMLInputElement>(null);
   
-  // Mock users database - load from localStorage
-  const [clients, setClients] = useState(() => {
-    const saved = localStorage.getItem('coursebuilder_clients');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'client-001',
-        email: 'sarah@abcpharma.com',
-        password: 'demo123',
-        name: 'Sarah Johnson',
-        role: 'client',
-        organization: 'ABC Pharma',
-        createdAt: new Date().toISOString()
-      }
-    ];
-  });
+  // Clients state - loaded from Supabase
+  const [clients, setClients] = useState<any[]>([]);
   
-  // Save clients to localStorage whenever they change
+  // Load clients from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('coursebuilder_clients', JSON.stringify(clients));
-  }, [clients]);
+    const loadClients = async () => {
+      const result = await getAllClients();
+      if (result.success && result.clients) {
+        setClients(result.clients);
+      }
+    };
+    if (isAuthenticated && currentUser?.role === 'admin') {
+      loadClients();
+    }
+  }, [isAuthenticated, currentUser]);
   
   // Jobs state - load from Supabase (localStorage removed for production)
   const [jobs, setJobs] = useState(() => {
@@ -3299,10 +3294,33 @@ Please log in and change your password immediately.
                         Reset Password
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete ${client.name}? This action cannot be undone.`)) {
-                            setClients(clients.filter(c => c.id !== client.id));
-                            alert(`✅ Client ${client.name} has been deleted`);
+                        onClick={async () => {
+                          const isCurrentlyActive = client.is_active !== false;
+                          const action = isCurrentlyActive ? 'disable' : 'enable';
+                          if (confirm(`Are you sure you want to ${action} ${client.name}'s access?`)) {
+                            const result = await setUserActive(client.id, !isCurrentlyActive);
+                            if (result.success) {
+                              setClients(clients.map(c => c.id === client.id ? {...c, is_active: !isCurrentlyActive} : c));
+                              alert(`✅ Client ${client.name} has been ${action}d`);
+                            } else {
+                              alert(`❌ Failed to ${action} client: ${result.error}`);
+                            }
+                          }
+                        }}
+                        className={`px-4 py-2 ${client.is_active === false ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-600 hover:bg-yellow-700'} text-white font-semibold rounded-lg transition-all text-sm`}
+                      >
+                        {client.is_active === false ? 'Enable' : 'Disable'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Are you sure you want to permanently delete ${client.name}? This action cannot be undone.`)) {
+                            const result = await deleteUser(client.id);
+                            if (result.success) {
+                              setClients(clients.filter(c => c.id !== client.id));
+                              alert(`✅ Client ${client.name} has been deleted from the system`);
+                            } else {
+                              alert(`❌ Failed to delete client: ${result.error}`);
+                            }
                           }
                         }}
                         className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-all text-sm"
