@@ -187,6 +187,39 @@ export async function createUser(
   }
 }
 
+// Get all clients (admin only)
+export async function getAllClients(): Promise<{ success: boolean; clients?: UserProfile[]; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('role', 'client')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const clients: UserProfile[] = (data || []).map(row => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      organization: row.organization,
+      role: row.role,
+      createdAt: row.created_at
+    }));
+
+    return { success: true, clients };
+  } catch (err) {
+    console.error('Get clients error:', err);
+    return { success: false, error: 'Failed to fetch clients' };
+  }
+}
+
 // Password reset request
 export async function requestPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
   if (!isSupabaseConfigured()) {
