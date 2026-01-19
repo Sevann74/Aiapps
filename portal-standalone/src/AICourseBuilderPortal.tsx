@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Send, Package } from 'lucide-react';
-import { signIn, signOut, createUser, type UserProfile } from './lib/authService';
+import { signIn, signOut, createUser, deleteUser, setUserActive, getAllClients, type UserProfile } from './lib/authService';
 import { uploadDocument, downloadDocument } from './lib/storageService';
 import { createJob, getJobs, updateJob } from './lib/jobsService';
 

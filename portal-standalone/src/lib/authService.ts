@@ -12,6 +12,7 @@ export interface UserProfile {
   organization: string;
   role: 'admin' | 'client';
   createdAt: string;
+  is_active?: boolean;
 }
 
 // Auth response type
@@ -53,6 +54,12 @@ export async function signIn(email: string, password: string): Promise<AuthRespo
     
     if (!profile) {
       return { success: false, error: 'User profile not found. Please contact support.' };
+    }
+
+    // Check if user is disabled
+    if (profile.is_active === false) {
+      await supabase.auth.signOut();
+      return { success: false, error: 'Your account has been disabled. Please contact support.' };
     }
 
     return { success: true, user: profile };
@@ -115,7 +122,8 @@ async function getUserProfile(userId: string): Promise<UserProfile | null> {
     name: data.name,
     organization: data.organization,
     role: data.role,
-    createdAt: data.created_at
+    createdAt: data.created_at,
+    is_active: data.is_active
   };
 }
 
@@ -235,6 +243,52 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
   }
 
   return { success: true };
+}
+
+// Delete a user (removes from user_profiles - prevents login via our app)
+export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Delete user error:', err);
+    return { success: false, error: 'Failed to delete user' };
+  }
+}
+
+// Disable/enable a user (sets is_active flag to prevent login)
+export async function setUserActive(userId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ is_active: isActive })
+      .eq('id', userId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Set user active error:', err);
+    return { success: false, error: 'Failed to update user status' };
+  }
 }
 
 // Listen for auth state changes
