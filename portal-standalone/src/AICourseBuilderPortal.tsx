@@ -274,7 +274,8 @@ const StreamlinedCourseBuilder = () => {
       setIsLoadingJobs(true);
       try {
         const result = await getJobs();
-        if (result.success && result.jobs && result.jobs.length > 0) {
+        if (result.success && result.jobs) {
+          // Always use Supabase data as single source of truth
           setJobs(result.jobs);
         }
       } catch (error) {
