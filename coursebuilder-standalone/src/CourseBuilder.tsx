@@ -1809,7 +1809,7 @@ const EnhancedCourseBuilder = () => {
           const facts = await extractVerifiableFacts(documentText);
 
           setProcessingStage('Generating quiz questions...');
-          questions = await generateQuestionsFromFacts(facts, documentText);
+          questions = await generateQuestionsFromFacts(facts, documentText, config.questionCount);
         }
 
         // STEP 3: Verify 100% accuracy (only for AI-generated questions)
@@ -3309,7 +3309,7 @@ const EnhancedCourseBuilder = () => {
           </button>
           <button
             onClick={exportSCORM}
-            disabled={courseData.includeQuiz !== false && (!verificationReport || !verificationReport.allVerified) || isProcessing}
+            disabled={courseData.includeQuiz !== false && courseData.questionMode === 'ai' && (!verificationReport || !verificationReport.allVerified) || isProcessing}
             className="flex-1 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isProcessing ? (
