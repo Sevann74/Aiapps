@@ -884,9 +884,10 @@ export function generateSingleSCOHTML(
       right: -100px;
       width: 300px;
       height: 300px;
-      background: radial-gradient(circle, rgba(0, 197, 184, 0.08) 0%, transparent 70%);
+      background: radial-gradient(circle, var(--brand-light) 0%, transparent 70%);
       border-radius: 50%;
       pointer-events: none;
+      opacity: 0.3;
     }
 
     .slide::after {
@@ -896,9 +897,10 @@ export function generateSingleSCOHTML(
       left: -100px;
       width: 300px;
       height: 300px;
-      background: radial-gradient(circle, rgba(46, 49, 146, 0.08) 0%, transparent 70%);
+      background: radial-gradient(circle, var(--brand-light) 0%, transparent 70%);
       border-radius: 50%;
       pointer-events: none;
+      opacity: 0.3;
     }
 
     .module-logo {
