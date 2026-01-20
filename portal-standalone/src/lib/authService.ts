@@ -218,7 +218,8 @@ export async function getAllClients(): Promise<{ success: boolean; clients?: Use
       name: row.name,
       organization: row.organization,
       role: row.role,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      is_active: row.is_active
     }));
 
     return { success: true, clients };
@@ -288,6 +289,29 @@ export async function setUserActive(userId: string, isActive: boolean): Promise<
   } catch (err) {
     console.error('Set user active error:', err);
     return { success: false, error: 'Failed to update user status' };
+  }
+}
+
+// Update user profile (for editing name, organization, etc.)
+export async function updateUserProfile(userId: string, updates: { name?: string; organization?: string }): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update(updates)
+      .eq('id', userId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Update user profile error:', err);
+    return { success: false, error: 'Failed to update user profile' };
   }
 }
 

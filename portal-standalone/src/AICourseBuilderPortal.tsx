@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Send, Package } from 'lucide-react';
-import { signIn, signOut, createUser, deleteUser, setUserActive, getAllClients, type UserProfile } from './lib/authService';
+import { signIn, signOut, createUser, deleteUser, setUserActive, getAllClients, updateUserProfile, requestPasswordReset, type UserProfile } from './lib/authService';
 import { uploadDocument, downloadDocument } from './lib/storageService';
 import { createJob, getJobs, updateJob } from './lib/jobsService';
 
@@ -124,141 +124,8 @@ const StreamlinedCourseBuilder = () => {
     }
   }, [isAuthenticated, currentUser]);
   
-  // Jobs state - load from Supabase (localStorage removed for production)
-  const [jobs, setJobs] = useState(() => {
-    const savedJobs = localStorage.getItem('streamlinedCourseJobs');
-    if (savedJobs) {
-      // Migrate old ETA values to new 24 hours standard
-      const parsedJobs = JSON.parse(savedJobs);
-      return parsedJobs.map((job: any) => ({
-        ...job,
-        eta: 'Up to 24 hours' // Standardize all ETAs
-      }));
-    }
-    
-    return [
-      {
-        id: 'J001',
-        clientId: 'client-001',
-        clientName: 'Sarah Johnson',
-        clientEmail: 'sarah@abcpharma.com',
-        organization: 'ABC Pharma',
-        status: 'pending_review',
-        courseTitle: 'Lab Safety Procedures',
-        sopNumber: 'SOP-LAB-001',
-        effectiveDate: '2025-01-15',
-        estimatedSeatTime: 45,
-        quizMode: 'ai',
-        comments: 'Please ensure compliance with ISO 17025',
-        fileName: 'lab-safety-procedures.pdf',
-        fileChecksum: 'abc123def456...',
-        submittedAt: '2025-01-07T10:30:00Z',
-        updatedAt: '2025-01-08T14:20:00Z',
-        eta: '24 hours',
-        previewFileName: 'Client preview last.html',
-        previewContent: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lab Safety Procedures - Course Preview</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
-    .header { background: linear-gradient(135deg, #2E3192, #00C5B8); color: white; padding: 30px; border-radius: 10px; margin-bottom: 20px; }
-    .content { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    h1 { margin: 0; font-size: 2em; }
-    h2 { color: #2E3192; border-bottom: 2px solid #00C5B8; padding-bottom: 10px; }
-    .important { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
-    .quiz { background: #e7f3ff; padding: 20px; border-radius: 8px; margin-top: 20px; }
-    .option { background: white; padding: 10px; margin: 8px 0; border: 2px solid #ddd; border-radius: 5px; cursor: pointer; }
-    .option:hover { border-color: #2E3192; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>🔬 Lab Safety Procedures</h1>
-    <p>SOP-LAB-001 | Effective Date: January 15, 2025</p>
-  </div>
-  
-  <div class="content">
-    <h2>Module 1: Introduction to Lab Safety</h2>
-    <p>Welcome to the Lab Safety Procedures training course. This course covers essential safety protocols and procedures required for working in laboratory environments.</p>
-    
-    <div class="important">
-      <strong>⚠️ Important:</strong> All personnel must complete this training before entering laboratory facilities.
-    </div>
-    
-    <h3>Learning Objectives</h3>
-    <ul>
-      <li>Understand basic laboratory safety principles</li>
-      <li>Identify common laboratory hazards</li>
-      <li>Apply proper personal protective equipment (PPE) procedures</li>
-      <li>Follow emergency response protocols</li>
-    </ul>
-  </div>
-  
-  <div class="content">
-    <h2>Module 2: Personal Protective Equipment (PPE)</h2>
-    <p>Proper use of PPE is critical for laboratory safety. This section covers the selection, use, and maintenance of laboratory PPE.</p>
-    
-    <h3>Required PPE</h3>
-    <ul>
-      <li><strong>Lab Coat:</strong> Must be worn at all times in the laboratory</li>
-      <li><strong>Safety Glasses:</strong> Required when handling chemicals or biological materials</li>
-      <li><strong>Gloves:</strong> Select appropriate glove type based on hazard assessment</li>
-      <li><strong>Closed-toe Shoes:</strong> No sandals or open-toed footwear permitted</li>
-    </ul>
-    
-    <div class="important">
-      <strong>⚠️ Critical Safety Point:</strong> Never remove PPE until you have exited the laboratory area.
-    </div>
-  </div>
-  
-  <div class="content">
-    <h2>Module 3: Chemical Safety</h2>
-    <p>Proper handling and storage of chemicals is essential for maintaining a safe laboratory environment.</p>
-    
-    <h3>Key Principles</h3>
-    <ul>
-      <li>Always read Safety Data Sheets (SDS) before using chemicals</li>
-      <li>Store chemicals according to compatibility groups</li>
-      <li>Use fume hoods when working with volatile substances</li>
-      <li>Label all chemical containers clearly</li>
-      <li>Dispose of chemical waste according to institutional procedures</li>
-    </ul>
-  </div>
-  
-  <div class="content quiz">
-    <h2>📝 Knowledge Check</h2>
-    <p><strong>Question 1:</strong> Which of the following PPE items is required at all times in the laboratory?</p>
-    <div class="option">A) Safety goggles</div>
-    <div class="option" style="border-color: #28a745; background: #d4edda;"><strong>✓ B) Lab coat (Correct Answer)</strong></div>
-    <div class="option">C) Face shield</div>
-    <div class="option">D) Respirator</div>
-    
-    <p style="margin-top: 20px;"><strong>Question 2:</strong> What should you do before using any chemical in the laboratory?</p>
-    <div class="option">A) Ask a colleague</div>
-    <div class="option" style="border-color: #28a745; background: #d4edda;"><strong>✓ B) Read the Safety Data Sheet (Correct Answer)</strong></div>
-    <div class="option">C) Smell the chemical</div>
-    <div class="option">D) Test a small amount first</div>
-  </div>
-  
-  <div class="content">
-    <p style="text-align: center; color: #666; font-size: 0.9em;">
-      <strong>Course Preview</strong> | This is a demonstration of the actual course content that will be delivered to learners.
-    </p>
-  </div>
-</body>
-</html>`,
-        auditLog: [
-          { timestamp: '2025-01-07T10:30:00Z', action: 'Job submitted', actor: 'sarah@abcpharma.com', ip: '192.168.1.1' },
-          { timestamp: '2025-01-07T10:30:05Z', action: 'Email notification sent', actor: 'system', details: 'Sent to david.dergazarian@navigantlearning.com' },
-{ timestamp: '2025-01-08T09:15:00Z', action: 'Admin downloaded SOP', actor: 'david.dergazarian@navigantlearning.com', ip: '10.0.0.1' },
-          { timestamp: '2025-01-08T14:20:00Z', action: 'Preview uploaded', actor: 'david.dergazarian@navigantlearning.com', details: 'Client preview last.html' }
-        ]
-      }
-    ];
-  });
+  // Jobs state - loaded from Supabase (no localStorage fallback)
+  const [jobs, setJobs] = useState<any[]>([]);
   
   // Load jobs from Supabase when authenticated
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -3249,14 +3116,18 @@ Learning Conversion Hub
                     
                     <div className="flex flex-col gap-2 ml-4">
                       <button
-                        onClick={() => {
-                          setSelectedClientForEdit(client);
+                        onClick={async () => {
                           const newName = prompt('Edit Client Name:', client.name);
                           if (newName && newName !== client.name) {
-                            setClients(clients.map(c => 
-                              c.id === client.id ? {...c, name: newName} : c
-                            ));
-                            alert(`✅ Client name updated to: ${newName}`);
+                            const result = await updateUserProfile(client.id, { name: newName });
+                            if (result.success) {
+                              setClients(clients.map(c => 
+                                c.id === client.id ? {...c, name: newName} : c
+                              ));
+                              alert(`✅ Client name updated to: ${newName}`);
+                            } else {
+                              alert(`❌ Failed to update client: ${result.error}`);
+                            }
                           }
                         }}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all text-sm"
@@ -3264,29 +3135,14 @@ Learning Conversion Hub
                         Edit
                       </button>
                       <button
-                        onClick={() => {
-                          const newPassword = prompt('Enter new temporary password for ' + client.name + ':');
-                          if (newPassword) {
-                            setClients(clients.map(c => 
-                              c.id === client.id ? {...c, password: newPassword} : c
-                            ));
-                            console.log(`
-📧 PASSWORD RESET EMAIL
-═══════════════════════════════════════════════════════════
-To: ${client.email}
-Subject: Password Reset - Learning Conversion Hub
-
-Dear ${client.name},
-
-Your password has been reset by an administrator.
-
-New Password: ${newPassword}
-
-Please log in and change your password immediately.
-
-═══════════════════════════════════════════════════════════
-                            `);
-                            alert(`✅ Password reset for ${client.name}\n\nNew password: ${newPassword}\n\nPassword reset email sent to ${client.email}`);
+                        onClick={async () => {
+                          if (confirm(`Send password reset email to ${client.email}?`)) {
+                            const result = await requestPasswordReset(client.email);
+                            if (result.success) {
+                              alert(`✅ Password reset email sent to ${client.email}\n\nThe client will receive an email with instructions to reset their password.`);
+                            } else {
+                              alert(`❌ Failed to send reset email: ${result.error}`);
+                            }
                           }
                         }}
                         className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-all text-sm"
