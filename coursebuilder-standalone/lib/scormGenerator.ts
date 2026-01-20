@@ -624,7 +624,7 @@ export function generateSingleSCOHTML(
   const whatChangedSlideHTML = hasChangeSummary ? `
     <section class="slide what-changed-slide" id="slide-0" style="display: block;">
       ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
-      <h2>📋 What Changed Since the Previous Version</h2>
+      <h2><span class="section-icon">📋</span> What Changed Since the Previous Version</h2>
       
       <div class="what-changed-content">
         ${changeSummary!.updatedSections.length > 0 ? `
@@ -712,7 +712,7 @@ export function generateSingleSCOHTML(
   const acknowledgmentSlideHTML = `
     <section class="slide acknowledgment-slide" id="slide-${totalSlides - 1}" style="display: none;">
       ${logo ? `<img src="shared/logo.png" alt="Logo" class="module-logo" />` : ''}
-      <h2>🎓 Course Completion Acknowledgment</h2>
+      <h2><span class="section-icon">🎓</span> Course Completion Acknowledgment</h2>
 
       <div class="congratulations">
         <h3>🎉 Congratulations!</h3>
@@ -937,6 +937,11 @@ export function generateSingleSCOHTML(
     .section-icon,
     .info-icon {
       margin-right: 0.5rem;
+      /* Prevent emoji icons from being affected by gradient text */
+      -webkit-text-fill-color: initial;
+      background: none;
+      -webkit-background-clip: initial;
+      background-clip: initial;
     }
 
     .module-content {
