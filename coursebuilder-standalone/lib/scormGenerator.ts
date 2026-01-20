@@ -1681,13 +1681,13 @@ export function generateSingleSCOHTML(
       background: white;
       border-radius: 16px;
       box-shadow: var(--shadow-md);
-      border-left: 5px solid var(--brand-navy);
+      border-left: 5px solid #6366f1;
       animation: slideIn 0.5s ease-out;
     }
 
     .question-header {
       font-size: 0.875rem;
-      color: var(--brand-cyan);
+      color: #6366f1;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -1774,7 +1774,7 @@ export function generateSingleSCOHTML(
       padding: 1rem;
       background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
       border-radius: 12px;
-      border-left: 4px solid var(--brand-cyan);
+      border-left: 4px solid #06b6d4;
     }
 
     .results-summary {
