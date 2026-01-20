@@ -2236,6 +2236,7 @@ export function generateSingleSCOHTML(
     const TOTAL_SLIDES = ${totalSlides};
     const HAS_QUIZ = ${includeQuiz};
     const NUM_MODULES = ${modules.length};
+    const MODULE_SLIDE_OFFSET = ${moduleSlideOffset};
     const QUIZ_SLIDE_INDEX = ${quizSlideIndex};
     const PASSING_SCORE = ${passingScore};
     const MAX_ATTEMPTS = ${maxAttempts};
@@ -2561,11 +2562,14 @@ export function generateSingleSCOHTML(
       const sortedBookmarks = Array.from(bookmarkedSlides).sort((a, b) => a - b);
       sortedBookmarks.forEach(slideIdx => {
         let name = 'Slide ' + (slideIdx + 1);
-        if (slideIdx < slideNames.length) {
-          name = slideNames[slideIdx].name;
+        const moduleIdx = slideIdx - MODULE_SLIDE_OFFSET;
+        if (MODULE_SLIDE_OFFSET > 0 && slideIdx === 0) {
+          name = 'What Changed';
+        } else if (moduleIdx >= 0 && moduleIdx < slideNames.length) {
+          name = slideNames[moduleIdx].name;
         } else if (slideIdx === TOTAL_SLIDES - 1) {
           name = 'Acknowledgment';
-        } else if (HAS_QUIZ && slideIdx === NUM_MODULES) {
+        } else if (HAS_QUIZ && slideIdx === QUIZ_SLIDE_INDEX) {
           name = 'Final Assessment';
         }
         html += '<div class="toc-item" onclick="navigateToSlide(' + slideIdx + ')">🔖 ' + name + '</div>';
