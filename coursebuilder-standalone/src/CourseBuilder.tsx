@@ -884,14 +884,11 @@ const EnhancedCourseBuilder = () => {
       </div>`;
         }
 
-        // Images - display embedded image
+        // Images - display embedded image (no header if heading is blank)
         if (sectionType === 'image') {
           return `
       <div class="content-card card-image">
-        <div class="card-header card-title-blue">
-          <span class="title-icon icon-blue">🖼️</span>
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Figure'}</h3>
-        </div>
+        ${section.heading ? `<div class="card-header card-title-blue"><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
         <div class="card-content" style="text-align: center; padding: 1rem;">
           <img src="${section.body}" alt="${section.heading || 'Document image'}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);" />
         </div>
@@ -3797,7 +3794,9 @@ const EnhancedCourseBuilder = () => {
                         
                         {section.type === 'image' && (
                           <div className="bg-blue-50 border-l-4 border-blue-400 p-5 mb-6 rounded-lg">
-                            <h4 className="text-lg font-semibold text-blue-900 mb-3">🖼️ {section.heading}</h4>
+                            {section.heading && (
+                              <h4 className="text-lg font-semibold text-blue-900 mb-3">{section.heading}</h4>
+                            )}
                             <div className="text-center">
                               <img 
                                 src={section.body} 

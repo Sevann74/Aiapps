@@ -560,14 +560,11 @@ export function generateSingleSCOHTML(
         iconClass = 'icon-slate';
       }
 
-      // Images get special styling
+      // Images get special styling (no header if heading is blank)
       if (section.type === 'image') {
         return `
       <div class="content-card card-image">
-        <div class="card-header card-title-blue">
-          <span class="title-icon icon-blue">🖼️</span>
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Figure'}</h3>
-        </div>
+        ${section.heading ? `<div class="card-header card-title-blue"><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
         <div class="card-content image-content">
           <img src="${section.body}" alt="${section.heading || 'Document image'}" class="embedded-image" />
         </div>
