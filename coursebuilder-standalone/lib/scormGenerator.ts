@@ -519,6 +519,7 @@ export function generateSingleSCOHTML(
       case 'note': return { icon: '💡', colorClass: 'card-note' };
       case 'warning': return { icon: '⚠️', colorClass: 'card-warning' };
       case 'table': return { icon: '📊', colorClass: 'card-table' };
+      case 'image': return { icon: '🖼️', colorClass: 'card-image' };
       default: return { icon: '📄', colorClass: 'card-text' };
     }
   };
@@ -557,6 +558,21 @@ export function generateSingleSCOHTML(
         cardClass = 'card-documents';
         titleClass = 'card-title-slate';
         iconClass = 'icon-slate';
+      }
+
+      // Images get special styling
+      if (section.type === 'image') {
+        return `
+      <div class="content-card card-image">
+        <div class="card-header card-title-blue">
+          <span class="title-icon icon-blue">🖼️</span>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Figure'}</h3>
+        </div>
+        <div class="card-content image-content">
+          <img src="${section.body}" alt="${section.heading || 'Document image'}" class="embedded-image" />
+        </div>
+      </div>
+        `;
       }
 
       // Tables get special styling
@@ -1052,7 +1068,25 @@ export function generateSingleSCOHTML(
     .card-roles { background: linear-gradient(135deg, #ffffff, #faf5ff); }
     .card-documents { background: linear-gradient(135deg, #ffffff, #f8fafc); }
     .card-table { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
+    .card-image { background: linear-gradient(135deg, #ffffff, #f0f9ff); }
     .card-important { background: linear-gradient(135deg, #fff5f5, #fed7d7); border-left: 4px solid #e53e3e; }
+    
+    /* Embedded Images */
+    .image-content {
+      text-align: center;
+      padding: 1rem;
+    }
+    .embedded-image {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .embedded-image:hover {
+      transform: scale(1.02);
+    }
     .card-important .card-content p { color: #742a2a; font-weight: 500; }
     
     /* Table Wrapper in Cards */

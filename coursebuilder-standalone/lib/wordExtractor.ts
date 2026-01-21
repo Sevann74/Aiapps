@@ -1,8 +1,17 @@
 import mammoth from 'mammoth';
 
+export interface ExtractedImage {
+  id: string;
+  data: string;  // base64 data URL
+  contentType: string;
+  altText?: string;
+}
+
 export interface WordExtractionResult {
   text: string;
   html: string;
+  htmlWithImages: string;  // HTML with embedded base64 images
+  images: ExtractedImage[];
   characterCount: number;
   wordCount: number;
   isValid: boolean;
@@ -24,7 +33,37 @@ export async function extractTextFromWord(file: File): Promise<WordExtractionRes
   try {
     const arrayBuffer = await file.arrayBuffer();
     
-    // Extract as HTML first (preserves structure better)
+    // Track extracted images
+    const extractedImages: ExtractedImage[] = [];
+    let imageIndex = 0;
+    
+    // Configure mammoth to extract images inline
+    const imageOptions = {
+      convertImage: mammoth.images.imgElement(async (image: any) => {
+        const imageId = `img_${imageIndex++}`;
+        const base64Data = await image.read('base64');
+        const contentType = image.contentType || 'image/png';
+        const dataUrl = `data:${contentType};base64,${base64Data}`;
+        
+        extractedImages.push({
+          id: imageId,
+          data: dataUrl,
+          contentType: contentType,
+          altText: `Image ${imageIndex}`
+        });
+        
+        return {
+          src: dataUrl,
+          alt: `Image ${imageIndex}`,
+          'data-image-id': imageId
+        };
+      })
+    };
+    
+    // Extract as HTML with images
+    const htmlWithImagesResult = await mammoth.convertToHtml({ arrayBuffer }, imageOptions);
+    
+    // Extract as HTML without images (for text processing)
     const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
     
     // Also extract as plain text
@@ -38,9 +77,15 @@ export async function extractTextFromWord(file: File): Promise<WordExtractionRes
         }
       });
     }
+    
+    // Add image extraction info
+    if (extractedImages.length > 0) {
+      warnings.push(`Extracted ${extractedImages.length} image(s) from document`);
+    }
 
     const rawText = textResult.value;
     const html = htmlResult.value;
+    const htmlWithImages = htmlWithImagesResult.value;
     
     // Convert HTML to structured text that preserves bullets and tables
     const structuredText = convertHtmlToStructuredText(html);
@@ -62,6 +107,8 @@ export async function extractTextFromWord(file: File): Promise<WordExtractionRes
     return {
       text: structuredText,
       html: html,
+      htmlWithImages: htmlWithImages,
+      images: extractedImages,
       characterCount,
       wordCount,
       isValid,
@@ -75,6 +122,8 @@ export async function extractTextFromWord(file: File): Promise<WordExtractionRes
     return {
       text: '',
       html: '',
+      htmlWithImages: '',
+      images: [],
       characterCount: 0,
       wordCount: 0,
       isValid: false,

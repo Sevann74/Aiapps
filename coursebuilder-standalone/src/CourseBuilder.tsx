@@ -4,7 +4,7 @@ import * as courseApi from '../lib/courseBuilderApi';
 import { generateSCORMPackage } from '../lib/scormGenerator';
 import { validateSCORMStructure, getSCORMCompatibilityInfo } from '../lib/scormValidator';
 import { extractTextFromPDF, validateDocumentText, getTextPreview, PDFExtractionResult } from '../lib/pdfExtractor';
-import { extractTextFromWord, isWordDocument } from '../lib/wordExtractor';
+import { extractTextFromWord, isWordDocument, ExtractedImage } from '../lib/wordExtractor';
 import { parseAPIError, ErrorDetails } from '../lib/errorHandler';
 import { testEdgeFunctionConnection, APITestResult } from '../lib/apiTester';
 import * as auditTrail from '../lib/auditTrail';
@@ -22,6 +22,7 @@ const EnhancedCourseBuilder = () => {
   const [sourceDocumentData, setSourceDocumentData] = useState<string | null>(null); // Base64 data from uploaded file
   const [downloadablePdfData, setDownloadablePdfData] = useState<string | null>(null); // Base64 PDF for SCORM download
   const [downloadablePdfName, setDownloadablePdfName] = useState<string | null>(null); // Name of downloadable PDF
+  const [extractedImages, setExtractedImages] = useState<ExtractedImage[]>([]); // Images extracted from Word documents
   const [documentText, setDocumentText] = useState('');
   const [pdfExtractionResult, setPdfExtractionResult] = useState<PDFExtractionResult | null>(null);
   const [courseTitle, setCourseTitle] = useState('');
@@ -1223,6 +1224,14 @@ const EnhancedCourseBuilder = () => {
       try {
         const result = await extractTextFromWord(file);
         
+        // Store extracted images from Word document
+        if (result.images && result.images.length > 0) {
+          setExtractedImages(result.images);
+          console.log(`Extracted ${result.images.length} images from Word document`);
+        } else {
+          setExtractedImages([]);
+        }
+        
         // Convert to PDF extraction result format for compatibility
         const pdfResult: PDFExtractionResult = {
           text: result.text,
@@ -1834,7 +1843,35 @@ const EnhancedCourseBuilder = () => {
       const facts = (config.includeQuiz && config.questionMode !== 'manual')
         ? await extractVerifiableFacts(documentText)
         : [];
-      const modules = await generateModulesFromDocument(documentText, facts);
+      let modules = await generateModulesFromDocument(documentText, facts);
+      
+      // Add extracted images to the first module (if any images were extracted from Word doc)
+      if (extractedImages.length > 0 && modules.length > 0) {
+        console.log(`Adding ${extractedImages.length} extracted images to course modules`);
+        
+        // Add images as content sections at the end of the first module
+        const imagesSections = extractedImages.map((img, idx) => ({
+          type: 'image',
+          heading: img.altText || `Figure ${idx + 1}`,
+          body: img.data
+        }));
+        
+        // Add a new module for images if there are many, otherwise add to first module
+        if (extractedImages.length > 3) {
+          modules = [...modules, {
+            id: `section_images`,
+            title: 'Document Figures & Diagrams',
+            duration: '2 min',
+            content: imagesSections,
+            relatedFacts: []
+          }];
+        } else {
+          modules[0] = {
+            ...modules[0],
+            content: [...modules[0].content, ...imagesSections]
+          };
+        }
+      }
 
       // STEP 5: Verify content completeness
       setProcessingStage('Verifying content completeness...');
