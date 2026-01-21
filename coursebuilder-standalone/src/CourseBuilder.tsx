@@ -82,6 +82,13 @@ const EnhancedCourseBuilder = () => {
     duration: string;
   } | null>(null);
   const [showModuleTitleEditor, setShowModuleTitleEditor] = useState(false);
+  // STATE FOR IMAGE INSERTION
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageInsertPosition, setImageInsertPosition] = useState<{
+    moduleIndex: number;
+    afterSectionIndex: number; // -1 means at beginning
+  } | null>(null);
+  const [newImageCaption, setNewImageCaption] = useState('');
 
   // SAVED COURSES STATE
   const [showSavedCourses, setShowSavedCourses] = useState(false);
@@ -1556,6 +1563,67 @@ const EnhancedCourseBuilder = () => {
   };
 
   // ============================================
+  // IMAGE INSERTION FUNCTIONS
+  // ============================================
+
+  const openImageModal = (moduleIndex: number, afterSectionIndex: number) => {
+    setImageInsertPosition({ moduleIndex, afterSectionIndex });
+    setNewImageCaption('');
+    setShowImageModal(true);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !imageInsertPosition || !courseData) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64Data = reader.result as string;
+      insertImageIntoModule(base64Data, newImageCaption || `Figure ${imageInsertPosition.afterSectionIndex + 2}`);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const insertExtractedImage = (imageData: string, altText: string) => {
+    if (!imageInsertPosition || !courseData) return;
+    insertImageIntoModule(imageData, altText);
+  };
+
+  const insertImageIntoModule = (imageData: string, caption: string) => {
+    if (!imageInsertPosition || !courseData) return;
+
+    const { moduleIndex, afterSectionIndex } = imageInsertPosition;
+    const updatedCourseData = { ...courseData };
+    const newImageSection = {
+      type: 'image',
+      heading: caption,
+      body: imageData
+    };
+
+    // Insert at the correct position
+    const insertIndex = afterSectionIndex + 1;
+    updatedCourseData.modules[moduleIndex].content = [
+      ...updatedCourseData.modules[moduleIndex].content.slice(0, insertIndex),
+      newImageSection,
+      ...updatedCourseData.modules[moduleIndex].content.slice(insertIndex)
+    ];
+
+    setCourseData(updatedCourseData);
+    setShowImageModal(false);
+    setImageInsertPosition(null);
+    setNewImageCaption('');
+    setHasUnsavedEdits(true);
+    alert('✓ Image added! Don\'t forget to export your SCORM package to save changes.');
+  };
+
+  // ============================================
   // CLIENT PREVIEW DOWNLOAD HANDLER
   // ============================================
 
@@ -1845,32 +1913,9 @@ const EnhancedCourseBuilder = () => {
         : [];
       let modules = await generateModulesFromDocument(documentText, facts);
       
-      // Add extracted images to the first module (if any images were extracted from Word doc)
-      if (extractedImages.length > 0 && modules.length > 0) {
-        console.log(`Adding ${extractedImages.length} extracted images to course modules`);
-        
-        // Add images as content sections at the end of the first module
-        const imagesSections = extractedImages.map((img, idx) => ({
-          type: 'image',
-          heading: img.altText || `Figure ${idx + 1}`,
-          body: img.data
-        }));
-        
-        // Add a new module for images if there are many, otherwise add to first module
-        if (extractedImages.length > 3) {
-          modules = [...modules, {
-            id: `section_images`,
-            title: 'Document Figures & Diagrams',
-            duration: '2 min',
-            content: imagesSections,
-            relatedFacts: []
-          }];
-        } else {
-          modules[0] = {
-            ...modules[0],
-            content: [...modules[0].content, ...imagesSections]
-          };
-        }
+      // Log extracted images - they will be available for manual placement in Review Course
+      if (extractedImages.length > 0) {
+        console.log(`${extractedImages.length} images extracted from Word document - available for manual placement in Review Course`);
       }
 
       // STEP 5: Verify content completeness
@@ -3627,14 +3672,23 @@ const EnhancedCourseBuilder = () => {
 
                     {courseData.modules[previewModule].content.map((section, sectionIdx) => (
                       <div key={sectionIdx} className="relative group">
-                        {/* EDIT BUTTON - appears on hover */}
-                        <button
-                          onClick={() => openContentEditor(previewModule, sectionIdx)}
-                          className="absolute -left-3 top-0 bg-blue-600 text-white p-2 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-blue-700"
-                          title="Edit this content section"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        {/* EDIT & ADD IMAGE BUTTONS - appears on hover */}
+                        <div className="absolute -left-3 top-0 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <button
+                            onClick={() => openContentEditor(previewModule, sectionIdx)}
+                            className="bg-blue-600 text-white p-2 rounded-lg shadow-lg hover:bg-blue-700"
+                            title="Edit this content section"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openImageModal(previewModule, sectionIdx)}
+                            className="bg-green-600 text-white p-2 rounded-lg shadow-lg hover:bg-green-700"
+                            title="Add image after this section"
+                          >
+                            <Image className="w-4 h-4" />
+                          </button>
+                        </div>
 
                         {section.type === 'objectives' && (
                           <div className="bg-blue-50 border-l-4 border-blue-500 p-6 mb-8 rounded-lg">
@@ -3696,6 +3750,20 @@ const EnhancedCourseBuilder = () => {
                           <div className="bg-purple-50 border-l-4 border-purple-500 p-5 mb-6 rounded-lg">
                             <h4 className="text-lg font-semibold text-purple-900 mb-3">💡 {section.heading}</h4>
                             {renderFormattedContent(section.body, 'text-purple-800')}
+                          </div>
+                        )}
+                        
+                        {section.type === 'image' && (
+                          <div className="bg-blue-50 border-l-4 border-blue-400 p-5 mb-6 rounded-lg">
+                            <h4 className="text-lg font-semibold text-blue-900 mb-3">🖼️ {section.heading}</h4>
+                            <div className="text-center">
+                              <img 
+                                src={section.body} 
+                                alt={section.heading || 'Document image'} 
+                                className="max-w-full h-auto rounded-lg shadow-md mx-auto"
+                                style={{ maxHeight: '400px' }}
+                              />
+                            </div>
                           </div>
                         )}
                         
@@ -3991,6 +4059,108 @@ const EnhancedCourseBuilder = () => {
               >
                 <Save className="w-5 h-5" />
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Upload Modal */}
+      {showImageModal && imageInsertPosition && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-green-600 text-white p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Add Image</h2>
+                <p className="text-green-100 text-sm mt-1">
+                  Insert after section {imageInsertPosition.afterSectionIndex + 1} in Module {imageInsertPosition.moduleIndex + 1}
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowImageModal(false); setImageInsertPosition(null); }}
+                className="p-2 hover:bg-green-700 rounded-lg transition-all"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Image Caption */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Image Caption / Title
+                </label>
+                <input
+                  type="text"
+                  value={newImageCaption}
+                  onChange={(e) => setNewImageCaption(e.target.value)}
+                  placeholder="e.g., Figure 1: Process Flow Diagram"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Upload New Image */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Upload Image
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-500 transition-colors">
+                  <Image className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-600 mb-2">Drag and drop an image, or click to browse</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    id="image-upload-input"
+                  />
+                  <label
+                    htmlFor="image-upload-input"
+                    className="inline-block px-4 py-2 bg-green-600 text-white font-semibold rounded-lg cursor-pointer hover:bg-green-700 transition-all"
+                  >
+                    Choose File
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">Supports: PNG, JPG, GIF, SVG, WebP</p>
+                </div>
+              </div>
+
+              {/* Extracted Images from Document */}
+              {extractedImages.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Or Select from Extracted Images ({extractedImages.length} available)
+                  </label>
+                  <div className="grid grid-cols-2 gap-4 max-h-60 overflow-y-auto p-2 border-2 border-gray-200 rounded-lg">
+                    {extractedImages.map((img, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => insertExtractedImage(img.data, newImageCaption || img.altText || `Figure ${idx + 1}`)}
+                        className="cursor-pointer border-2 border-gray-200 rounded-lg p-2 hover:border-green-500 hover:bg-green-50 transition-all"
+                      >
+                        <img
+                          src={img.data}
+                          alt={img.altText || `Image ${idx + 1}`}
+                          className="w-full h-24 object-contain rounded"
+                        />
+                        <p className="text-xs text-center text-gray-600 mt-1 truncate">
+                          {img.altText || `Image ${idx + 1}`}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 border-t-2 border-gray-200 p-4 flex justify-end">
+              <button
+                onClick={() => { setShowImageModal(false); setImageInsertPosition(null); }}
+                className="px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+              >
+                Cancel
               </button>
             </div>
           </div>
