@@ -2330,6 +2330,11 @@ export function generateSingleSCOHTML(
         highestSlideReached = currentSlide;
       }
 
+      // Reset quiz to first question when navigating to quiz slide
+      if (HAS_QUIZ && currentSlide === QUIZ_SLIDE_INDEX && typeof showQuestion === 'function') {
+        showQuestion(0);
+      }
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
       updateProgress();
