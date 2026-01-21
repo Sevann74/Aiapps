@@ -1388,7 +1388,7 @@ AI Course Builder | Navigant Learning
               {/* File Upload - REQUIRED */}
               <div>
                 <label className="block text-sm font-bold text-gray-900 mb-2">
-                  Upload SOP Document <span className="text-red-600">*</span>
+                  Upload Document <span className="text-red-600">*</span>
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-all cursor-pointer"
                      onClick={() => fileInputRef.current?.click()}>
