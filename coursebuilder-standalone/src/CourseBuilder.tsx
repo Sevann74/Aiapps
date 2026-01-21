@@ -1597,7 +1597,7 @@ const EnhancedCourseBuilder = () => {
     const reader = new FileReader();
     reader.onload = () => {
       const base64Data = reader.result as string;
-      insertImageIntoModule(base64Data, newImageCaption || `Figure ${imageInsertPosition.afterSectionIndex + 2}`);
+      insertImageIntoModule(base64Data, newImageCaption);
     };
     reader.readAsDataURL(file);
   };
@@ -4178,7 +4178,7 @@ const EnhancedCourseBuilder = () => {
                     {extractedImages.map((img, idx) => (
                       <div
                         key={idx}
-                        onClick={() => insertExtractedImage(img.data, newImageCaption || img.altText || `Figure ${idx + 1}`)}
+                        onClick={() => insertExtractedImage(img.data, newImageCaption)}
                         className="cursor-pointer border-2 border-gray-200 rounded-lg p-2 hover:border-green-500 hover:bg-green-50 transition-all"
                       >
                         <img
