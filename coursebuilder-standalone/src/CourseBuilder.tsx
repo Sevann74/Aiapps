@@ -884,6 +884,20 @@ const EnhancedCourseBuilder = () => {
       </div>`;
         }
 
+        // Images - display embedded image
+        if (sectionType === 'image') {
+          return `
+      <div class="content-card card-image">
+        <div class="card-header card-title-blue">
+          <span class="title-icon icon-blue">🖼️</span>
+          <h3>${section.heading ? escapeHtml(section.heading) : 'Figure'}</h3>
+        </div>
+        <div class="card-content" style="text-align: center; padding: 1rem;">
+          <img src="${section.body}" alt="${section.heading || 'Document image'}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);" />
+        </div>
+      </div>`;
+        }
+
         // Plain text - clean white card, NO icon
         return `
       <div class="content-card card-text">
@@ -1621,6 +1635,27 @@ const EnhancedCourseBuilder = () => {
     setNewImageCaption('');
     setHasUnsavedEdits(true);
     alert('✓ Image added! Don\'t forget to export your SCORM package to save changes.');
+  };
+
+  const deleteSection = (moduleIndex: number, sectionIndex: number) => {
+    if (!courseData) return;
+    
+    const section = courseData.modules[moduleIndex].content[sectionIndex];
+    const sectionType = section.type === 'image' ? 'image' : 'section';
+    
+    if (!confirm(`Are you sure you want to delete this ${sectionType}? This cannot be undone.`)) {
+      return;
+    }
+
+    const updatedCourseData = { ...courseData };
+    updatedCourseData.modules[moduleIndex].content = [
+      ...updatedCourseData.modules[moduleIndex].content.slice(0, sectionIndex),
+      ...updatedCourseData.modules[moduleIndex].content.slice(sectionIndex + 1)
+    ];
+
+    setCourseData(updatedCourseData);
+    setHasUnsavedEdits(true);
+    alert(`✓ ${sectionType.charAt(0).toUpperCase() + sectionType.slice(1)} deleted! Don't forget to export your SCORM package to save changes.`);
   };
 
   // ============================================
@@ -3672,7 +3707,7 @@ const EnhancedCourseBuilder = () => {
 
                     {courseData.modules[previewModule].content.map((section, sectionIdx) => (
                       <div key={sectionIdx} className="relative group">
-                        {/* EDIT & ADD IMAGE BUTTONS - appears on hover */}
+                        {/* EDIT, ADD IMAGE & DELETE BUTTONS - appears on hover */}
                         <div className="absolute -left-3 top-0 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           <button
                             onClick={() => openContentEditor(previewModule, sectionIdx)}
@@ -3687,6 +3722,13 @@ const EnhancedCourseBuilder = () => {
                             title="Add image after this section"
                           >
                             <Image className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteSection(previewModule, sectionIdx)}
+                            className="bg-red-600 text-white p-2 rounded-lg shadow-lg hover:bg-red-700"
+                            title="Delete this section"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
 
@@ -3941,7 +3983,8 @@ const EnhancedCourseBuilder = () => {
               {/* Heading */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Section Heading <span className="text-red-600">*</span>
+                  Section Heading {editingContent.section.type !== 'image' && <span className="text-red-600">*</span>}
+                  {editingContent.section.type === 'image' && <span className="text-gray-400 text-xs ml-1">(optional)</span>}
                 </label>
                 <input
                   type="text"
@@ -3950,7 +3993,7 @@ const EnhancedCourseBuilder = () => {
                     ...editingContent,
                     section: { ...editingContent.section, heading: e.target.value }
                   })}
-                  placeholder="e.g., Introduction, Key Steps, Safety Requirements"
+                  placeholder={editingContent.section.type === 'image' ? "e.g., Figure 1: Process Flow Diagram" : "e.g., Introduction, Key Steps, Safety Requirements"}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -4054,7 +4097,7 @@ const EnhancedCourseBuilder = () => {
               </button>
               <button
                 onClick={saveContentEdit}
-                disabled={!editingContent.section.heading || !editingContent.section.body}
+                disabled={(editingContent.section.type !== 'image' && !editingContent.section.heading) || !editingContent.section.body}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Save className="w-5 h-5" />
