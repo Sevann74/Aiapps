@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { createUser } from '../../lib/authService';
 
 interface Organization {
   id: string;
@@ -32,6 +33,9 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', organization_id: '', role: 'client' });
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   const AVAILABLE_MODULES = [
     { key: 'conversion', label: 'Learning Conversion', icon: '📚' },
@@ -146,6 +150,45 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
 
   const hasEntitlement = (org: Organization, moduleKey: string): boolean => {
     return org.entitlements?.some(e => e.module_key === moduleKey && e.enabled) ?? false;
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUser.name || !newUser.email || !newUser.password || !newUser.organization_id) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    setIsCreatingUser(true);
+    try {
+      const selectedOrg = organizations.find(o => o.id === newUser.organization_id);
+      const result = await createUser(
+        newUser.email,
+        newUser.password,
+        newUser.name,
+        selectedOrg?.name || '',
+        newUser.role as 'admin' | 'client'
+      );
+
+      if (result.success) {
+        // Update the user's organization_id in user_profiles
+        await supabase
+          .from('user_profiles')
+          .update({ organization_id: newUser.organization_id })
+          .eq('email', newUser.email);
+
+        setShowCreateUser(false);
+        setNewUser({ name: '', email: '', password: '', organization_id: '', role: 'client' });
+        fetchData();
+        alert('User created successfully!');
+      } else {
+        alert(result.error || 'Failed to create user');
+      }
+    } catch (err) {
+      console.error('Error creating user:', err);
+      alert('Failed to create user');
+    } finally {
+      setIsCreatingUser(false);
+    }
   };
 
   return (
@@ -299,7 +342,104 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
           </div>
         ) : (
           /* Users Tab */
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <div className="space-y-4">
+            {/* Create User Button */}
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setShowCreateUser(true)}
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+              >
+                ➕ New User
+              </button>
+            </div>
+
+            {/* Create User Modal */}
+            {showCreateUser && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">Create User</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Name *</label>
+                      <input
+                        type="text"
+                        value={newUser.name}
+                        onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                        placeholder="John Doe"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Email *</label>
+                      <input
+                        type="email"
+                        value={newUser.email}
+                        onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                        placeholder="john@company.com"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Password *</label>
+                      <input
+                        type="password"
+                        value={newUser.password}
+                        onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                        placeholder="••••••••"
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Organization *</label>
+                      <select
+                        value={newUser.organization_id}
+                        onChange={(e) => setNewUser({...newUser, organization_id: e.target.value})}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="">Select Organization</option>
+                        {organizations.map(org => (
+                          <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Role *</label>
+                      <select
+                        value={newUser.role}
+                        onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="client">Client</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button
+                      onClick={() => { setShowCreateUser(false); setNewUser({ name: '', email: '', password: '', organization_id: '', role: 'client' }); }}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateUser}
+                      disabled={isCreatingUser}
+                      className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {isCreatingUser ? 'Creating...' : 'Create User'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -336,6 +476,7 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
                 <p className="text-gray-600">Users will appear here when they're created.</p>
               </div>
             )}
+            </div>
           </div>
         )}
       </div>
