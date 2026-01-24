@@ -44,6 +44,20 @@ const HubHome: React.FC<HubHomeProps> = ({
     }
   ];
 
+  // Add Hub Admin tile for admins
+  if (user.role === 'admin') {
+    modules.push({
+      key: 'hub-admin',
+      title: 'Hub Admin',
+      description: 'Manage organizations, module entitlements, and users across the CapNorth Hub platform.',
+      icon: '⚙️',
+      enabled: true,
+      locked: false,
+      stats: undefined,
+      lockedMessage: undefined
+    });
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50">
       {/* Header */}
@@ -114,14 +128,16 @@ const HubHome: React.FC<HubHomeProps> = ({
               />
             ))}
             
-            {/* Placeholder for future modules */}
-            <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50">
-              <span className="text-4xl mb-4">➕</span>
-              <h3 className="text-lg font-semibold text-gray-500 mb-2">More Coming Soon</h3>
-              <p className="text-sm text-gray-400">
-                Additional modules will appear here as they become available
-              </p>
-            </div>
+            {/* Placeholder for future modules - only show if not admin or less than 3 modules */}
+            {modules.length < 4 && (
+              <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50">
+                <span className="text-4xl mb-4">➕</span>
+                <h3 className="text-lg font-semibold text-gray-500 mb-2">More Coming Soon</h3>
+                <p className="text-sm text-gray-400">
+                  Additional modules will appear here as they become available
+                </p>
+              </div>
+            )}
           </div>
         )}
 

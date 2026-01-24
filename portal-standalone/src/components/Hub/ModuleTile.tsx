@@ -35,29 +35,24 @@ const ModuleTile: React.FC<ModuleTileProps> = ({
         }
       `}
     >
-      {/* Lock overlay for disabled modules */}
       {!isAccessible && (
         <div className="absolute top-4 right-4">
           <span className="text-2xl">🔒</span>
         </div>
       )}
 
-      {/* Icon */}
       <div className={`text-5xl mb-4 ${!isAccessible ? 'grayscale' : ''}`}>
         {icon}
       </div>
 
-      {/* Title */}
       <h3 className={`text-xl font-bold mb-2 ${isAccessible ? 'text-gray-900' : 'text-gray-500'}`}>
         {title}
       </h3>
 
-      {/* Description */}
       <p className={`text-sm mb-4 flex-1 ${isAccessible ? 'text-gray-600' : 'text-gray-400'}`}>
         {description}
       </p>
 
-      {/* Stats or locked message */}
       {isAccessible && stats && (
         <div className="text-sm font-semibold text-blue-600 mb-4">
           {stats}
@@ -70,7 +65,6 @@ const ModuleTile: React.FC<ModuleTileProps> = ({
         </div>
       )}
 
-      {/* Action button */}
       <div className="pt-4 border-t border-gray-100">
         {isAccessible ? (
           <div className="flex items-center justify-between">
@@ -78,15 +72,9 @@ const ModuleTile: React.FC<ModuleTileProps> = ({
             <span className="text-blue-600">→</span>
           </div>
         ) : (
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              // Could trigger a "request access" modal
-            }}
-            className="text-gray-400 font-semibold hover:text-gray-600 transition-colors"
-          >
+          <span className="text-gray-400 font-semibold">
             Request Access
-          </button>
+          </span>
         )}
       </div>
     </div>

@@ -21,7 +21,6 @@ export function useEntitlements(organizationId: string | null): UseEntitlementsR
 
   const fetchEntitlements = async () => {
     if (!organizationId) {
-      // No org ID yet - default to conversion enabled (backward compatibility)
       setEntitlements([{ module_key: 'conversion', enabled: true }]);
       setLoading(false);
       return;
@@ -36,13 +35,11 @@ export function useEntitlements(organizationId: string | null): UseEntitlementsR
 
       if (fetchError) {
         console.error('Error fetching entitlements:', fetchError);
-        // Fallback: enable conversion by default
         setEntitlements([{ module_key: 'conversion', enabled: true }]);
         setError(fetchError.message);
       } else if (data && data.length > 0) {
         setEntitlements(data);
       } else {
-        // No entitlements found - default to conversion enabled
         setEntitlements([{ module_key: 'conversion', enabled: true }]);
       }
     } catch (err) {
@@ -59,10 +56,9 @@ export function useEntitlements(organizationId: string | null): UseEntitlementsR
   }, [organizationId]);
 
   const hasAccess = (moduleKey: string): boolean => {
-    // Conversion is always enabled for backward compatibility
     if (moduleKey === 'conversion') {
       const found = entitlements.find(e => e.module_key === 'conversion');
-      return found ? found.enabled : true; // Default true for conversion
+      return found ? found.enabled : true;
     }
     
     const entitlement = entitlements.find(e => e.module_key === moduleKey);
