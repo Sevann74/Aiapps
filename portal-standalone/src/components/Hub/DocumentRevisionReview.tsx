@@ -230,29 +230,47 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
     setExpandedSections(newExpanded);
   };
 
-  // Simple change type labels (ComplianceQueryPro style)
-  const getChangeTypeLabel = (changeType: string) => {
-    switch (changeType) {
-      case 'added': return 'New';
-      case 'modified': return 'Modified';
-      case 'removed': return 'Removed';
-      default: return changeType;
+  // Classification labels for tiered matching system
+  const getClassificationLabel = (classification: string) => {
+    switch (classification) {
+      case 'NO_CHANGE': return 'No Change';
+      case 'EDITORIAL': return 'Editorial';
+      case 'SUBSTANTIVE': return 'Substantive';
+      case 'RELOCATED': return 'Relocated';
+      case 'NEW': return 'New';
+      case 'RETIRED': return 'Retired';
+      case 'MANUAL_REVIEW': return 'Manual Review';
+      default: return classification;
     }
   };
 
-  const getChangeTypeColor = (changeType: string) => {
-    switch (changeType) {
-      case 'added': return 'bg-green-100 text-green-700';
-      case 'modified': return 'bg-amber-100 text-amber-700';
-      case 'removed': return 'bg-red-100 text-red-700';
+  const getClassificationColor = (classification: string) => {
+    switch (classification) {
+      case 'NO_CHANGE': return 'bg-gray-100 text-gray-600';
+      case 'EDITORIAL': return 'bg-blue-100 text-blue-700';
+      case 'SUBSTANTIVE': return 'bg-amber-100 text-amber-700';
+      case 'RELOCATED': return 'bg-purple-100 text-purple-700';
+      case 'NEW': return 'bg-green-100 text-green-700';
+      case 'RETIRED': return 'bg-red-100 text-red-700';
+      case 'MANUAL_REVIEW': return 'bg-orange-100 text-orange-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
 
-  // Process changes for display - simple section-level diffing
+  const getMatchTierLabel = (tier: string) => {
+    switch (tier) {
+      case 'TIER1_ID': return 'ID Match';
+      case 'TIER2_HASH': return 'Hash Match';
+      case 'TIER3_SIMILARITY': return 'Similarity';
+      case 'UNMATCHED': return 'Unmatched';
+      default: return tier;
+    }
+  };
+
+  // Process changes for display - tiered matching with audit trail
   const processedChanges = comparisonResult?.changes.map(change => {
     const badges = detectChangeBadges(change.oldContent, change.newContent);
-    const descriptor = generateChangeDescriptor(change.oldContent, change.newContent, change.changeType);
+    const descriptor = generateChangeDescriptor(change.oldContent, change.newContent, change.classification || change.changeType);
     return { 
       ...change, 
       badges, 
@@ -561,8 +579,8 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                             <span className="font-bold text-gray-900">
                               {change.sectionId} – {change.sectionTitle}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getChangeTypeColor(change.changeType)}`}>
-                              {getChangeTypeLabel(change.changeType)}
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getClassificationColor(change.classification)}`}>
+                              {getClassificationLabel(change.classification)}
                             </span>
                           </div>
                           
@@ -648,7 +666,7 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                                     {change.sectionId} – {change.sectionTitle}
                                   </span>
                                   <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">
-                                    {getChangeTypeLabel(change.changeType)}
+                                    {getClassificationLabel(change.classification)}
                                   </span>
                                 </div>
                                 <p className="text-sm text-gray-600">{change.descriptor}</p>
