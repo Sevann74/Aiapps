@@ -35,7 +35,7 @@ const HubHome: React.FC<HubHomeProps> = ({
     {
       key: 'conversion',
       title: 'Learning Conversion',
-      description: 'Convert documents into interactive SCORM e-learning courses with AI-powered content extraction and quiz generation.',
+      description: 'Convert approved documents into interactive SCORM-compliant e-learning, with structured content extraction and assessment generation.',
       icon: '📚',
       enabled: hasAccess('conversion'),
       locked: false,
@@ -44,7 +44,7 @@ const HubHome: React.FC<HubHomeProps> = ({
     {
       key: 'document-review',
       title: 'Document Revision Impact Review',
-      description: 'Compare document versions and generate audit-safe Training Impact Assessment reports for L&D and Process Owners.',
+      description: 'Identify and document the training impact of document revisions through deterministic, audit-safe comparison. Generate Training Impact Assessment reports to support Quality, L&D, and Process Owner decisions.',
       icon: '📋',
       enabled: hasAccess('sop-compare'),
       locked: !hasAccess('sop-compare'),
