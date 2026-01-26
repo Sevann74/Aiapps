@@ -10,6 +10,7 @@ export interface UserProfile {
   email: string;
   name: string;
   organization: string;
+  organization_id?: string;
   role: 'admin' | 'client';
   createdAt: string;
   is_active?: boolean;
@@ -121,6 +122,7 @@ async function getUserProfile(userId: string): Promise<UserProfile | null> {
     email: data.email,
     name: data.name,
     organization: data.organization,
+    organization_id: data.organization_id,
     role: data.role,
     createdAt: data.created_at,
     is_active: data.is_active
