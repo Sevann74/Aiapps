@@ -115,29 +115,47 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
   };
 
   const toggleEntitlement = async (orgId: string, moduleKey: string, currentlyEnabled: boolean) => {
+    console.log('toggleEntitlement called:', { orgId, moduleKey, currentlyEnabled });
     try {
       if (currentlyEnabled) {
         // Disable - delete the entitlement
-        await supabase
-          .from('org_entitlements')
-          .delete()
-          .eq('organization_id', orgId)
-          .eq('module_key', moduleKey);
-      } else {
-        // Enable - insert the entitlement (delete first to avoid conflicts)
-        await supabase
+        const { error: deleteError } = await supabase
           .from('org_entitlements')
           .delete()
           .eq('organization_id', orgId)
           .eq('module_key', moduleKey);
         
-        await supabase
+        if (deleteError) {
+          console.error('Delete error:', deleteError);
+          alert(`Delete failed: ${deleteError.message}`);
+          return;
+        }
+      } else {
+        // Enable - insert the entitlement (delete first to avoid conflicts)
+        const { error: deleteError } = await supabase
+          .from('org_entitlements')
+          .delete()
+          .eq('organization_id', orgId)
+          .eq('module_key', moduleKey);
+        
+        if (deleteError) {
+          console.error('Pre-delete error:', deleteError);
+        }
+        
+        const { error: insertError } = await supabase
           .from('org_entitlements')
           .insert({ organization_id: orgId, module_key: moduleKey, enabled: true });
+        
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          alert(`Insert failed: ${insertError.message}\nCode: ${insertError.code}\nDetails: ${insertError.details}`);
+          return;
+        }
       }
       fetchData();
     } catch (err) {
       console.error('Error toggling entitlement:', err);
+      alert(`Unexpected error: ${err}`);
     }
   };
 
