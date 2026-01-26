@@ -7,12 +7,19 @@ const corsHeaders = {
 };
 
 interface ComplianceQueryRequest {
-  operation: 'search' | 'chat' | 'compare-sops';
+  operation: 'search' | 'chat' | 'compare-sops' | 'summarize-sop-changes';
   query?: string;
   conversationHistory?: Array<{ role: string; content: string }>;
   documents?: Array<{ id: string; title: string; content: string; metadata?: any }>;
   sop1?: { id: string; title: string; content: string; version?: string };
   sop2?: { id: string; title: string; content: string; version?: string };
+  changes?: Array<{
+    sectionId: string;
+    sectionTitle: string;
+    changeType: 'added' | 'removed' | 'modified';
+    oldContent: string;
+    newContent: string;
+  }>;
 }
 
 Deno.serve(async (req: Request) => {
@@ -31,7 +38,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const requestData: ComplianceQueryRequest = await req.json();
-    const { operation, query, conversationHistory, documents, sop1, sop2 } = requestData;
+    const { operation, query, conversationHistory, documents, sop1, sop2, changes } = requestData;
 
     let prompt = "";
     let maxTokens = 4096;
@@ -191,6 +198,54 @@ Respond in this JSON format:
   ]
 }`;
         maxTokens = 8192;
+        break;
+
+      case 'summarize-sop-changes':
+        if (!sop1 || !sop2) {
+          throw new Error("Both SOP references are required");
+        }
+        if (!changes || !Array.isArray(changes) || changes.length === 0) {
+          throw new Error("changes[] is required");
+        }
+
+        prompt = `You are a meticulous SOP change summarizer.
+
+You will be given a list of section-level changes (already detected deterministically). Your job is ONLY to summarize each change accurately based on the provided old/new excerpts.
+
+CRITICAL RULES:
+1. Do NOT invent changes. Use only the provided oldContent/newContent.
+2. Do NOT provide impact, recommendations, or actions.
+3. Return STRICT JSON only. No markdown.
+4. Provide evidenceOld/evidenceNew as exact short quotes copied from the provided content (or null if not available).
+5. Confidence must be 0-100 and should be lower if the excerpt is short/ambiguous.
+
+SOP 1:
+Title: ${sop1.title}
+Version: ${sop1.version || 'Unknown'}
+
+SOP 2:
+Title: ${sop2.title}
+Version: ${sop2.version || 'Unknown'}
+
+CHANGES (JSON):
+${JSON.stringify(changes)}
+
+Respond in this JSON format:
+{
+  "summaries": [
+    {
+      "sectionId": "1.0",
+      "sectionTitle": "1.0 Purpose",
+      "changeType": "modified",
+      "summary": "One to two sentences describing exactly what changed.",
+      "confidence": 90,
+      "evidenceOld": "Exact short quote from oldContent or null",
+      "evidenceNew": "Exact short quote from newContent or null"
+    }
+  ]
+}`;
+        maxTokens = 4096;
+        temperature = 0.1;
         break;
 
       default:
