@@ -9,16 +9,17 @@ import {
   Plus,
   Minus,
   Edit3,
-  CheckCircle
+  CheckCircle,
+  AlertTriangle,
+  AlertCircle,
+  Info
 } from 'lucide-react';
 import { 
-  extractText, 
-  compareTexts,
+  extractDocument, 
+  compareDocuments,
   SimpleComparisonResult,
-  SimpleChange,
-  ExtractedText
+  SectionChange
 } from '../../lib/simpleDocumentCompare';
-import * as Diff from 'diff';
 
 interface SimpleDocumentReviewProps {
   onBack: () => void;
@@ -38,7 +39,7 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
   const [result, setResult] = useState<SimpleComparisonResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [viewMode, setViewMode] = useState<'changes' | 'sidebyside'>('changes');
+  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
   
   const oldFileRef = useRef<HTMLInputElement>(null);
   const newFileRef = useRef<HTMLInputElement>(null);
@@ -69,12 +70,13 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
     
     try {
       const [oldDoc, newDoc] = await Promise.all([
-        extractText(oldFile),
-        extractText(newFile)
+        extractDocument(oldFile),
+        extractDocument(newFile)
       ]);
       
-      const comparisonResult = compareTexts(oldDoc, newDoc);
+      const comparisonResult = compareDocuments(oldDoc, newDoc);
       setResult(comparisonResult);
+      setExpandedSections(new Set(comparisonResult.changes.map((_, i) => i))); // Expand all by default
       setStep('results');
     } catch (err) {
       console.error('Comparison error:', err);
@@ -91,73 +93,121 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
     setNewFile(null);
     setResult(null);
     setError(null);
+    setExpandedSections(new Set());
   };
 
-  const renderDiffText = (change: SimpleChange) => {
-    if (change.type === 'added') {
-      return (
-        <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Plus className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-bold text-green-700">ADDED</span>
-          </div>
-          <p className="text-green-800 bg-green-100 p-2 rounded">{change.newText}</p>
-        </div>
-      );
+  const toggleSection = (idx: number) => {
+    const newSet = new Set(expandedSections);
+    if (newSet.has(idx)) {
+      newSet.delete(idx);
+    } else {
+      newSet.add(idx);
     }
-    
-    if (change.type === 'removed') {
-      return (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Minus className="w-4 h-4 text-red-600" />
-            <span className="text-sm font-bold text-red-700">REMOVED</span>
-          </div>
-          <p className="text-red-800 bg-red-100 p-2 rounded line-through">{change.oldText}</p>
-        </div>
-      );
+    setExpandedSections(newSet);
+  };
+
+  const getSignificanceColor = (sig: 'high' | 'medium' | 'low') => {
+    switch (sig) {
+      case 'high': return 'bg-red-100 text-red-700 border-red-300';
+      case 'medium': return 'bg-amber-100 text-amber-700 border-amber-300';
+      case 'low': return 'bg-blue-100 text-blue-700 border-blue-300';
     }
+  };
+
+  const getSignificanceIcon = (sig: 'high' | 'medium' | 'low') => {
+    switch (sig) {
+      case 'high': return <AlertTriangle className="w-4 h-4" />;
+      case 'medium': return <AlertCircle className="w-4 h-4" />;
+      case 'low': return <Info className="w-4 h-4" />;
+    }
+  };
+
+  const getChangeTypeStyle = (type: 'added' | 'removed' | 'modified') => {
+    switch (type) {
+      case 'added': return { bg: 'bg-green-50', border: 'border-green-500', icon: <Plus className="w-5 h-5 text-green-600" />, label: 'NEW SECTION', labelColor: 'text-green-700' };
+      case 'removed': return { bg: 'bg-red-50', border: 'border-red-500', icon: <Minus className="w-5 h-5 text-red-600" />, label: 'REMOVED', labelColor: 'text-red-700' };
+      case 'modified': return { bg: 'bg-amber-50', border: 'border-amber-500', icon: <Edit3 className="w-5 h-5 text-amber-600" />, label: 'MODIFIED', labelColor: 'text-amber-700' };
+    }
+  };
+
+  const renderSectionChange = (change: SectionChange, idx: number) => {
+    const style = getChangeTypeStyle(change.changeType);
+    const isExpanded = expandedSections.has(idx);
     
-    if (change.type === 'modified' && change.diffParts) {
-      return (
-        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <Edit3 className="w-4 h-4 text-amber-600" />
-            <span className="text-sm font-bold text-amber-700">CHANGED</span>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-bold text-gray-500 mb-1">BEFORE</p>
-              <div className="bg-red-50 p-2 rounded text-sm">
-                {change.diffParts.map((part, i) => (
-                  <span 
-                    key={i} 
-                    className={part.removed ? 'bg-red-200 text-red-800 line-through' : part.added ? 'hidden' : ''}
-                  >
-                    {part.value}
-                  </span>
-                ))}
+    return (
+      <div key={idx} className={`${style.bg} border-l-4 ${style.border} rounded-r-xl overflow-hidden shadow-sm`}>
+        {/* Section Header */}
+        <button
+          onClick={() => toggleSection(idx)}
+          className="w-full p-4 flex items-center justify-between hover:bg-black/5 transition-all"
+        >
+          <div className="flex items-center gap-3">
+            {style.icon}
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${style.labelColor}`}>{style.label}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${getSignificanceColor(change.significance)}`}>
+                  {getSignificanceIcon(change.significance)}
+                  <span className="ml-1">{change.significance.toUpperCase()} IMPACT</span>
+                </span>
               </div>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-500 mb-1">AFTER</p>
-              <div className="bg-green-50 p-2 rounded text-sm">
-                {change.diffParts.map((part, i) => (
-                  <span 
-                    key={i} 
-                    className={part.added ? 'bg-green-200 text-green-800 font-semibold' : part.removed ? 'hidden' : ''}
-                  >
-                    {part.value}
-                  </span>
-                ))}
-              </div>
+              <h4 className="font-bold text-gray-900 text-lg">{change.sectionTitle}</h4>
             </div>
           </div>
-        </div>
-      );
-    }
-    
-    return null;
+          <span className="text-gray-400 text-xl">{isExpanded ? '−' : '+'}</span>
+        </button>
+        
+        {/* Expanded Content */}
+        {isExpanded && (
+          <div className="px-4 pb-4">
+            {change.changeType === 'added' && (
+              <div className="bg-green-100 border border-green-300 rounded-lg p-4">
+                <p className="text-xs font-bold text-green-700 mb-2">NEW CONTENT</p>
+                <p className="text-green-900 whitespace-pre-wrap">{change.newContent}</p>
+              </div>
+            )}
+            
+            {change.changeType === 'removed' && (
+              <div className="bg-red-100 border border-red-300 rounded-lg p-4">
+                <p className="text-xs font-bold text-red-700 mb-2">REMOVED CONTENT</p>
+                <p className="text-red-900 whitespace-pre-wrap line-through">{change.oldContent}</p>
+              </div>
+            )}
+            
+            {change.changeType === 'modified' && change.diffParts && (
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-xs font-bold text-red-700 mb-2">BEFORE</p>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                    {change.diffParts.map((part, i) => (
+                      <span 
+                        key={i} 
+                        className={part.removed ? 'bg-red-200 text-red-900' : part.added ? 'hidden' : ''}
+                      >
+                        {part.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-xs font-bold text-green-700 mb-2">AFTER</p>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                    {change.diffParts.map((part, i) => (
+                      <span 
+                        key={i} 
+                        className={part.added ? 'bg-green-200 text-green-900 font-semibold' : part.removed ? 'hidden' : ''}
+                      >
+                        {part.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -334,9 +384,17 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
               </div>
             </div>
 
+            {/* Sections Analyzed Info */}
+            <div className="bg-white rounded-xl shadow p-4">
+              <p className="text-gray-600 text-sm">
+                <span className="font-semibold">{result.summary.sectionsAnalyzed}</span> sections analyzed • 
+                Changes sorted by impact (high → low)
+              </p>
+            </div>
+
             {/* Changes List */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">All Changes</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Section Changes</h3>
               
               {result.changes.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
@@ -346,11 +404,7 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {result.changes.map((change, idx) => (
-                    <div key={idx}>
-                      {renderDiffText(change)}
-                    </div>
-                  ))}
+                  {result.changes.map((change, idx) => renderSectionChange(change, idx))}
                 </div>
               )}
             </div>
