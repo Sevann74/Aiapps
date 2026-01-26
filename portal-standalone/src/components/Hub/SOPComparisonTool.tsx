@@ -1,6 +1,12 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye } from 'lucide-react';
+import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye, Sparkles, Cpu } from 'lucide-react';
 import { extractDocument, compareDocuments, type ComparisonResult, type SectionChange } from '../../lib/documentExtractor';
+import { complianceQueryService, type SOPComparisonResponse } from '../../lib/complianceQueryService';
+import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface SOPComparisonToolProps {
   user: {
@@ -33,7 +39,10 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [sop2, setSop2] = useState('');
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
+  const [aiComparisonResult, setAiComparisonResult] = useState<SOPComparisonResponse | null>(null);
   const [expandedDiffs, setExpandedDiffs] = useState<Set<number>>(new Set());
+  const [comparisonMode, setComparisonMode] = useState<'ai' | 'deterministic'>('ai');
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const formatFileSize = (bytes: number) => {
@@ -41,6 +50,26 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+  };
+
+  // Direct extraction functions for better error handling
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n\n';
+    }
+    return fullText.trim();
+  };
+
+  const extractTextFromWord = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
   };
 
   const processFile = async (file: File): Promise<UploadedFile> => {
@@ -68,16 +97,28 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     }
 
     try {
-      const extracted = await extractDocument(file);
+      let content = '';
+      if (isPdf) {
+        content = await extractTextFromPDF(file);
+      } else {
+        content = await extractTextFromWord(file);
+      }
+      
+      // Extract version from filename
+      const versionMatch = file.name.match(/v?(\d+\.?\d*)/i);
+      const version = versionMatch ? versionMatch[1] : '1.0';
+      
       return {
         ...base,
-        title: extracted.metadata.title || file.name.replace(/\.[^.]+$/, ''),
-        content: extracted.text,
-        version: extracted.metadata.version || '1.0',
+        title: file.name.replace(/\.[^.]+$/, ''),
+        content,
+        version,
         status: 'completed'
       };
     } catch (err) {
-      return { ...base, status: 'error', error: 'Failed to extract document content.' };
+      console.error('Document extraction error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to extract document content.';
+      return { ...base, status: 'error', error: errorMessage };
     }
   };
 
@@ -142,14 +183,28 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
 
     setComparisonLoading(true);
     setComparisonResult(null);
+    setAiComparisonResult(null);
+    setError(null);
 
     try {
-      const doc1 = await extractDocument(file1.file);
-      const doc2 = await extractDocument(file2.file);
-      const result = compareDocuments(doc1, doc2);
-      setComparisonResult(result);
-    } catch (error) {
-      console.error('Comparison error:', error);
+      if (comparisonMode === 'ai') {
+        // AI-powered comparison using Claude
+        const result = await complianceQueryService.compareSOPs(
+          { id: file1.id, title: file1.title, content: file1.content, version: file1.version },
+          { id: file2.id, title: file2.title, content: file2.content, version: file2.version }
+        );
+        setAiComparisonResult(result);
+      } else {
+        // Deterministic comparison using local engine
+        const doc1 = await extractDocument(file1.file);
+        const doc2 = await extractDocument(file2.file);
+        const result = compareDocuments(doc1, doc2);
+        setComparisonResult(result);
+      }
+    } catch (err) {
+      console.error('Comparison error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Comparison failed';
+      setError(errorMessage);
     } finally {
       setComparisonLoading(false);
     }
@@ -411,27 +466,191 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               </div>
             </div>
 
+            {/* Comparison Mode Toggle */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">Comparison Mode</label>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setComparisonMode('ai')}
+                  className={`flex-1 p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
+                    comparisonMode === 'ai' 
+                      ? 'border-purple-500 bg-purple-50' 
+                      : 'border-gray-200 hover:border-purple-300'
+                  }`}
+                >
+                  <Sparkles className={`w-6 h-6 ${comparisonMode === 'ai' ? 'text-purple-600' : 'text-gray-400'}`} />
+                  <div className="text-left">
+                    <p className={`font-bold ${comparisonMode === 'ai' ? 'text-purple-900' : 'text-gray-700'}`}>AI-Powered</p>
+                    <p className="text-xs text-gray-500">Claude analysis with recommendations</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setComparisonMode('deterministic')}
+                  className={`flex-1 p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
+                    comparisonMode === 'deterministic' 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <Cpu className={`w-6 h-6 ${comparisonMode === 'deterministic' ? 'text-blue-600' : 'text-gray-400'}`} />
+                  <div className="text-left">
+                    <p className={`font-bold ${comparisonMode === 'deterministic' ? 'text-blue-900' : 'text-gray-700'}`}>Deterministic</p>
+                    <p className="text-xs text-gray-500">Audit-safe with full trail</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-800">Comparison Error</p>
+                  <p className="text-red-700 text-sm">{error}</p>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={compareSOPs}
               disabled={!sop1 || !sop2 || comparisonLoading}
-              className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-bold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center gap-2"
+              className={`w-full px-6 py-3 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center gap-2 ${
+                comparisonMode === 'ai' 
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                  : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
+              }`}
             >
               {comparisonLoading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Comparing SOPs...
+                  {comparisonMode === 'ai' ? 'AI Analyzing...' : 'Comparing...'}
                 </>
               ) : (
                 <>
-                  <GitCompare className="w-5 h-5" />
-                  Compare SOPs
+                  {comparisonMode === 'ai' ? <Sparkles className="w-5 h-5" /> : <GitCompare className="w-5 h-5" />}
+                  {comparisonMode === 'ai' ? 'Compare with AI' : 'Compare (Deterministic)'}
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* Results */}
+        {/* AI Comparison Results */}
+        {aiComparisonResult && (
+          <div className="space-y-6">
+            {/* Summary */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                AI Comparison Summary
+              </h3>
+              
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <p className="text-2xl font-bold text-gray-900">{aiComparisonResult.summary.totalSections}</p>
+                  <p className="text-xs text-gray-600">Total Sections</p>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">{aiComparisonResult.summary.identicalSections}</p>
+                  <p className="text-xs text-gray-600">Identical</p>
+                </div>
+                <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-2xl font-bold text-yellow-600">{aiComparisonResult.summary.modifiedSections}</p>
+                  <p className="text-xs text-gray-600">Modified</p>
+                </div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">{aiComparisonResult.summary.newSections}</p>
+                  <p className="text-xs text-gray-600">New</p>
+                </div>
+                <div className="text-center p-3 bg-red-50 rounded-lg">
+                  <p className="text-2xl font-bold text-red-600">{aiComparisonResult.summary.removedSections}</p>
+                  <p className="text-xs text-gray-600">Removed</p>
+                </div>
+              </div>
+
+              {/* Critical Changes Alert */}
+              {aiComparisonResult.criticalChanges.length > 0 && (
+                <div className="p-4 bg-red-50 border-2 border-red-300 rounded-lg mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-1" />
+                    <div className="flex-1">
+                      <p className="font-bold text-red-900 mb-2">Critical Changes Detected</p>
+                      <ul className="space-y-1">
+                        {aiComparisonResult.criticalChanges.map((change, idx) => (
+                          <li key={idx} className="text-sm text-red-800">• {change}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Detailed Differences */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Detailed Differences</h3>
+              <div className="space-y-4">
+                {aiComparisonResult.differences.map((diff, idx) => (
+                  <div key={idx} className={`border-2 rounded-xl p-5 ${
+                    diff.severity === 'high' ? 'bg-red-50 border-red-300' :
+                    diff.severity === 'medium' ? 'bg-yellow-50 border-yellow-300' :
+                    'bg-blue-50 border-blue-300'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-bold text-lg">{diff.section}</h4>
+                      <div className="flex gap-2">
+                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${
+                          diff.type === 'modified' ? 'bg-yellow-200 text-yellow-800' :
+                          diff.type === 'new' ? 'bg-blue-200 text-blue-800' :
+                          'bg-red-200 text-red-800'
+                        }`}>{diff.type.toUpperCase()}</span>
+                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${
+                          diff.severity === 'high' ? 'bg-red-200 text-red-800' :
+                          diff.severity === 'medium' ? 'bg-yellow-200 text-yellow-800' :
+                          'bg-blue-200 text-blue-800'
+                        }`}>{diff.severity.toUpperCase()}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-2 gap-4 mb-3">
+                      <div className="bg-white rounded-lg p-3 border">
+                        <p className="text-xs font-bold text-gray-600 mb-1">Previous</p>
+                        <p className="text-sm">{diff.sop1Text || <span className="italic text-gray-400">Not present</span>}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-purple-200">
+                        <p className="text-xs font-bold text-purple-600 mb-1">New</p>
+                        <p className="text-sm">{diff.sop2Text || <span className="italic text-gray-400">Removed</span>}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white/50 rounded-lg p-3">
+                      <p className="text-xs font-bold text-gray-700 mb-1">Impact</p>
+                      <p className="text-sm">{diff.impact}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recommendations */}
+            {aiComparisonResult.recommendations.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">AI Recommendations</h3>
+                <div className="space-y-3">
+                  {aiComparisonResult.recommendations.map((rec, idx) => (
+                    <div key={idx} className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-gray-800">{rec}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Deterministic Comparison Results */}
         {comparisonResult && (
           <div className="space-y-6">
             {/* Summary */}
