@@ -39,6 +39,7 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
 
   const AVAILABLE_MODULES = [
     { key: 'conversion', label: 'Learning Conversion', icon: '📚' },
+    { key: 'sop-compare', label: 'SOP Compare', icon: '📋' },
     { key: 'compliance', label: 'Compliance Query Pro', icon: '🔍' }
   ];
 
