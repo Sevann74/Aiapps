@@ -51,6 +51,15 @@ const HubHome: React.FC<HubHomeProps> = ({
       lockedMessage: !hasAccess('sop-compare') ? 'Contact Admin' : undefined
     },
     {
+      key: 'sop-compare',
+      title: 'SOP Comparison Tool',
+      description: 'Compare two SOPs side-by-side to identify differences, track changes, and ensure compliance. Full audit trail with tiered matching.',
+      icon: '🔄',
+      enabled: hasAccess('sop-compare'),
+      locked: !hasAccess('sop-compare'),
+      lockedMessage: !hasAccess('sop-compare') ? 'Contact Admin' : undefined
+    },
+    {
       key: 'compliance',
       title: 'Compliance Query Pro',
       description: 'AI-powered compliance search and analysis. Query your regulatory documents with natural language.',
