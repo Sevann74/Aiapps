@@ -25,6 +25,28 @@ export interface SOPComparisonResponse {
   recommendations: string[];
 }
 
+export interface SOPChangeForSummary {
+  sectionId: string;
+  sectionTitle: string;
+  changeType: 'added' | 'removed' | 'modified';
+  oldContent: string;
+  newContent: string;
+}
+
+export interface SOPChangeSummary {
+  sectionId: string;
+  sectionTitle: string;
+  changeType: 'added' | 'removed' | 'modified';
+  summary: string;
+  confidence: number;
+  evidenceOld: string | null;
+  evidenceNew: string | null;
+}
+
+export interface SOPChangeSummariesResponse {
+  summaries: SOPChangeSummary[];
+}
+
 class ComplianceQueryService {
   private edgeFunctionUrl: string;
 
@@ -69,6 +91,46 @@ class ComplianceQueryService {
       return result.data;
     } catch (error) {
       console.error('SOP comparison error:', error);
+      throw error;
+    }
+  }
+
+  async summarizeSOPChanges(input: {
+    sop1: { id: string; title: string; version?: string };
+    sop2: { id: string; title: string; version?: string };
+    changes: SOPChangeForSummary[];
+  }): Promise<SOPChangeSummariesResponse> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const response = await fetch(this.edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({
+          operation: 'summarize-sop-changes',
+          sop1: input.sop1,
+          sop2: input.sop2,
+          changes: input.changes,
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'SOP change summarization failed');
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'SOP change summarization failed');
+      }
+
+      return result.data;
+    } catch (error) {
+      console.error('SOP change summarization error:', error);
       throw error;
     }
   }

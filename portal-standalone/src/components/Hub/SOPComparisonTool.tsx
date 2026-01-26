@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye, Sparkles, Cpu } from 'lucide-react';
 import { extractDocument, compareDocuments, type ComparisonResult, type SectionChange } from '../../lib/documentExtractor';
-import { complianceQueryService, type SOPComparisonResponse } from '../../lib/complianceQueryService';
+import { complianceQueryService, type SOPChangeForSummary, type SOPChangeSummary } from '../../lib/complianceQueryService';
+import { extractDocument as extractSectionedDocument, compareDocuments as compareSectionedDocuments, type SimpleComparisonResult as SectionedComparisonResult } from '../../lib/simpleDocumentCompare';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -39,11 +40,38 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [sop2, setSop2] = useState('');
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
-  const [aiComparisonResult, setAiComparisonResult] = useState<SOPComparisonResponse | null>(null);
+  const [hybridResult, setHybridResult] = useState<SectionedComparisonResult | null>(null);
+  const [aiSummaries, setAiSummaries] = useState<SOPChangeSummary[] | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [expandedDiffs, setExpandedDiffs] = useState<Set<number>>(new Set());
   const [comparisonMode, setComparisonMode] = useState<'ai' | 'deterministic'>('ai');
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const summarizeChangesInBatches = async (params: {
+    sop1Meta: { id: string; title: string; version?: string };
+    sop2Meta: { id: string; title: string; version?: string };
+    changes: SOPChangeForSummary[];
+  }): Promise<SOPChangeSummary[]> => {
+    const batchSize = 12;
+    const all: SOPChangeSummary[] = [];
+
+    for (let i = 0; i < params.changes.length; i += batchSize) {
+      const batch = params.changes.slice(i, i + batchSize);
+      const resp = await complianceQueryService.summarizeSOPChanges({
+        sop1: params.sop1Meta,
+        sop2: params.sop2Meta,
+        changes: batch,
+      });
+
+      if (resp?.summaries?.length) {
+        all.push(...resp.summaries);
+      }
+    }
+
+    return all;
+  };
 
   const formatFileSize = (bytes: number) => {
     if (!bytes) return '0 B';
@@ -183,17 +211,44 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
 
     setComparisonLoading(true);
     setComparisonResult(null);
-    setAiComparisonResult(null);
+    setHybridResult(null);
+    setAiSummaries(null);
+    setAiSummaryError(null);
     setError(null);
 
     try {
       if (comparisonMode === 'ai') {
-        // AI-powered comparison using Claude
-        const result = await complianceQueryService.compareSOPs(
-          { id: file1.id, title: file1.title, content: file1.content, version: file1.version },
-          { id: file2.id, title: file2.title, content: file2.content, version: file2.version }
-        );
-        setAiComparisonResult(result);
+        // Never-miss approach: section-based deterministic comparison is the source of truth.
+        // AI is used only to summarize already-detected changes.
+        const oldDoc = await extractSectionedDocument(file1.file);
+        const newDoc = await extractSectionedDocument(file2.file);
+        const result = compareSectionedDocuments(oldDoc, newDoc);
+        setHybridResult(result);
+
+        const changesForAI: SOPChangeForSummary[] = result.changes.map(c => ({
+          sectionId: c.sectionId,
+          sectionTitle: c.sectionTitle,
+          changeType: c.changeType,
+          oldContent: c.oldContent || '',
+          newContent: c.newContent || '',
+        }));
+
+        if (changesForAI.length > 0) {
+          setAiSummaryLoading(true);
+          try {
+            const summaries = await summarizeChangesInBatches({
+              sop1Meta: { id: file1.id, title: file1.title, version: file1.version },
+              sop2Meta: { id: file2.id, title: file2.title, version: file2.version },
+              changes: changesForAI,
+            });
+            setAiSummaries(summaries);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'AI summary failed';
+            setAiSummaryError(msg);
+          } finally {
+            setAiSummaryLoading(false);
+          }
+        }
       } else {
         // Deterministic comparison using local engine
         const doc1 = await extractDocument(file1.file);
@@ -218,6 +273,91 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       newExpanded.add(idx);
     }
     setExpandedDiffs(newExpanded);
+  };
+
+  const renderHybridChange = (change: any, idx: number) => {
+    const isExpanded = expandedDiffs.has(idx);
+    const summary = aiSummaries?.find(s => s.sectionId === change.sectionId && s.changeType === change.changeType);
+    const typeBadge =
+      change.changeType === 'added'
+        ? 'bg-green-100 text-green-700'
+        : change.changeType === 'removed'
+          ? 'bg-red-100 text-red-700'
+          : 'bg-amber-100 text-amber-700';
+
+    return (
+      <div key={idx} className="border-2 rounded-xl overflow-hidden border-gray-200">
+        <button
+          onClick={() => toggleDiff(idx)}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-gray-900">{change.sectionId}</span>
+            <span className="text-gray-600">–</span>
+            <span className="text-gray-700">{change.sectionTitle}</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-bold ${typeBadge}`}>{String(change.changeType).toUpperCase()}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            {summary && <span>AI: {Math.round(summary.confidence)}%</span>}
+            <Eye className="w-4 h-4" />
+          </div>
+        </button>
+
+        {isExpanded && (
+          <div className="border-t p-4 bg-gray-50">
+            {summary && (
+              <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-purple-900">AI Summary</p>
+                  <span className="text-xs font-bold text-purple-700">Confidence: {Math.round(summary.confidence)}%</span>
+                </div>
+                <p className="text-sm text-purple-900">{summary.summary}</p>
+              </div>
+            )}
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-xs font-bold text-gray-600 mb-2">Previous Version</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                  {change.oldContent || <span className="italic text-gray-500">Section not present</span>}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4 border-2 border-purple-300">
+                <p className="text-xs font-bold text-purple-600 mb-2">New Version</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                  {change.newContent || <span className="italic text-gray-500">Section removed</span>}
+                </p>
+              </div>
+            </div>
+
+            {change.diffParts && (
+              <div className="mt-4 grid md:grid-cols-2 gap-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-xs font-bold text-red-700 mb-2">Removed</p>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                    {change.diffParts.map((part: any, i: number) => (
+                      <span key={i} className={part.removed ? 'bg-red-200 text-red-900' : part.added ? 'hidden' : ''}>
+                        {part.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs font-bold text-green-700 mb-2">Added</p>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
+                    {change.diffParts.map((part: any, i: number) => (
+                      <span key={i} className={part.added ? 'bg-green-200 text-green-900 font-semibold' : part.removed ? 'hidden' : ''}>
+                        {part.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const getClassificationColor = (classification: string) => {
@@ -480,8 +620,8 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                 >
                   <Sparkles className={`w-6 h-6 ${comparisonMode === 'ai' ? 'text-purple-600' : 'text-gray-400'}`} />
                   <div className="text-left">
-                    <p className={`font-bold ${comparisonMode === 'ai' ? 'text-purple-900' : 'text-gray-700'}`}>AI-Powered</p>
-                    <p className="text-xs text-gray-500">Claude analysis with recommendations</p>
+                    <p className={`font-bold ${comparisonMode === 'ai' ? 'text-purple-900' : 'text-gray-700'}`}>Never Miss (Deterministic + AI Summary)</p>
+                    <p className="text-xs text-gray-500">Deterministic finds every change; AI summarizes only</p>
                   </div>
                 </button>
                 <button
@@ -529,129 +669,78 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               ) : (
                 <>
                   {comparisonMode === 'ai' ? <Sparkles className="w-5 h-5" /> : <GitCompare className="w-5 h-5" />}
-                  {comparisonMode === 'ai' ? 'Compare with AI' : 'Compare (Deterministic)'}
+                  {comparisonMode === 'ai' ? 'Compare (Never Miss)' : 'Compare (Deterministic)'}
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* AI Comparison Results */}
-        {aiComparisonResult && (
+        {/* Never Miss Results (section-based) */}
+        {comparisonMode === 'ai' && hybridResult && (
           <div className="space-y-6">
-            {/* Summary */}
             <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-purple-600" />
-                AI Comparison Summary
+                Never Miss Results
               </h3>
-              
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+              <p className="text-sm text-gray-600">Changes are detected deterministically by section; AI summaries are optional.</p>
+
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-bold text-gray-900">{aiComparisonResult.summary.totalSections}</p>
-                  <p className="text-xs text-gray-600">Total Sections</p>
+                  <p className="text-2xl font-bold text-gray-900">{hybridResult.summary.totalChanges}</p>
+                  <p className="text-xs text-gray-600">Total</p>
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{aiComparisonResult.summary.identicalSections}</p>
-                  <p className="text-xs text-gray-600">Identical</p>
+                  <p className="text-2xl font-bold text-green-700">{hybridResult.summary.added}</p>
+                  <p className="text-xs text-gray-600">Added</p>
                 </div>
-                <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-2xl font-bold text-yellow-600">{aiComparisonResult.summary.modifiedSections}</p>
+                <div className="text-center p-3 bg-amber-50 rounded-lg">
+                  <p className="text-2xl font-bold text-amber-700">{hybridResult.summary.modified}</p>
                   <p className="text-xs text-gray-600">Modified</p>
                 </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{aiComparisonResult.summary.newSections}</p>
-                  <p className="text-xs text-gray-600">New</p>
-                </div>
                 <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{aiComparisonResult.summary.removedSections}</p>
+                  <p className="text-2xl font-bold text-red-700">{hybridResult.summary.removed}</p>
                   <p className="text-xs text-gray-600">Removed</p>
+                </div>
+                <div className="text-center p-3 bg-purple-50 rounded-lg">
+                  <p className="text-2xl font-bold text-purple-700">{hybridResult.summary.sectionsAnalyzed}</p>
+                  <p className="text-xs text-gray-600">Sections</p>
                 </div>
               </div>
 
-              {/* Critical Changes Alert */}
-              {aiComparisonResult.criticalChanges.length > 0 && (
-                <div className="p-4 bg-red-50 border-2 border-red-300 rounded-lg mb-4">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-1" />
-                    <div className="flex-1">
-                      <p className="font-bold text-red-900 mb-2">Critical Changes Detected</p>
-                      <ul className="space-y-1">
-                        {aiComparisonResult.criticalChanges.map((change, idx) => (
-                          <li key={idx} className="text-sm text-red-800">• {change}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
+              {aiSummaryLoading && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
+                  <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                  Generating AI summaries…
+                </div>
+              )}
+              {aiSummaryError && (
+                <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-sm text-purple-900 font-semibold">AI summaries unavailable</p>
+                  <p className="text-sm text-purple-800">{aiSummaryError}</p>
                 </div>
               )}
             </div>
 
-            {/* Detailed Differences */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Detailed Differences</h3>
-              <div className="space-y-4">
-                {aiComparisonResult.differences.map((diff, idx) => (
-                  <div key={idx} className={`border-2 rounded-xl p-5 ${
-                    diff.severity === 'high' ? 'bg-red-50 border-red-300' :
-                    diff.severity === 'medium' ? 'bg-yellow-50 border-yellow-300' :
-                    'bg-blue-50 border-blue-300'
-                  }`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-lg">{diff.section}</h4>
-                      <div className="flex gap-2">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${
-                          diff.type === 'modified' ? 'bg-yellow-200 text-yellow-800' :
-                          diff.type === 'new' ? 'bg-blue-200 text-blue-800' :
-                          'bg-red-200 text-red-800'
-                        }`}>{diff.type.toUpperCase()}</span>
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${
-                          diff.severity === 'high' ? 'bg-red-200 text-red-800' :
-                          diff.severity === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                          'bg-blue-200 text-blue-800'
-                        }`}>{diff.severity.toUpperCase()}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid md:grid-cols-2 gap-4 mb-3">
-                      <div className="bg-white rounded-lg p-3 border">
-                        <p className="text-xs font-bold text-gray-600 mb-1">Previous</p>
-                        <p className="text-sm">{diff.sop1Text || <span className="italic text-gray-400">Not present</span>}</p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-purple-200">
-                        <p className="text-xs font-bold text-purple-600 mb-1">New</p>
-                        <p className="text-sm">{diff.sop2Text || <span className="italic text-gray-400">Removed</span>}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white/50 rounded-lg p-3">
-                      <p className="text-xs font-bold text-gray-700 mb-1">Impact</p>
-                      <p className="text-sm">{diff.impact}</p>
-                    </div>
+              <div className="space-y-3">
+                {hybridResult.changes.map((change: any, idx: number) => renderHybridChange(change, idx))}
+                {hybridResult.changes.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500" />
+                    <p className="font-semibold">No differences found</p>
+                    <p className="text-sm">The two documents appear to be identical.</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
-
-            {/* Recommendations */}
-            {aiComparisonResult.recommendations.length > 0 && (
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">AI Recommendations</h3>
-                <div className="space-y-3">
-                  {aiComparisonResult.recommendations.map((rec, idx) => (
-                    <div key={idx} className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg">
-                      <CheckCircle className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-gray-800">{rec}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* Deterministic Comparison Results */}
-        {comparisonResult && (
+        {comparisonMode === 'deterministic' && comparisonResult && (
           <div className="space-y-6">
             {/* Summary */}
             <div className="bg-white rounded-xl shadow-lg p-6">
