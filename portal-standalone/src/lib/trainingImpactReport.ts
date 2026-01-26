@@ -1,13 +1,21 @@
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, HeadingLevel } from 'docx';
 import { saveAs } from 'file-saver';
 
-export interface SOPChange {
+// Renamed from SOPChange to DocumentChange - all SOP references removed
+export interface DocumentChange {
   section: string;
+  sectionNumber: string;
+  sectionTitle: string;
   changeType: 'modified' | 'added' | 'removed';
   previousText: string;
   newText: string;
   trainingFlag: string;
+  badges: string[];
+  descriptor: string;
 }
+
+// Legacy alias for compatibility
+export type SOPChange = DocumentChange;
 
 export interface TrainingIndicators {
   proceduralSteps: boolean;
@@ -19,8 +27,8 @@ export interface TrainingIndicators {
 }
 
 export interface ComparisonMetadata {
-  sopTitle: string;
-  sopId: string;
+  documentTitle: string;
+  documentId: string;
   previousVersion: string;
   newVersion: string;
   effectiveDate: string;
@@ -30,21 +38,111 @@ export interface ComparisonMetadata {
 
 export interface TrainingImpactReportData {
   metadata: ComparisonMetadata;
-  changes: SOPChange[];
+  changes: DocumentChange[];
   indicators: TrainingIndicators;
   summary: {
     totalSectionsChanged: number;
     added: number;
     modified: number;
     removed: number;
+    impactedAreas?: string[];
+    changeCategories?: string[];
   };
+}
+
+// Detect change category badges (deterministic, rule-based)
+export function detectChangeBadges(oldText: string, newText: string): string[] {
+  const badges: string[] = [];
+  const lowerOld = oldText.toLowerCase();
+  const lowerNew = newText.toLowerCase();
+  const combined = lowerOld + ' ' + lowerNew;
+  
+  // Documentation patterns
+  const docTerms = ['document', 'record', 'log', 'form', 'report', 'signature', 'sign-off', 'file', 'attach'];
+  if (docTerms.some(term => combined.includes(term))) {
+    badges.push('documentation');
+  }
+  
+  // Role patterns
+  const roleTerms = ['responsible', 'operator', 'supervisor', 'manager', 'qa', 'qc', 'technician', 'analyst', 'personnel', 'staff', 'employee'];
+  if (roleTerms.some(term => combined.includes(term))) {
+    badges.push('roles');
+  }
+  
+  // Frequency patterns
+  const frequencyTerms = ['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'hourly', 'every', 'per day', 'per week', 'per month', 'frequency', 'interval'];
+  if (frequencyTerms.some(term => combined.includes(term))) {
+    badges.push('frequency');
+  }
+  
+  // Procedure patterns (default if nothing else matches or has procedural keywords)
+  const procedureTerms = ['step', 'procedure', 'process', 'method', 'perform', 'execute', 'complete', 'verify', 'check', 'ensure'];
+  if (procedureTerms.some(term => combined.includes(term)) || badges.length === 0) {
+    badges.push('procedure');
+  }
+  
+  return badges;
+}
+
+// Generate a 1-line mechanical change descriptor (no AI interpretation)
+export function generateChangeDescriptor(oldText: string, newText: string, changeType: string): string {
+  if (changeType === 'added') {
+    return 'New content added to this section';
+  }
+  if (changeType === 'removed') {
+    return 'Content retired from this section';
+  }
+  
+  const lowerOld = oldText.toLowerCase();
+  const lowerNew = newText.toLowerCase();
+  
+  // Frequency change detection
+  const frequencyTerms = ['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'hourly'];
+  for (const term of frequencyTerms) {
+    if (lowerOld.includes(term) || lowerNew.includes(term)) {
+      const oldFreq = frequencyTerms.find(t => lowerOld.includes(t));
+      const newFreq = frequencyTerms.find(t => lowerNew.includes(t));
+      if (oldFreq && newFreq && oldFreq !== newFreq) {
+        return `Frequency wording modified (${oldFreq} → ${newFreq})`;
+      }
+    }
+  }
+  
+  // Role change detection
+  const roleTerms = ['operator', 'supervisor', 'manager', 'technician', 'analyst', 'qa', 'qc'];
+  for (const term of roleTerms) {
+    if ((lowerOld.includes(term) && !lowerNew.includes(term)) || 
+        (!lowerOld.includes(term) && lowerNew.includes(term))) {
+      return `Role or responsibility wording updated`;
+    }
+  }
+  
+  // Documentation change detection
+  const docTerms = ['document', 'record', 'log', 'form', 'report', 'signature'];
+  if (docTerms.some(term => lowerNew.includes(term) && !lowerOld.includes(term))) {
+    return 'Documentation requirement added or modified';
+  }
+  
+  // Safety change detection
+  const safetyTerms = ['warning', 'caution', 'danger', 'safety', 'ppe', 'hazard'];
+  if (safetyTerms.some(term => lowerOld.includes(term) || lowerNew.includes(term))) {
+    return 'Safety-related wording updated';
+  }
+  
+  // Limit/specification detection
+  const limitTerms = ['minimum', 'maximum', 'limit', 'threshold', 'range', 'specification'];
+  if (limitTerms.some(term => lowerOld.includes(term) || lowerNew.includes(term))) {
+    return 'Limit or specification wording modified';
+  }
+  
+  // Default descriptor
+  return 'Section wording revised';
 }
 
 function detectTrainingFlag(oldText: string, newText: string): string {
   const lowerOld = oldText.toLowerCase();
   const lowerNew = newText.toLowerCase();
   
-  // Frequency patterns
   const frequencyTerms = ['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'hourly', 'every', 'per day', 'per week', 'per month'];
   for (const term of frequencyTerms) {
     if ((lowerOld.includes(term) || lowerNew.includes(term)) && lowerOld !== lowerNew) {
@@ -52,7 +150,6 @@ function detectTrainingFlag(oldText: string, newText: string): string {
     }
   }
   
-  // Documentation patterns
   const docTerms = ['document', 'record', 'log', 'form', 'report', 'signature', 'sign-off'];
   for (const term of docTerms) {
     if (lowerNew.includes(term) && !lowerOld.includes(term)) {
@@ -60,7 +157,6 @@ function detectTrainingFlag(oldText: string, newText: string): string {
     }
   }
   
-  // Safety patterns
   const safetyTerms = ['warning', 'caution', 'danger', 'safety', 'ppe', 'protective', 'hazard'];
   for (const term of safetyTerms) {
     if (lowerNew.includes(term) || lowerOld.includes(term)) {
@@ -68,7 +164,6 @@ function detectTrainingFlag(oldText: string, newText: string): string {
     }
   }
   
-  // Limit patterns
   const limitTerms = ['minimum', 'maximum', 'limit', 'threshold', 'range', 'specification', 'tolerance', '°c', '°f', '%', 'mg', 'ml'];
   for (const term of limitTerms) {
     if (lowerOld.includes(term) || lowerNew.includes(term)) {
@@ -76,7 +171,6 @@ function detectTrainingFlag(oldText: string, newText: string): string {
     }
   }
   
-  // Role patterns
   const roleTerms = ['responsible', 'operator', 'supervisor', 'manager', 'qa', 'qc', 'technician', 'analyst'];
   for (const term of roleTerms) {
     if ((lowerOld.includes(term) || lowerNew.includes(term)) && lowerOld !== lowerNew) {
@@ -87,7 +181,7 @@ function detectTrainingFlag(oldText: string, newText: string): string {
   return 'Procedural change';
 }
 
-export function detectTrainingIndicators(changes: SOPChange[]): TrainingIndicators {
+export function detectTrainingIndicators(changes: DocumentChange[]): TrainingIndicators {
   const indicators: TrainingIndicators = {
     proceduralSteps: false,
     safetyWarnings: false,
@@ -120,8 +214,28 @@ export function categorizeChange(oldText: string, newText: string): { changeType
   return { changeType: 'modified', trainingFlag: detectTrainingFlag(oldText, newText) };
 }
 
+// Map change categories to readable labels
+function getCategoryLabel(badge: string): string {
+  const labels: Record<string, string> = {
+    documentation: 'Documentation requirements',
+    roles: 'Role responsibilities',
+    frequency: 'Timing/frequency',
+    procedure: 'Procedural steps'
+  };
+  return labels[badge] || badge;
+}
+
 export async function generateTrainingImpactReport(data: TrainingImpactReportData): Promise<void> {
   const { metadata, changes, indicators, summary } = data;
+  
+  // Build impacted areas text for executive summary
+  const impactedAreasText = summary.impactedAreas && summary.impactedAreas.length > 0
+    ? summary.impactedAreas.join(', ')
+    : changes.map(c => c.sectionTitle).filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).join(', ');
+  
+  // Build change categories text
+  const allBadges = [...new Set(changes.flatMap(c => c.badges || []))];
+  const categoriesText = allBadges.map(getCategoryLabel).join(' and ');
   
   const doc = new Document({
     sections: [{
@@ -135,78 +249,74 @@ export async function generateTrainingImpactReport(data: TrainingImpactReportDat
           spacing: { after: 200 }
         }),
         new Paragraph({
-          text: 'SOP Revision Analysis Report',
+          text: 'Document Revision Analysis',
           alignment: AlignmentType.CENTER,
           spacing: { after: 400 }
         }),
         
-        // Header table
+        // Header table - Document Revision Context
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [
-            createHeaderRow('SOP Title', metadata.sopTitle),
-            createHeaderRow('SOP ID', metadata.sopId),
+            createHeaderRow('Document Title', metadata.documentTitle),
+            createHeaderRow('Document ID', metadata.documentId),
             createHeaderRow('Previous Version', metadata.previousVersion),
             createHeaderRow('New Version', metadata.newVersion),
             createHeaderRow('Effective Date', metadata.effectiveDate),
-            createHeaderRow('Comparison Date', metadata.comparisonDate),
+            createHeaderRow('Assessment Date', metadata.comparisonDate),
             createHeaderRow('Department', metadata.department || 'N/A'),
-            createHeaderRow('Tool Used', 'SOP Compare – AI-assisted text comparison'),
+            createHeaderRow('Assessment Method', 'Document Revision Impact Review – Textual comparison'),
           ]
         }),
         
         new Paragraph({ text: '', spacing: { after: 400 } }),
         
-        // SECTION 2: Executive Summary
+        // SECTION 2: Executive Summary (improved per requirements)
         new Paragraph({
-          text: 'SECTION 2 — EXECUTIVE SUMMARY',
+          text: 'EXECUTIVE SUMMARY',
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 400, after: 200 }
         }),
         
         new Paragraph({
-          children: [
-            new TextRun({ text: 'Total Sections Changed: ', bold: true }),
-            new TextRun({ text: String(summary.totalSectionsChanged) })
-          ],
-          spacing: { after: 100 }
-        }),
-        
-        new Paragraph({
-          text: 'Types of Changes Detected:',
-          bold: true,
-          spacing: { before: 200, after: 100 }
-        }),
-        
-        new Paragraph({
-          children: [
-            new TextRun({ text: `• Added: ${summary.added} section(s)` })
-          ],
-          indent: { left: 400 }
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: `• Modified: ${summary.modified} section(s)` })
-          ],
-          indent: { left: 400 }
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: `• Removed: ${summary.removed} section(s)` })
-          ],
-          indent: { left: 400 },
+          text: 'This Training Impact Assessment evaluates changes between the previous and current versions of the document identified above.',
           spacing: { after: 200 }
         }),
         
         new Paragraph({
           children: [
+            new TextRun({ text: `A total of `, }),
+            new TextRun({ text: `${summary.totalSectionsChanged} section(s)`, bold: true }),
+            new TextRun({ text: ` were impacted in this revision. Changes were identified in the following areas:` })
+          ],
+          spacing: { after: 150 }
+        }),
+        
+        // List impacted areas
+        ...impactedAreasText.split(', ').map(area => new Paragraph({
+          children: [new TextRun({ text: `• ${area}` })],
+          indent: { left: 400 },
+          spacing: { after: 50 }
+        })),
+        
+        new Paragraph({
+          children: [
+            new TextRun({ text: `The majority of changes relate to ` }),
+            new TextRun({ text: categoriesText || 'procedural content', bold: true }),
+            new TextRun({ text: `. ` }),
+            new TextRun({ text: indicators.safetyWarnings 
+              ? 'Safety-related content was identified in this revision.' 
+              : 'No changes were identified affecting safety warnings or operational limits.' 
+            })
+          ],
+          spacing: { before: 150, after: 200 }
+        }),
+        
+        // Disclaimer box
+        new Paragraph({
+          children: [
             new TextRun({ 
-              text: 'DISCLAIMER: ',
-              bold: true,
-              color: '666666'
-            }),
-            new TextRun({ 
-              text: 'This report identifies textual changes only. No regulatory interpretation or recommendations are provided. Training decisions remain the responsibility of Quality, L&D, and Process Owners.',
+              text: 'This assessment identifies textual changes only. It does not provide regulatory interpretation or training recommendations. The determination of whether retraining is required remains the responsibility of Quality, Learning & Development, and the Process Owner.',
               italics: true,
               color: '666666'
             })
@@ -221,26 +331,15 @@ export async function generateTrainingImpactReport(data: TrainingImpactReportDat
           shading: { fill: 'F5F5F5' }
         }),
         
-        // SECTION 3: Structured Change Table
+        // SECTION 3: Training Relevance Indicators (moved up per requirements)
         new Paragraph({
-          text: 'SECTION 3 — STRUCTURED CHANGE TABLE',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 }
-        }),
-        
-        createChangeTable(changes),
-        
-        new Paragraph({ text: '', spacing: { after: 400 } }),
-        
-        // SECTION 4: Training Relevance Indicators
-        new Paragraph({
-          text: 'SECTION 4 — TRAINING RELEVANCE INDICATORS',
+          text: 'TRAINING RELEVANCE INDICATORS',
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 400, after: 200 }
         }),
         
         new Paragraph({
-          text: 'The following objective indicators have been identified based on the textual analysis:',
+          text: 'Objective training relevance indicators identified in this revision:',
           spacing: { after: 200 }
         }),
         
@@ -265,9 +364,43 @@ export async function generateTrainingImpactReport(data: TrainingImpactReportDat
           spacing: { before: 300, after: 400 }
         }),
         
+        // Summary Bar (Quality-native labels)
+        new Paragraph({
+          text: 'REVISION SUMMARY',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 }
+        }),
+        
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: [
+                createSummaryCell('Sections Impacted', String(summary.totalSectionsChanged)),
+                createSummaryCell('New Content', String(summary.added)),
+                createSummaryCell('Revised Content', String(summary.modified)),
+                createSummaryCell('Retired Content', String(summary.removed))
+              ]
+            })
+          ]
+        }),
+        
+        new Paragraph({ text: '', spacing: { after: 400 } }),
+        
+        // SECTION 4: Structured Change Table
+        new Paragraph({
+          text: 'STRUCTURED CHANGE TABLE',
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 }
+        }),
+        
+        createChangeTable(changes),
+        
+        new Paragraph({ text: '', spacing: { after: 400 } }),
+        
         // SECTION 5: Sign-off Section
         new Paragraph({
-          text: 'SECTION 5 — SIGN-OFF',
+          text: 'SIGN-OFF',
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 400, after: 200 }
         }),
@@ -280,7 +413,7 @@ export async function generateTrainingImpactReport(data: TrainingImpactReportDat
         new Paragraph({
           children: [
             new TextRun({ 
-              text: `Generated: ${new Date().toISOString().split('T')[0]} | SOP Compare – CapNorth Hub`,
+              text: `Generated: ${new Date().toISOString().split('T')[0]} | Document Revision Impact Review – CapNorth Hub`,
               size: 18,
               color: '999999'
             })
@@ -293,7 +426,7 @@ export async function generateTrainingImpactReport(data: TrainingImpactReportDat
   });
   
   const blob = await Packer.toBlob(doc);
-  const filename = `Training_Impact_Report_${metadata.sopId}_v${metadata.newVersion}_${new Date().toISOString().split('T')[0]}.docx`;
+  const filename = `Training_Impact_Assessment_${metadata.documentId}_v${metadata.newVersion}_${new Date().toISOString().split('T')[0]}.docx`;
   saveAs(blob, filename);
 }
 
@@ -311,7 +444,7 @@ function createHeaderRow(label: string, value: string): TableRow {
       new TableCell({
         width: { size: 70, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
-          text: value,
+          text: value || 'N/A',
           spacing: { before: 50, after: 50 }
         })]
       })
@@ -319,14 +452,33 @@ function createHeaderRow(label: string, value: string): TableRow {
   });
 }
 
-function createChangeTable(changes: SOPChange[]): Table {
+function createSummaryCell(label: string, value: string): TableCell {
+  return new TableCell({
+    width: { size: 25, type: WidthType.PERCENTAGE },
+    children: [
+      new Paragraph({
+        children: [new TextRun({ text: value, bold: true, size: 32 })],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 100, after: 50 }
+      }),
+      new Paragraph({
+        children: [new TextRun({ text: label, size: 18, color: '666666' })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 100 }
+      })
+    ],
+    shading: { fill: 'F8F8F8' }
+  });
+}
+
+function createChangeTable(changes: DocumentChange[]): Table {
   const headerRow = new TableRow({
     children: [
-      createTableHeaderCell('Section', 15),
+      createTableHeaderCell('Section', 20),
       createTableHeaderCell('Change Type', 12),
-      createTableHeaderCell('Previous Text (verbatim)', 30),
-      createTableHeaderCell('New Text (verbatim)', 30),
-      createTableHeaderCell('Training Flag', 13)
+      createTableHeaderCell('Previous Text (verbatim)', 28),
+      createTableHeaderCell('Current Text (verbatim)', 28),
+      createTableHeaderCell('Relevance Indicator', 12)
     ],
     tableHeader: true
   });
@@ -334,14 +486,14 @@ function createChangeTable(changes: SOPChange[]): Table {
   const dataRows = changes.map(change => new TableRow({
     children: [
       new TableCell({
-        width: { size: 15, type: WidthType.PERCENTAGE },
+        width: { size: 20, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ text: change.section, spacing: { before: 50, after: 50 } })]
       }),
       new TableCell({
         width: { size: 12, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
           children: [new TextRun({ 
-            text: change.changeType.toUpperCase(),
+            text: change.changeType === 'added' ? 'NEW' : change.changeType === 'removed' ? 'RETIRED' : 'REVISED',
             bold: true,
             color: change.changeType === 'added' ? '228B22' : change.changeType === 'removed' ? 'CC0000' : 'CC7700'
           })],
@@ -349,21 +501,21 @@ function createChangeTable(changes: SOPChange[]): Table {
         })]
       }),
       new TableCell({
-        width: { size: 30, type: WidthType.PERCENTAGE },
+        width: { size: 28, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
-          text: change.previousText || '—',
+          text: change.previousText ? (change.previousText.substring(0, 400) + (change.previousText.length > 400 ? '...' : '')) : '—',
           spacing: { before: 50, after: 50 }
         })]
       }),
       new TableCell({
-        width: { size: 30, type: WidthType.PERCENTAGE },
+        width: { size: 28, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
-          text: change.newText || '—',
+          text: change.newText ? (change.newText.substring(0, 400) + (change.newText.length > 400 ? '...' : '')) : '—',
           spacing: { before: 50, after: 50 }
         })]
       }),
       new TableCell({
-        width: { size: 13, type: WidthType.PERCENTAGE },
+        width: { size: 12, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
           children: [new TextRun({ text: change.trainingFlag, italics: true })],
           spacing: { before: 50, after: 50 }

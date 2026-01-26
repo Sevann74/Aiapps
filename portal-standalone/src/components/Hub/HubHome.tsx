@@ -42,9 +42,9 @@ const HubHome: React.FC<HubHomeProps> = ({
       stats: activeJobsCount > 0 ? `${activeJobsCount} Active Job${activeJobsCount > 1 ? 's' : ''}` : undefined
     },
     {
-      key: 'sop-compare',
-      title: 'SOP Compare',
-      description: 'Compare SOP versions and generate audit-safe Training Impact Assessment reports for L&D and Process Owners.',
+      key: 'document-review',
+      title: 'Document Revision Impact Review',
+      description: 'Compare document versions and generate audit-safe Training Impact Assessment reports for L&D and Process Owners.',
       icon: '📋',
       enabled: hasAccess('sop-compare'),
       locked: !hasAccess('sop-compare'),
