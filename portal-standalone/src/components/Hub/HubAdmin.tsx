@@ -124,10 +124,16 @@ const HubAdmin: React.FC<HubAdminProps> = ({ onBack }) => {
           .eq('organization_id', orgId)
           .eq('module_key', moduleKey);
       } else {
-        // Enable - upsert the entitlement
+        // Enable - insert the entitlement (delete first to avoid conflicts)
         await supabase
           .from('org_entitlements')
-          .upsert({ organization_id: orgId, module_key: moduleKey, enabled: true });
+          .delete()
+          .eq('organization_id', orgId)
+          .eq('module_key', moduleKey);
+        
+        await supabase
+          .from('org_entitlements')
+          .insert({ organization_id: orgId, module_key: moduleKey, enabled: true });
       }
       fetchData();
     } catch (err) {
