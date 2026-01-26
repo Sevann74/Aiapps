@@ -21,7 +21,15 @@ const HubHome: React.FC<HubHomeProps> = ({
   onLogout,
   activeJobsCount = 0 
 }) => {
-  const { hasAccess, loading } = useEntitlements(user.organization_id || null);
+  const { hasAccess, loading, entitlements } = useEntitlements(user.organization_id || null);
+  
+  // Debug logging
+  console.log('HubHome Debug:', {
+    organization_id: user.organization_id,
+    entitlements,
+    hasSOPCompare: hasAccess('sop-compare'),
+    loading
+  });
 
   const modules = [
     {
