@@ -230,30 +230,44 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
     setExpandedSections(newExpanded);
   };
 
-  const getChangeTypeLabel = (type: string) => {
-    switch (type) {
-      case 'added': return 'New Content';
-      case 'removed': return 'Retired Content';
-      case 'modified': return 'Revised';
-      default: return type;
+  // Classification label mapping (audit-safe terminology)
+  const getClassificationLabel = (classification: string) => {
+    switch (classification) {
+      case 'NEW': return 'New Content';
+      case 'EDITORIAL': return 'Editorial';
+      case 'REVISED': return 'Revised';
+      case 'RELOCATED': return 'Relocated';
+      case 'RETIRED': return 'Retired';
+      case 'NO_CHANGE': return 'No Change';
+      default: return classification;
     }
   };
 
-  const getChangeTypeColor = (type: string) => {
-    switch (type) {
-      case 'added': return 'bg-green-100 text-green-800 border-green-300';
-      case 'removed': return 'bg-red-100 text-red-800 border-red-300';
-      case 'modified': return 'bg-amber-100 text-amber-800 border-amber-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+  const getClassificationColor = (classification: string) => {
+    switch (classification) {
+      case 'NEW': return 'bg-green-100 text-green-700';
+      case 'EDITORIAL': return 'bg-blue-100 text-blue-700';
+      case 'REVISED': return 'bg-amber-100 text-amber-700';
+      case 'RELOCATED': return 'bg-purple-100 text-purple-700';
+      case 'RETIRED': return 'bg-red-100 text-red-700';
+      default: return 'bg-gray-100 text-gray-700';
     }
   };
 
-  // Process changes for display
+  // Process changes for display - use new classification from comparison engine
   const processedChanges = comparisonResult?.changes.map(change => {
-    const { changeType, trainingFlag } = categorizeChange(change.oldContent, change.newContent);
     const badges = detectChangeBadges(change.oldContent, change.newContent);
-    const descriptor = generateChangeDescriptor(change.oldContent, change.newContent, changeType);
-    return { ...change, changeType, trainingFlag, badges, descriptor };
+    const descriptor = generateChangeDescriptor(change.oldContent, change.newContent, change.classification || change.changeType);
+    return { 
+      ...change, 
+      badges, 
+      descriptor,
+      // Use classification from engine, fallback to legacy changeType mapping
+      displayClassification: change.classification || (
+        change.changeType === 'added' ? 'NEW' :
+        change.changeType === 'removed' ? 'RETIRED' : 'REVISED'
+      )
+    };
   }) || [];
 
   return (
@@ -557,12 +571,8 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                             <span className="font-bold text-gray-900">
                               {change.sectionId} – {change.sectionTitle}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                              change.changeType === 'added' ? 'bg-green-100 text-green-700' :
-                              change.changeType === 'removed' ? 'bg-red-100 text-red-700' :
-                              'bg-amber-100 text-amber-700'
-                            }`}>
-                              {getChangeTypeLabel(change.changeType)}
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getClassificationColor(change.displayClassification)}`}>
+                              {getClassificationLabel(change.displayClassification)}
                             </span>
                           </div>
                           
@@ -648,7 +658,7 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                                     {change.sectionId} – {change.sectionTitle}
                                   </span>
                                   <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">
-                                    {getChangeTypeLabel(change.changeType)}
+                                    {getClassificationLabel(change.displayClassification)}
                                   </span>
                                 </div>
                                 <p className="text-sm text-gray-600">{change.descriptor}</p>
