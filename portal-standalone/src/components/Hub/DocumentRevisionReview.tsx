@@ -481,7 +481,7 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                 This information will appear in the Training Impact Assessment Report.
               </p>
               
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Document Title *</label>
                   <input
@@ -489,26 +489,6 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                     value={metadata.documentTitle}
                     onChange={(e) => setMetadata({...metadata, documentTitle: e.target.value})}
                     placeholder="e.g., Equipment Calibration Procedure"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Document ID *</label>
-                  <input
-                    type="text"
-                    value={metadata.documentId}
-                    onChange={(e) => setMetadata({...metadata, documentId: e.target.value})}
-                    placeholder="e.g., DOC-QC-2024-089"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Department</label>
-                  <input
-                    type="text"
-                    value={metadata.department}
-                    onChange={(e) => setMetadata({...metadata, department: e.target.value})}
-                    placeholder="e.g., Quality Control"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                 </div>
@@ -548,7 +528,7 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-2">Identified Document Changes</h3>
               <p className="text-sm text-gray-500 mb-4">
-                Click a row to view verbatim text. The full report contains complete change details.
+                This view provides a high-level overview. Full verbatim content is available in the generated assessment report.
               </p>
               
               {processedChanges.length === 0 ? (
@@ -558,8 +538,9 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {processedChanges.map((change, idx) => (
-                    <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden">
+                  {/* Active Changes (Added + Modified) */}
+                  {processedChanges.filter(c => c.changeType !== 'removed').map((change, idx) => (
+                    <div key={`active-${idx}`} className="border border-gray-200 rounded-xl overflow-hidden">
                       {/* Collapsed Header Row */}
                       <button
                         onClick={() => toggleSection(idx)}
@@ -640,6 +621,62 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                       )}
                     </div>
                   ))}
+                  
+                  {/* Retired Sections - Visually grouped */}
+                  {processedChanges.filter(c => c.changeType === 'removed').length > 0 && (
+                    <div className="mt-4 pt-4 border-t-2 border-red-200">
+                      <p className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                        Retired Sections
+                      </p>
+                      <div className="space-y-2 bg-red-50/50 rounded-lg p-2">
+                        {processedChanges.filter(c => c.changeType === 'removed').map((change, idx) => (
+                          <div key={`retired-${idx}`} className="border border-red-200 rounded-xl overflow-hidden bg-white">
+                            <button
+                              onClick={() => toggleSection(processedChanges.indexOf(change))}
+                              className="w-full p-4 flex items-center gap-4 hover:bg-red-50 transition-colors text-left"
+                            >
+                              {expandedSections.has(processedChanges.indexOf(change)) ? (
+                                <ChevronDown className="w-5 h-5 text-red-400 flex-shrink-0" />
+                              ) : (
+                                <ChevronRight className="w-5 h-5 text-red-400 flex-shrink-0" />
+                              )}
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-1">
+                                  <span className="font-bold text-gray-900">
+                                    {change.sectionId} – {change.sectionTitle}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">
+                                    {getChangeTypeLabel(change.changeType)}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">{change.descriptor}</p>
+                              </div>
+                            </button>
+                            
+                            {expandedSections.has(processedChanges.indexOf(change)) && (
+                              <div className="border-t border-red-200 p-4 bg-red-50/30">
+                                <div className="flex items-center gap-2 mb-3 text-sm text-gray-500">
+                                  <Eye className="w-4 h-4" />
+                                  <span>Retired content (for reference)</span>
+                                </div>
+                                {change.oldContent && (
+                                  <div className="bg-white rounded-lg p-3 border border-red-200">
+                                    <p className="text-xs font-semibold text-red-500 mb-2">Previous Version (now retired):</p>
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                      {change.oldContent.substring(0, 500)}
+                                      {change.oldContent.length > 500 && '...'}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -647,7 +684,7 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
             {/* Generate Report Button */}
             <button
               onClick={handleGenerateReport}
-              disabled={isGeneratingReport || !metadata.documentTitle || !metadata.documentId || !metadata.previousVersion || !metadata.newVersion}
+              disabled={isGeneratingReport || !metadata.documentTitle || !metadata.previousVersion || !metadata.newVersion}
               className="w-full px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3"
             >
               {isGeneratingReport ? (

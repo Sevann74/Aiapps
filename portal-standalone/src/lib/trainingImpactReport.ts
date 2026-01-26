@@ -120,7 +120,10 @@ export function generateChangeDescriptor(oldText: string, newText: string, chang
   // Documentation change detection
   const docTerms = ['document', 'record', 'log', 'form', 'report', 'signature'];
   if (docTerms.some(term => lowerNew.includes(term) && !lowerOld.includes(term))) {
-    return 'Documentation requirement added or modified';
+    return 'Wording updated related to documentation requirements';
+  }
+  if (docTerms.some(term => lowerOld.includes(term) || lowerNew.includes(term))) {
+    return 'Documentation wording revised';
   }
   
   // Safety change detection
@@ -474,23 +477,29 @@ function createSummaryCell(label: string, value: string): TableCell {
 function createChangeTable(changes: DocumentChange[]): Table {
   const headerRow = new TableRow({
     children: [
-      createTableHeaderCell('Section', 20),
-      createTableHeaderCell('Change Type', 12),
-      createTableHeaderCell('Previous Text (verbatim)', 28),
-      createTableHeaderCell('Current Text (verbatim)', 28),
-      createTableHeaderCell('Relevance Indicator', 12)
+      createTableHeaderCell('Section', 18),
+      createTableHeaderCell('Type', 10),
+      createTableHeaderCell('Change Summary', 20),
+      createTableHeaderCell('Previous Text', 24),
+      createTableHeaderCell('Current Text', 24),
+      createTableHeaderCell('Flag', 4)
     ],
     tableHeader: true
   });
   
   const dataRows = changes.map(change => new TableRow({
     children: [
+      // Section column - bold section name
       new TableCell({
-        width: { size: 20, type: WidthType.PERCENTAGE },
-        children: [new Paragraph({ text: change.section, spacing: { before: 50, after: 50 } })]
+        width: { size: 18, type: WidthType.PERCENTAGE },
+        children: [new Paragraph({ 
+          children: [new TextRun({ text: change.section, bold: true })],
+          spacing: { before: 50, after: 50 } 
+        })]
       }),
+      // Change type column - colored badge
       new TableCell({
-        width: { size: 12, type: WidthType.PERCENTAGE },
+        width: { size: 10, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
           children: [new TextRun({ 
             text: change.changeType === 'added' ? 'NEW' : change.changeType === 'removed' ? 'RETIRED' : 'REVISED',
@@ -500,24 +509,44 @@ function createChangeTable(changes: DocumentChange[]): Table {
           spacing: { before: 50, after: 50 }
         })]
       }),
+      // Change summary column - bold descriptor (the key insight)
       new TableCell({
-        width: { size: 28, type: WidthType.PERCENTAGE },
+        width: { size: 20, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
-          text: change.previousText ? (change.previousText.substring(0, 400) + (change.previousText.length > 400 ? '...' : '')) : '—',
+          children: [new TextRun({ text: change.descriptor || change.trainingFlag, bold: true, size: 20 })],
           spacing: { before: 50, after: 50 }
         })]
       }),
+      // Previous text column - normal weight, smaller font
       new TableCell({
-        width: { size: 28, type: WidthType.PERCENTAGE },
+        width: { size: 24, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
-          text: change.newText ? (change.newText.substring(0, 400) + (change.newText.length > 400 ? '...' : '')) : '—',
+          children: [new TextRun({ 
+            text: change.previousText ? (change.previousText.substring(0, 300) + (change.previousText.length > 300 ? '...' : '')) : '—',
+            size: 18,
+            color: '444444'
+          })],
           spacing: { before: 50, after: 50 }
         })]
       }),
+      // Current text column - normal weight, smaller font
       new TableCell({
-        width: { size: 12, type: WidthType.PERCENTAGE },
+        width: { size: 24, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
-          children: [new TextRun({ text: change.trainingFlag, italics: true })],
+          children: [new TextRun({ 
+            text: change.newText ? (change.newText.substring(0, 300) + (change.newText.length > 300 ? '...' : '')) : '—',
+            size: 18,
+            color: '444444'
+          })],
+          spacing: { before: 50, after: 50 }
+        })]
+      }),
+      // Training flag column - compact indicator
+      new TableCell({
+        width: { size: 4, type: WidthType.PERCENTAGE },
+        children: [new Paragraph({ 
+          children: [new TextRun({ text: '●', color: change.trainingFlag.includes('Safety') ? 'CC0000' : '2E5090' })],
+          alignment: AlignmentType.CENTER,
           spacing: { before: 50, after: 50 }
         })]
       })
