@@ -9,222 +9,313 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.j
 // TYPES
 // ============================================
 
-export interface SimpleChange {
-  type: 'added' | 'removed' | 'modified' | 'unchanged';
-  lineNumber: number;
-  oldText: string;
-  newText: string;
+export interface DocumentSection {
+  id: string;
+  title: string;
+  level: number;
+  content: string;
+}
+
+export interface SectionChange {
+  sectionId: string;
+  sectionTitle: string;
+  changeType: 'added' | 'removed' | 'modified';
+  oldContent: string;
+  newContent: string;
   diffParts?: Diff.Change[];
+  significance: 'high' | 'medium' | 'low';
 }
 
 export interface SimpleComparisonResult {
-  changes: SimpleChange[];
+  changes: SectionChange[];
   summary: {
     totalChanges: number;
     added: number;
     removed: number;
     modified: number;
-    unchanged: number;
+    sectionsAnalyzed: number;
   };
-  oldText: string;
-  newText: string;
+  oldSections: DocumentSection[];
+  newSections: DocumentSection[];
 }
 
-export interface ExtractedText {
-  text: string;
-  paragraphs: string[];
-  metadata: {
-    title: string;
-    version: string;
-  };
+export interface ExtractedDocument {
+  sections: DocumentSection[];
+  metadata: { title: string; version: string };
+}
+
+// ============================================
+// METADATA FILTERING
+// ============================================
+
+const METADATA_PATTERNS = [
+  /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,
+  /^\d{4}-\d{2}-\d{2}$/,
+  /^[A-Z]{2,3}-\d{4}-\d{3}$/,
+  /^v?\d+\.\d+$/i,
+  /^page\s*\d+/i,
+  /^draft$/i,
+  /^final$/i,
+  /^approved$/i,
+  /^open$/i,
+  /^closed$/i,
+  /^n\/a$/i,
+];
+
+function isMetadataLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 3) return true;
+  if (trimmed.length > 200) return false;
+  return METADATA_PATTERNS.some(p => p.test(trimmed));
+}
+
+// ============================================
+// SECTION DETECTION
+// ============================================
+
+const SECTION_PATTERNS = [
+  /^(\d+\.?\d*\.?\d*)\s+(.+)$/,
+  /^(Section\s+\d+):?\s*(.*)$/i,
+  /^([A-Z]\.?\d*\.?\d*)\s+(.+)$/,
+  /^(Purpose|Scope|Procedure|Responsibilities|References|Definitions|Equipment|Materials|Safety|Quality|Documentation|Objective|Background|Introduction|Summary|Appendix\s*[A-Z]?):?\s*(.*)$/i,
+];
+
+function detectSection(line: string): { id: string; title: string; level: number } | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 2) return null;
+  
+  for (const pattern of SECTION_PATTERNS) {
+    const match = trimmed.match(pattern);
+    if (match) {
+      const id = match[1];
+      const title = match[2]?.trim() || match[1];
+      const level = (id.match(/\./g) || []).length + 1;
+      return { id, title: `${id} ${title}`.trim(), level };
+    }
+  }
+  
+  // All-caps headings (common in SOPs)
+  if (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && trimmed.length < 60 && !/^\d/.test(trimmed)) {
+    return { id: trimmed.substring(0, 20), title: trimmed, level: 1 };
+  }
+  
+  return null;
 }
 
 // ============================================
 // EXTRACTION
 // ============================================
 
-export async function extractText(file: File): Promise<ExtractedText> {
+export async function extractDocument(file: File): Promise<ExtractedDocument> {
   const extension = file.name.split('.').pop()?.toLowerCase();
-  
-  let text = '';
+  let rawText = '';
   
   if (extension === 'docx' || extension === 'doc') {
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.extractRawText({ arrayBuffer });
-    text = result.value;
+    rawText = result.value;
   } else if (extension === 'pdf') {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
       const pageText = textContent.items.map((item: any) => item.str).join(' ');
-      text += pageText + '\n\n';
+      rawText += pageText + '\n\n';
     }
   } else {
     throw new Error('Unsupported file format. Please upload Word (.docx) or PDF files.');
   }
   
-  // Split into paragraphs (non-empty lines)
-  const paragraphs = text
-    .split(/\n+/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
-  
-  // Extract metadata from filename
+  const sections = parseIntoSections(rawText);
   const versionMatch = file.name.match(/v?(\d+\.?\d*)/i);
-  const version = versionMatch ? versionMatch[1] : '1.0';
-  const title = file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
   
   return {
-    text,
-    paragraphs,
-    metadata: { title, version }
+    sections,
+    metadata: {
+      title: file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
+      version: versionMatch ? versionMatch[1] : '1.0'
+    }
   };
 }
 
-// ============================================
-// SIMPLE COMPARISON
-// ============================================
-
-export function compareTexts(oldDoc: ExtractedText, newDoc: ExtractedText): SimpleComparisonResult {
-  const changes: SimpleChange[] = [];
+function parseIntoSections(text: string): DocumentSection[] {
+  const lines = text.split('\n');
+  const sections: DocumentSection[] = [];
+  let currentSection: DocumentSection | null = null;
+  let sectionCounter = 0;
   
-  const oldParagraphs = oldDoc.paragraphs;
-  const newParagraphs = newDoc.paragraphs;
-  
-  // Use diff library to compare paragraph arrays
-  const diff = Diff.diffArrays(oldParagraphs, newParagraphs);
-  
-  let lineNumber = 0;
-  let oldIndex = 0;
-  let newIndex = 0;
-  
-  for (const part of diff) {
-    if (part.added) {
-      // New content added
-      for (const value of part.value) {
-        lineNumber++;
-        changes.push({
-          type: 'added',
-          lineNumber,
-          oldText: '',
-          newText: value
-        });
-        newIndex++;
-      }
-    } else if (part.removed) {
-      // Content removed
-      for (const value of part.value) {
-        lineNumber++;
-        changes.push({
-          type: 'removed',
-          lineNumber,
-          oldText: value,
-          newText: ''
-        });
-        oldIndex++;
-      }
-    } else {
-      // Unchanged - but check for word-level changes
-      for (const value of part.value) {
-        lineNumber++;
-        const oldValue = oldParagraphs[oldIndex] || '';
-        const newValue = newParagraphs[newIndex] || '';
-        
-        // Check if there are word-level differences
-        if (oldValue !== newValue) {
-          const wordDiff = Diff.diffWords(oldValue, newValue);
-          const hasChanges = wordDiff.some(d => d.added || d.removed);
-          
-          if (hasChanges) {
-            changes.push({
-              type: 'modified',
-              lineNumber,
-              oldText: oldValue,
-              newText: newValue,
-              diffParts: wordDiff
-            });
-          }
-        }
-        oldIndex++;
-        newIndex++;
-      }
-    }
-  }
-  
-  // Also do a line-by-line comparison to catch modifications
-  const maxLen = Math.max(oldParagraphs.length, newParagraphs.length);
-  const lineChanges: SimpleChange[] = [];
-  
-  for (let i = 0; i < maxLen; i++) {
-    const oldLine = oldParagraphs[i] || '';
-    const newLine = newParagraphs[i] || '';
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
     
-    if (oldLine === newLine) {
-      // Unchanged
-      continue;
-    } else if (!oldLine && newLine) {
-      // Added
-      lineChanges.push({
-        type: 'added',
-        lineNumber: i + 1,
-        oldText: '',
-        newText: newLine
-      });
-    } else if (oldLine && !newLine) {
-      // Removed
-      lineChanges.push({
-        type: 'removed',
-        lineNumber: i + 1,
-        oldText: oldLine,
-        newText: ''
-      });
+    const sectionInfo = detectSection(trimmed);
+    
+    if (sectionInfo) {
+      if (currentSection && currentSection.content.trim()) {
+        sections.push(currentSection);
+      }
+      sectionCounter++;
+      currentSection = {
+        id: sectionInfo.id || `SEC_${sectionCounter}`,
+        title: sectionInfo.title,
+        level: sectionInfo.level,
+        content: ''
+      };
+    } else if (currentSection) {
+      if (!isMetadataLine(trimmed)) {
+        currentSection.content += (currentSection.content ? '\n' : '') + trimmed;
+      }
     } else {
-      // Modified - get word-level diff
-      const wordDiff = Diff.diffWords(oldLine, newLine);
-      lineChanges.push({
-        type: 'modified',
-        lineNumber: i + 1,
-        oldText: oldLine,
-        newText: newLine,
-        diffParts: wordDiff
+      sectionCounter++;
+      currentSection = {
+        id: 'PREAMBLE',
+        title: 'Document Header',
+        level: 0,
+        content: isMetadataLine(trimmed) ? '' : trimmed
+      };
+    }
+  }
+  
+  if (currentSection && currentSection.content.trim()) {
+    sections.push(currentSection);
+  }
+  
+  return sections;
+}
+
+// ============================================
+// COMPARISON HELPERS
+// ============================================
+
+function normalizeContent(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function calculateSimilarity(text1: string, text2: string): number {
+  const norm1 = normalizeContent(text1);
+  const norm2 = normalizeContent(text2);
+  if (norm1 === norm2) return 1.0;
+  if (!norm1 || !norm2) return 0;
+  
+  const words1 = new Set(norm1.split(' ').filter(w => w.length > 2));
+  const words2 = new Set(norm2.split(' ').filter(w => w.length > 2));
+  if (words1.size === 0 && words2.size === 0) return 1.0;
+  if (words1.size === 0 || words2.size === 0) return 0;
+  
+  const intersection = [...words1].filter(w => words2.has(w)).length;
+  const union = new Set([...words1, ...words2]).size;
+  return intersection / union;
+}
+
+function assessSignificance(oldContent: string, newContent: string): 'high' | 'medium' | 'low' {
+  const highImpact = ['must', 'shall', 'required', 'mandatory', 'prohibited', 'immediately', 'critical', 'safety', 'calibration', 'validation', 'approval', 'signature', 'temperature', 'deviation', 'capa', 'oos', 'oot'];
+  
+  const oldLower = oldContent.toLowerCase();
+  const newLower = newContent.toLowerCase();
+  
+  for (const kw of highImpact) {
+    if (oldLower.includes(kw) !== newLower.includes(kw)) return 'high';
+  }
+  
+  const oldNums = oldContent.match(/\d+\.?\d*/g) || [];
+  const newNums = newContent.match(/\d+\.?\d*/g) || [];
+  if (JSON.stringify(oldNums.sort()) !== JSON.stringify(newNums.sort())) return 'high';
+  
+  if (calculateSimilarity(oldContent, newContent) < 0.5) return 'medium';
+  return 'low';
+}
+
+// ============================================
+// SECTION COMPARISON
+// ============================================
+
+export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDocument): SimpleComparisonResult {
+  const changes: SectionChange[] = [];
+  const matchedNewIds = new Set<string>();
+  
+  for (const oldSec of oldDoc.sections) {
+    let bestMatch: { section: DocumentSection; sim: number } | null = null;
+    
+    for (const newSec of newDoc.sections) {
+      if (matchedNewIds.has(newSec.id + newSec.title)) continue;
+      const titleSim = calculateSimilarity(oldSec.title, newSec.title);
+      if (titleSim > 0.6 && (!bestMatch || titleSim > bestMatch.sim)) {
+        bestMatch = { section: newSec, sim: titleSim };
+      }
+    }
+    
+    if (bestMatch) {
+      matchedNewIds.add(bestMatch.section.id + bestMatch.section.title);
+      const oldNorm = normalizeContent(oldSec.content);
+      const newNorm = normalizeContent(bestMatch.section.content);
+      
+      if (oldNorm !== newNorm) {
+        const diffParts = Diff.diffWords(oldSec.content, bestMatch.section.content);
+        const hasReal = diffParts.some(p => (p.added || p.removed) && p.value.trim().length > 2);
+        
+        if (hasReal) {
+          changes.push({
+            sectionId: oldSec.id,
+            sectionTitle: oldSec.title,
+            changeType: 'modified',
+            oldContent: oldSec.content,
+            newContent: bestMatch.section.content,
+            diffParts,
+            significance: assessSignificance(oldSec.content, bestMatch.section.content)
+          });
+        }
+      }
+    } else if (oldSec.content.trim().length > 10) {
+      changes.push({
+        sectionId: oldSec.id,
+        sectionTitle: oldSec.title,
+        changeType: 'removed',
+        oldContent: oldSec.content,
+        newContent: '',
+        significance: 'high'
       });
     }
   }
   
-  // Use line-by-line comparison if it found more changes
-  const finalChanges = lineChanges.length > changes.filter(c => c.type !== 'unchanged').length 
-    ? lineChanges 
-    : changes.filter(c => c.type !== 'unchanged');
+  for (const newSec of newDoc.sections) {
+    if (!matchedNewIds.has(newSec.id + newSec.title) && newSec.content.trim().length > 10) {
+      changes.push({
+        sectionId: newSec.id,
+        sectionTitle: newSec.title,
+        changeType: 'added',
+        oldContent: '',
+        newContent: newSec.content,
+        significance: 'medium'
+      });
+    }
+  }
   
-  // Calculate summary
-  const summary = {
-    totalChanges: finalChanges.length,
-    added: finalChanges.filter(c => c.type === 'added').length,
-    removed: finalChanges.filter(c => c.type === 'removed').length,
-    modified: finalChanges.filter(c => c.type === 'modified').length,
-    unchanged: Math.max(oldParagraphs.length, newParagraphs.length) - finalChanges.length
-  };
+  const sigOrder = { high: 0, medium: 1, low: 2 };
+  changes.sort((a, b) => sigOrder[a.significance] - sigOrder[b.significance] || a.sectionId.localeCompare(b.sectionId, undefined, { numeric: true }));
   
   return {
-    changes: finalChanges,
-    summary,
-    oldText: oldDoc.text,
-    newText: newDoc.text
+    changes,
+    summary: {
+      totalChanges: changes.length,
+      added: changes.filter(c => c.changeType === 'added').length,
+      removed: changes.filter(c => c.changeType === 'removed').length,
+      modified: changes.filter(c => c.changeType === 'modified').length,
+      sectionsAnalyzed: Math.max(oldDoc.sections.length, newDoc.sections.length)
+    },
+    oldSections: oldDoc.sections,
+    newSections: newDoc.sections
   };
 }
 
 // ============================================
-// FULL DOCUMENT COMPARISON (entry point)
+// ENTRY POINT
 // ============================================
 
 export async function compareDocumentsSimple(oldFile: File, newFile: File): Promise<SimpleComparisonResult> {
   const [oldDoc, newDoc] = await Promise.all([
-    extractText(oldFile),
-    extractText(newFile)
+    extractDocument(oldFile),
+    extractDocument(newFile)
   ]);
-  
-  return compareTexts(oldDoc, newDoc);
+  return compareDocuments(oldDoc, newDoc);
 }
