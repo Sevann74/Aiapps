@@ -16,7 +16,9 @@ import {
   Users,
   Clock,
   Settings,
-  Eye
+  Eye,
+  HelpCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   extractDocument, 
@@ -230,31 +232,63 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
     setExpandedSections(newExpanded);
   };
 
-  // Classification labels for tiered matching system
-  const getClassificationLabel = (classification: string) => {
-    switch (classification) {
-      case 'NO_CHANGE': return 'No Change';
-      case 'EDITORIAL': return 'Editorial';
-      case 'SUBSTANTIVE': return 'Substantive';
-      case 'RELOCATED': return 'Relocated';
-      case 'NEW': return 'New';
-      case 'RETIRED': return 'Retired';
-      case 'MANUAL_REVIEW': return 'Manual Review';
-      default: return classification;
+  // Neutral factual labels for change types
+  const getChangeTypeLabel = (changeType: string) => {
+    switch (changeType) {
+      case 'added': return 'New in current version';
+      case 'modified': return 'Changed';
+      case 'removed': return 'Removed from current version';
+      default: return changeType;
     }
   };
 
-  const getClassificationColor = (classification: string) => {
-    switch (classification) {
-      case 'NO_CHANGE': return 'bg-gray-100 text-gray-600';
-      case 'EDITORIAL': return 'bg-blue-100 text-blue-700';
-      case 'SUBSTANTIVE': return 'bg-amber-100 text-amber-700';
-      case 'RELOCATED': return 'bg-purple-100 text-purple-700';
-      case 'NEW': return 'bg-green-100 text-green-700';
-      case 'RETIRED': return 'bg-red-100 text-red-700';
-      case 'MANUAL_REVIEW': return 'bg-orange-100 text-orange-700';
+  const getChangeTypeColor = (changeType: string) => {
+    switch (changeType) {
+      case 'added': return 'bg-green-100 text-green-700';
+      case 'modified': return 'bg-slate-100 text-slate-700';
+      case 'removed': return 'bg-red-100 text-red-700';
       default: return 'bg-gray-100 text-gray-700';
     }
+  };
+
+  const getChangeTypeSublabel = (changeType: string) => {
+    switch (changeType) {
+      case 'added': return 'Content not present in previous version';
+      case 'modified': return 'Verbatim differences shown below';
+      case 'removed': return 'Content not found elsewhere in document';
+      default: return '';
+    }
+  };
+
+  // Uncertainty signaling badges
+  const getUncertaintyBadges = (change: any) => {
+    const badges: { icon: React.ReactNode; text: string; color: string }[] = [];
+    
+    if (change.matchConfidence !== undefined && change.matchConfidence < 0.7) {
+      badges.push({
+        icon: <AlertTriangle className="w-3 h-3" />,
+        text: 'Low match confidence',
+        color: 'bg-amber-100 text-amber-700 border-amber-300'
+      });
+    }
+    
+    if (change.possibleRelocation) {
+      badges.push({
+        icon: <HelpCircle className="w-3 h-3" />,
+        text: 'Possible relocation – verify manually',
+        color: 'bg-purple-100 text-purple-700 border-purple-300'
+      });
+    }
+    
+    if (change.structureUnclear) {
+      badges.push({
+        icon: <AlertTriangle className="w-3 h-3" />,
+        text: 'Section structure unclear',
+        color: 'bg-orange-100 text-orange-700 border-orange-300'
+      });
+    }
+    
+    return badges;
   };
 
   const getMatchTierLabel = (tier: string) => {
@@ -292,8 +326,8 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
             </button>
             <FileSpreadsheet className="w-8 h-8" />
             <div>
-              <h1 className="text-xl font-bold">Document Revision Impact Review</h1>
-              <p className="text-emerald-200 text-sm">Training Impact Assessment Tool</p>
+              <h1 className="text-xl font-bold">Document Revision Review</h1>
+              <p className="text-emerald-200 text-sm">Factual Change Detection</p>
             </div>
           </div>
           
@@ -334,7 +368,7 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                   <strong>Supported formats:</strong> Word (.docx) and PDF files up to 50MB
                 </p>
                 <p className="text-sm text-emerald-700 mt-1">
-                  <strong>Note:</strong> This tool identifies textual changes only. No regulatory interpretation or recommendations are provided.
+                  <strong>Note:</strong> This tool identifies textual differences only. No interpretation of significance or impact is provided.
                 </p>
               </div>
             </div>
@@ -579,13 +613,25 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                             <span className="font-bold text-gray-900">
                               {change.sectionId} – {change.sectionTitle}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${getClassificationColor(change.classification)}`}>
-                              {getClassificationLabel(change.classification)}
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getChangeTypeColor(change.changeType)}`}>
+                              {getChangeTypeLabel(change.changeType)}
                             </span>
                           </div>
                           
-                          {/* Change descriptor - 1-line mechanical summary */}
-                          <p className="text-sm text-gray-600">{change.descriptor}</p>
+                          {/* Change sublabel - neutral description */}
+                          <p className="text-xs text-gray-500">{getChangeTypeSublabel(change.changeType)}</p>
+                          
+                          {/* Uncertainty badges */}
+                          {getUncertaintyBadges(change).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {getUncertaintyBadges(change).map((badge, i) => (
+                                <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${badge.color}`}>
+                                  {badge.icon}
+                                  {badge.text}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         
                         {/* Category badges */}
@@ -665,11 +711,23 @@ const DocumentRevisionReview: React.FC<DocumentRevisionReviewProps> = ({ onBack,
                                   <span className="font-bold text-gray-900">
                                     {change.sectionId} – {change.sectionTitle}
                                   </span>
-                                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700">
-                                    {getClassificationLabel(change.classification)}
+                                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">
+                                    {getChangeTypeLabel(change.changeType)}
                                   </span>
                                 </div>
-                                <p className="text-sm text-gray-600">{change.descriptor}</p>
+                                <p className="text-xs text-gray-500">{getChangeTypeSublabel(change.changeType)}</p>
+                                
+                                {/* Uncertainty badges for removed sections */}
+                                {getUncertaintyBadges(change).length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {getUncertaintyBadges(change).map((badge, i) => (
+                                      <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${badge.color}`}>
+                                        {badge.icon}
+                                        {badge.text}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </button>
                             
