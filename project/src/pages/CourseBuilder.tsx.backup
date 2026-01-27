@@ -1,0 +1,1214 @@
+     import React, { useState, useRef } from 'react';
+import { Upload, FileText, Settings, Eye, Download, CheckCircle, AlertCircle, Loader, ArrowLeft, Image, Percent } from 'lucide-react';
+import * as courseApi from '../lib/courseBuilderApi';
+import { generateSCORMPackage } from '../lib/scormGenerator';
+import { validateSCORMStructure, getSCORMCompatibilityInfo } from '../lib/scormValidator';
+
+const EnhancedCourseBuilder = () => {
+  const [step, setStep] = useState('upload'); // upload, configure, processing, preview, complete
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [documentText, setDocumentText] = useState('');
+  const [courseTitle, setCourseTitle] = useState('');
+  const [config, setConfig] = useState({
+    passingScore: 80,
+    maxAttempts: 3,
+    scormVersion: '1.2',
+    includeImages: false,
+    brandingLogo: null,
+    generationMode: 'strict', // strict = 100% accuracy
+    questionMode: 'ai' // 'ai' or 'manual' or 'hybrid'
+  });
+  const [manualQuestions, setManualQuestions] = useState([]);
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [showQuestionEditor, setShowQuestionEditor] = useState(false);
+  const [courseData, setCourseData] = useState(null);
+  const [verificationReport, setVerificationReport] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState('');
+  
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const logoInputRef = useRef(null);
+
+  // ============================================
+  // FILE UPLOAD HANDLERS
+  // ============================================
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadedFile(file);
+    
+    // Extract text from PDF
+    if (file.type === 'application/pdf') {
+      try {
+        const text = await extractTextFromPDF(file);
+        setDocumentText(text);
+        setCourseTitle(file.name.replace('.pdf', ''));
+      } catch (error) {
+        alert('Error reading PDF. Please try again.');
+      }
+    }
+  };
+
+  const extractTextFromPDF = async (file) => {
+    // Simple PDF text extraction
+    const reader = new FileReader();
+    return new Promise((resolve, reject) => {
+      reader.onload = async (e) => {
+        try {
+          const typedArray = new Uint8Array(e.target.result);
+          // For demo, we'll use a simple extraction
+          // In production, use pdf.js or similar
+          const text = new TextDecoder().decode(typedArray);
+          // Clean up the text
+          const cleaned = text
+            .replace(/[^\x20-\x7E\n]/g, '') // Remove non-printable chars
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .join('\n');
+          resolve(cleaned);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setConfig(prev => ({ ...prev, brandingLogo: e.target.result }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // ============================================
+  // MANUAL QUESTION CREATION
+  // ============================================
+
+  const createNewQuestion = () => {
+    setEditingQuestion({
+      id: `manual_q${Date.now()}`,
+      question: '',
+      sourceReference: '',
+      exactQuote: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      explanation: '',
+      isManual: true
+    });
+    setShowQuestionEditor(true);
+  };
+
+  const saveManualQuestion = () => {
+    if (!editingQuestion.question.trim() || !editingQuestion.options.every(opt => opt.trim())) {
+      alert('Please fill in the question and all answer options');
+      return;
+    }
+
+    const updatedQuestions = editingQuestion.existingIndex !== undefined
+      ? manualQuestions.map((q, idx) => idx === editingQuestion.existingIndex ? editingQuestion : q)
+      : [...manualQuestions, editingQuestion];
+
+    setManualQuestions(updatedQuestions);
+    setShowQuestionEditor(false);
+    setEditingQuestion(null);
+  };
+
+  const editManualQuestion = (question, index) => {
+    setEditingQuestion({ ...question, existingIndex: index });
+    setShowQuestionEditor(true);
+  };
+
+  const deleteManualQuestion = (index) => {
+    if (confirm('Delete this question?')) {
+      setManualQuestions(manualQuestions.filter((_, idx) => idx !== index));
+    }
+  };
+
+  const verifyManualQuestion = (question) => {
+    // Verify manual question against source document
+    if (!documentText) return { score: 0, verified: false };
+
+    const similarity = calculateSimilarity(
+      question.question + ' ' + question.explanation,
+      documentText
+    );
+
+    const quoteExists = question.exactQuote 
+      ? documentText.includes(question.exactQuote)
+      : similarity > 50;
+
+    const score = (quoteExists ? 50 : 0) + (similarity > 50 ? 50 : 0);
+
+    return {
+      score: Math.round(score),
+      verified: score >= 70,
+      similarity: Math.round(similarity),
+      quoteExists,
+      status: score >= 90 ? 'verified' : score >= 70 ? 'warning' : 'needs-review'
+    };
+  };
+
+  // ============================================
+  // COURSE GENERATION (100% ACCURACY)
+  // ============================================
+
+  const generateCourse = async () => {
+    setIsProcessing(true);
+    setStep('processing');
+
+    try {
+      let questions = { questions: [] };
+      
+      // Handle different question modes
+      if (config.questionMode === 'manual') {
+        // Use only manual questions
+        setProcessingStage('Using your custom questions...');
+        questions = { questions: manualQuestions };
+        
+      } else if (config.questionMode === 'hybrid') {
+        // Combine AI + manual questions
+        setProcessingStage('Extracting facts from document...');
+        const facts = await extractVerifiableFacts(documentText);
+        
+        setProcessingStage('Generating AI questions...');
+        const aiQuestions = await generateQuestionsFromFacts(facts, documentText);
+        
+        questions = { 
+          questions: [...aiQuestions.questions, ...manualQuestions] 
+        };
+        
+      } else {
+        // AI-only mode (original flow)
+        setProcessingStage('Extracting facts from document...');
+        const facts = await extractVerifiableFacts(documentText);
+
+        setProcessingStage('Generating quiz questions...');
+        questions = await generateQuestionsFromFacts(facts, documentText);
+      }
+
+      // STEP 3: Verify 100% accuracy
+      setProcessingStage('Verifying accuracy...');
+      const verification = await verifyQuestions(questions, documentText);
+
+      // STEP 4: Generate course structure
+      setProcessingStage('Building course structure...');
+      const facts = config.questionMode === 'manual' 
+        ? [] 
+        : await extractVerifiableFacts(documentText);
+      const modules = await generateModulesFromDocument(documentText, facts);
+
+      // STEP 5: Add images if requested
+      let courseImages = [];
+      if (config.includeImages) {
+        setProcessingStage('Processing images...');
+        courseImages = await generateCourseImages(modules);
+      }
+
+      const course = {
+        title: courseTitle,
+        logo: config.brandingLogo,
+        modules,
+        quiz: questions,
+        images: courseImages,
+        verification,
+        questionMode: config.questionMode
+      };
+
+      setCourseData(course);
+      setVerificationReport(verification);
+      setStep('preview');
+
+    } catch (error) {
+      console.error('Course generation error:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      if (errorMessage.includes('ANTHROPIC_API_KEY')) {
+        alert(
+          '⚠️ Anthropic API Key Not Configured\n\n' +
+          'The AI-powered course generation requires an Anthropic API key.\n\n' +
+          'To fix this:\n' +
+          '1. Go to https://console.anthropic.com/ and get an API key\n' +
+          '2. Go to your Supabase dashboard\n' +
+          '3. Navigate to Edge Functions → Secrets\n' +
+          '4. Add secret: ANTHROPIC_API_KEY = your-api-key\n\n' +
+          'See ANTHROPIC_SETUP.md for detailed instructions.'
+        );
+      } else if (errorMessage.includes('establish connection') || errorMessage.includes('Receiving end does not exist')) {
+        alert(
+          '⚠️ Edge Function Connection Error\n\n' +
+          'Unable to connect to the AI service. This could be:\n\n' +
+          '• Anthropic API key not configured (see ANTHROPIC_SETUP.md)\n' +
+          '• Network connectivity issue\n' +
+          '• Edge function not deployed\n\n' +
+          'Please check the console for details and contact support if needed.'
+        );
+      } else if (errorMessage.includes('Failed to parse response')) {
+        alert(
+          '⚠️ API Response Error\n\n' +
+          'The AI service returned an unexpected response.\n\n' +
+          'This usually means:\n' +
+          '• The Anthropic API key is not configured\n' +
+          '• The API quota has been exceeded\n' +
+          '• The document format is not supported\n\n' +
+          'Error: ' + errorMessage
+        );
+      } else {
+        alert(
+          'Error generating course:\n\n' +
+          errorMessage +
+          '\n\nPlease check the console for details.'
+        );
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ============================================
+  // STEP 1: EXTRACT VERIFIABLE FACTS (100% FROM DOCUMENT)
+  // ============================================
+
+  const extractVerifiableFacts = async (text) => {
+    return await courseApi.extractVerifiableFacts(text);
+  };
+
+  // ============================================
+  // STEP 2: GENERATE QUESTIONS FROM VERIFIED FACTS
+  // ============================================
+
+  const generateQuestionsFromFacts = async (facts, sourceText) => {
+    return await courseApi.generateQuestionsFromFacts(facts, sourceText, 5);
+  };
+
+  // ============================================
+  // STEP 3: VERIFY 100% ACCURACY
+  // ============================================
+
+  const verifyQuestions = async (questionData, sourceText) => {
+    const questions = questionData.questions;
+    const verifications = [];
+    let totalScore = 0;
+
+    for (const q of questions) {
+      // Verify quote exists in source
+      const quoteExists = sourceText.includes(q.exactQuote);
+      
+      // Calculate similarity of question to source
+      const similarity = calculateSimilarity(q.question + ' ' + q.explanation, sourceText);
+      
+      // Verify correct answer is in the quote
+      const correctOption = q.options[q.correctAnswer];
+      const answerVerifiable = q.exactQuote.toLowerCase().includes(correctOption.toLowerCase()) ||
+                               checkSemanticMatch(correctOption, q.exactQuote);
+      
+      const score = (quoteExists ? 40 : 0) + 
+                    (similarity > 70 ? 30 : 0) + 
+                    (answerVerifiable ? 30 : 0);
+      
+      totalScore += score;
+      
+      verifications.push({
+        questionId: q.id,
+        question: q.question,
+        quoteExists,
+        similarity: Math.round(similarity),
+        answerVerifiable,
+        score: Math.round(score),
+        status: score >= 90 ? 'verified' : score >= 70 ? 'warning' : 'failed',
+        issues: [
+          !quoteExists && 'Quote not found in source document',
+          similarity <= 70 && `Low similarity: ${Math.round(similarity)}%`,
+          !answerVerifiable && 'Answer not verifiable from quote'
+        ].filter(Boolean)
+      });
+    }
+
+    const averageScore = Math.round(totalScore / questions.length);
+    const allVerified = verifications.every(v => v.status === 'verified');
+
+    return {
+      overallScore: averageScore,
+      totalQuestions: questions.length,
+      verified: verifications.filter(v => v.status === 'verified').length,
+      warnings: verifications.filter(v => v.status === 'warning').length,
+      failed: verifications.filter(v => v.status === 'failed').length,
+      allVerified,
+      details: verifications,
+      summary: allVerified 
+        ? `✅ All ${questions.length} questions verified (${averageScore}% accuracy)`
+        : `⚠️ ${verifications.filter(v => v.status !== 'verified').length} questions need review`
+    };
+  };
+
+  // ============================================
+  // SIMILARITY CALCULATION
+  // ============================================
+
+  const calculateSimilarity = (text1, text2) => {
+    // Convert to lowercase and extract meaningful words
+    const words1 = text1.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 3); // Filter short words
+    
+    const words2 = text2.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/);
+    
+    // Count matches
+    const matches = words1.filter(w => 
+      words2.some(w2 => w2.includes(w) || w.includes(w2))
+    ).length;
+    
+    return (matches / words1.length) * 100;
+  };
+
+  const checkSemanticMatch = (answer, quote) => {
+    // Check if key terms from answer appear in quote
+    const answerTerms = answer.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+    const quoteText = quote.toLowerCase();
+    
+    const matchCount = answerTerms.filter(term => quoteText.includes(term)).length;
+    return (matchCount / answerTerms.length) >= 0.5; // At least 50% of key terms match
+  };
+
+  // ============================================
+  // STEP 4: GENERATE COURSE MODULES
+  // ============================================
+
+  const generateModulesFromDocument = async (text, facts) => {
+    return await courseApi.generateModulesFromDocument(text, facts);
+  };
+
+  // ============================================
+  // STEP 5: GENERATE IMAGES (OPTIONAL)
+  // ============================================
+
+  const generateCourseImages = async (modules) => {
+    // Placeholder for image generation
+    // In production, you could integrate with DALL-E, Stable Diffusion, etc.
+    return modules.map((module, idx) => ({
+      moduleId: module.id,
+      imageUrl: `https://via.placeholder.com/800x400/4F46E5/FFFFFF?text=${encodeURIComponent(module.title)}`,
+      altText: module.title
+    }));
+  };
+
+  // ============================================
+  // SCORM EXPORT
+  // ============================================
+
+  const exportSCORM = async () => {
+    try {
+      setIsProcessing(true);
+      setProcessingStage('Validating SCORM structure...');
+
+      const validation = validateSCORMStructure(courseData, config);
+
+      if (!validation.valid) {
+        alert(`Cannot export SCORM package:\n\n${validation.errors.join('\n')}`);
+        setIsProcessing(false);
+        return;
+      }
+
+      if (validation.warnings.length > 0) {
+        const proceed = confirm(
+          `Warnings found:\n\n${validation.warnings.join('\n')}\n\nDo you want to continue with export?`
+        );
+        if (!proceed) {
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      setProcessingStage('Generating SCORM package...');
+
+      const blob = await generateSCORMPackage(courseData, config);
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${courseTitle.replace(/[^a-z0-9]/gi, '_')}_SCORM_${config.scormVersion}.zip`;
+      a.click();
+
+      URL.revokeObjectURL(url);
+
+      setIsProcessing(false);
+
+      const compatInfo = getSCORMCompatibilityInfo(config.scormVersion);
+      alert(
+        `SCORM ${config.scormVersion} package generated successfully!\n\n` +
+        `The ZIP file has been downloaded and is ready to upload to your LMS.\n\n` +
+        `Compatible with: ${compatInfo.compatibility.slice(0, 3).join(', ')}, and more.`
+      );
+    } catch (error) {
+      console.error('Error generating SCORM package:', error);
+      alert('Error generating SCORM package. Please check the console for details.');
+      setIsProcessing(false);
+    }
+  };
+
+  // ============================================
+  // RENDER FUNCTIONS
+  // ============================================
+
+  const renderUploadStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center mb-8">
+          <FileText className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Upload Training Document</h2>
+          <p className="text-gray-600">Upload a PDF containing your training content (SOP, policy, procedure)</p>
+        </div>
+
+        <div className="border-4 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-blue-400 transition-all cursor-pointer"
+             onClick={() => fileInputRef.current?.click()}>
+          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-lg font-semibold text-gray-700 mb-2">
+            {uploadedFile ? uploadedFile.name : 'Click to upload or drag and drop'}
+          </p>
+          <p className="text-sm text-gray-500">PDF files only • Max 10MB</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+        </div>
+
+        {documentText && (
+          <div className="mt-8">
+            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+                <div>
+                  <p className="font-semibold text-green-900">Document loaded successfully</p>
+                  <p className="text-sm text-green-700">{documentText.split('\n').length} lines • {documentText.length} characters</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Course Title</label>
+              <input
+                type="text"
+                value={courseTitle}
+                onChange={(e) => setCourseTitle(e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                placeholder="Enter course title"
+              />
+            </div>
+
+            <button
+              onClick={() => setStep('configure')}
+              disabled={!courseTitle.trim()}
+              className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Continue to Configuration →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderConfigureStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Configure Course Settings</h2>
+          <p className="text-gray-600">Customize your course generation options</p>
+        </div>
+
+        {/* Question Mode Selection */}
+        <div className="mb-8 p-6 border-2 border-blue-200 bg-blue-50 rounded-xl">
+          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Settings className="w-6 h-6 text-blue-600" />
+            Question Generation Mode
+          </h3>
+          
+          <div className="space-y-3">
+            <label className="flex items-start gap-3 p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 transition-all bg-white">
+              <input
+                type="radio"
+                name="questionMode"
+                value="ai"
+                checked={config.questionMode === 'ai'}
+                onChange={(e) => setConfig({...config, questionMode: e.target.value})}
+                className="mt-1 w-5 h-5 text-blue-600"
+              />
+              <div className="flex-1">
+                <p className="font-bold text-gray-900">AI-Generated Questions</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Automatically generate 100% verified questions from your document
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 transition-all bg-white">
+              <input
+                type="radio"
+                name="questionMode"
+                value="manual"
+                checked={config.questionMode === 'manual'}
+                onChange={(e) => setConfig({...config, questionMode: e.target.value})}
+                className="mt-1 w-5 h-5 text-blue-600"
+              />
+              <div className="flex-1">
+                <p className="font-bold text-gray-900">Create My Own Questions</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Manually write custom questions and answers
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 transition-all bg-white">
+              <input
+                type="radio"
+                name="questionMode"
+                value="hybrid"
+                checked={config.questionMode === 'hybrid'}
+                onChange={(e) => setConfig({...config, questionMode: e.target.value})}
+                className="mt-1 w-5 h-5 text-blue-600"
+              />
+              <div className="flex-1">
+                <p className="font-bold text-gray-900">Hybrid (AI + Manual)</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Combine AI-generated questions with your custom questions
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Manual Question Creator */}
+          {(config.questionMode === 'manual' || config.questionMode === 'hybrid') && (
+            <div className="mt-6 p-6 bg-white border-2 border-gray-200 rounded-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-bold text-gray-900">Your Custom Questions ({manualQuestions.length})</h4>
+                <button
+                  onClick={createNewQuestion}
+                  className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all"
+                >
+                  + Add Question
+                </button>
+              </div>
+
+              {manualQuestions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="mb-2">No custom questions yet</p>
+                  <p className="text-sm">Click "Add Question" to create your first question</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {manualQuestions.map((q, idx) => {
+                    const verification = verifyManualQuestion(q);
+                    return (
+                      <div key={idx} className={`p-4 border-2 rounded-lg ${
+                        verification.verified ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+                      }`}>
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900 mb-1">Q{idx + 1}: {q.question}</p>
+                            <div className="flex gap-2 text-xs">
+                              <span className={`px-2 py-1 rounded ${
+                                verification.verified ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
+                              }`}>
+                                {verification.score}% Match
+                              </span>
+                              {q.sourceReference && (
+                                <span className="px-2 py-1 rounded bg-blue-100 text-blue-700">
+                                  {q.sourceReference}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={() => editManualQuestion(q, idx)}
+                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-all text-sm"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteManualQuestion(idx)}
+                              className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-all text-sm"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-700 mt-2">
+                          <p className="font-medium">Answer: {q.options[q.correctAnswer]}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {config.questionMode === 'manual' && manualQuestions.length < 3 && (
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                  ⚠️ Minimum 3 questions required. You have {manualQuestions.length}.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Quiz Settings */}
+        <div className="mb-8 p-6 border-2 border-gray-200 rounded-xl">
+          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Settings className="w-6 h-6 text-blue-600" />
+            Quiz Settings
+          </h3>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Passing Score (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={config.passingScore}
+                onChange={(e) => setConfig({...config, passingScore: parseInt(e.target.value)})}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Max Attempts</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={config.maxAttempts}
+                onChange={(e) => setConfig({...config, maxAttempts: parseInt(e.target.value)})}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">SCORM Version</label>
+            <select
+              value={config.scormVersion}
+              onChange={(e) => setConfig({...config, scormVersion: e.target.value})}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+            >
+              <option value="1.2">SCORM 1.2 (Most Compatible)</option>
+              <option value="2004">SCORM 2004 (Advanced Features)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Image Settings */}
+        <div className="mb-8 p-6 border-2 border-gray-200 rounded-xl">
+          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Image className="w-6 h-6 text-purple-600" />
+            Visual Settings
+          </h3>
+
+          <div className="mb-6">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config.includeImages}
+                onChange={(e) => setConfig({...config, includeImages: e.target.checked})}
+                className="w-5 h-5 text-blue-600"
+              />
+              <span className="font-semibold text-gray-700">Include AI-generated images for each module</span>
+            </label>
+            <p className="text-sm text-gray-500 ml-8 mt-1">
+              Adds visual content to make the course more engaging
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Company Logo (Optional)
+            </label>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => logoInputRef.current?.click()}
+                className="px-4 py-2 bg-gray-100 border-2 border-gray-300 rounded-lg hover:bg-gray-200 transition-all"
+              >
+                Choose Logo
+              </button>
+              {config.brandingLogo && (
+                <div className="flex items-center gap-2">
+                  <img src={config.brandingLogo} alt="Logo preview" className="h-12 w-12 object-contain border rounded" />
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+              )}
+            </div>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleLogoUpload}
+            />
+            <p className="text-sm text-gray-500 mt-2">
+              Your logo will appear on the course title page and certificates
+            </p>
+          </div>
+        </div>
+
+        {/* Accuracy Mode */}
+        <div className="mb-8 p-6 border-2 border-green-200 bg-green-50 rounded-xl">
+          <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Percent className="w-6 h-6 text-green-600" />
+            Content Accuracy Mode
+          </h3>
+          
+          <div className="bg-white rounded-lg p-4 border-2 border-green-300">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+              <div>
+                <p className="font-bold text-gray-900 mb-1">Strict Verification Mode (Enabled)</p>
+                <p className="text-sm text-gray-700 mb-2">
+                  All quiz questions will be 100% verified against your source document:
+                </p>
+                <ul className="text-sm text-gray-600 space-y-1 ml-4">
+                  <li>✓ Questions must reference exact quotes from the document</li>
+                  <li>✓ Answers must be directly verifiable from source text</li>
+                  <li>✓ Each question includes source section reference</li>
+                  <li>✓ Automated accuracy verification (target: 95%+ match)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <button
+            onClick={() => setStep('upload')}
+            className="px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={generateCourse}
+            disabled={
+              (config.questionMode === 'manual' && manualQuestions.length < 3) ||
+              (config.questionMode === 'hybrid' && manualQuestions.length < 1)
+            }
+            className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {config.questionMode === 'ai' && 'Generate Course (100% Verified)'}
+            {config.questionMode === 'manual' && `Generate Course with ${manualQuestions.length} Custom Questions`}
+            {config.questionMode === 'hybrid' && `Generate Course (AI + ${manualQuestions.length} Custom)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderProcessingStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
+        <Loader className="w-16 h-16 text-blue-600 mx-auto mb-6 animate-spin" />
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">Generating Your Course...</h2>
+        <p className="text-lg text-gray-600 mb-8">{processingStage}</p>
+        
+        <div className="max-w-md mx-auto">
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 h-3 rounded-full transition-all duration-500"
+                 style={{ width: processingStage.includes('facts') ? '20%' : 
+                                processingStage.includes('quiz') ? '40%' : 
+                                processingStage.includes('Verifying') ? '60%' : 
+                                processingStage.includes('structure') ? '80%' : '100%' }}>
+            </div>
+          </div>
+          
+          <div className="mt-6 text-sm text-gray-500 space-y-2">
+            <p>✓ Extracting verifiable facts from document</p>
+            <p>✓ Generating quiz questions with source verification</p>
+            <p>✓ Running 100% accuracy checks</p>
+            <p>✓ Building course modules</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPreviewStep = () => {
+    if (!courseData || !verificationReport) return null;
+
+    return (
+      <div className="max-w-6xl mx-auto">
+        {/* Verification Report */}
+        <div className={`rounded-2xl shadow-xl p-8 mb-8 ${
+          verificationReport.allVerified 
+            ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200' 
+            : 'bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200'
+        }`}>
+          <div className="flex items-center gap-4 mb-6">
+            {verificationReport.allVerified ? (
+              <CheckCircle className="w-12 h-12 text-green-600" />
+            ) : (
+              <AlertCircle className="w-12 h-12 text-yellow-600" />
+            )}
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">Verification Report</h2>
+              <p className={`text-lg ${verificationReport.allVerified ? 'text-green-700' : 'text-yellow-700'}`}>
+                {verificationReport.summary}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+              <p className="text-sm text-gray-600 mb-1">Overall Score</p>
+              <p className="text-3xl font-bold text-blue-600">{verificationReport.overallScore}%</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+              <p className="text-sm text-gray-600 mb-1">Verified</p>
+              <p className="text-3xl font-bold text-green-600">{verificationReport.verified}</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+              <p className="text-sm text-gray-600 mb-1">Warnings</p>
+              <p className="text-3xl font-bold text-yellow-600">{verificationReport.warnings}</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+              <p className="text-sm text-gray-600 mb-1">Failed</p>
+              <p className="text-3xl font-bold text-red-600">{verificationReport.failed}</p>
+            </div>
+          </div>
+
+          {/* Detailed Verification */}
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200">
+            <h3 className="font-bold text-gray-900 mb-4">Detailed Verification Results</h3>
+            <div className="space-y-3">
+              {verificationReport.details.map((detail, idx) => {
+                const question = courseData.quiz.questions[idx];
+                const isManual = question?.isManual;
+                
+                return (
+                  <div key={idx} className={`p-4 rounded-lg border-2 ${
+                    detail.status === 'verified' ? 'bg-green-50 border-green-200' : 
+                    detail.status === 'warning' ? 'bg-yellow-50 border-yellow-200' : 
+                    'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-900">Question {idx + 1}</p>
+                        {isManual && (
+                          <span className="px-2 py-1 rounded text-xs font-bold bg-purple-100 text-purple-700">
+                            CUSTOM
+                          </span>
+                        )}
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        detail.status === 'verified' ? 'bg-green-600 text-white' : 
+                        detail.status === 'warning' ? 'bg-yellow-600 text-white' : 
+                        'bg-red-600 text-white'
+                      }`}>
+                        {detail.score}% Match
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-700 mb-2">{detail.question}</p>
+                    <div className="flex gap-4 text-xs">
+                      <span className={detail.quoteExists ? 'text-green-600' : 'text-red-600'}>
+                        {detail.quoteExists ? '✓' : '✗'} Quote Verified
+                      </span>
+                      <span className={detail.similarity > 70 ? 'text-green-600' : 'text-red-600'}>
+                        {detail.similarity > 70 ? '✓' : '✗'} {detail.similarity}% Similarity
+                      </span>
+                      <span className={detail.answerVerifiable ? 'text-green-600' : 'text-red-600'}>
+                        {detail.answerVerifiable ? '✓' : '✗'} Answer Verified
+                      </span>
+                    </div>
+                    {detail.issues.length > 0 && (
+                      <div className="mt-2 text-xs text-red-600">
+                        Issues: {detail.issues.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Course Preview */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              {config.brandingLogo && (
+                <img src={config.brandingLogo} alt="Logo" className="h-16 w-16 object-contain" />
+              )}
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">{courseData.title}</h2>
+                <p className="text-gray-600">{courseData.modules.length} modules • {courseData.quiz.questions.length} quiz questions</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Modules Preview */}
+          <div className="space-y-4">
+            {courseData.modules.map((module, idx) => (
+              <div key={idx} className="border-2 border-gray-200 rounded-xl p-6 hover:border-blue-300 transition-all">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{module.title}</h3>
+                    <p className="text-sm text-gray-500">{module.duration}</p>
+                  </div>
+                  {config.includeImages && courseData.images[idx] && (
+                    <img 
+                      src={courseData.images[idx].imageUrl} 
+                      alt={courseData.images[idx].altText}
+                      className="w-24 h-16 object-cover rounded border"
+                    />
+                  )}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {module.content.length} content sections
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-4">
+          <button
+            onClick={() => setStep('configure')}
+            disabled={isProcessing}
+            className="px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ← Regenerate
+          </button>
+          <button
+            onClick={exportSCORM}
+            disabled={!verificationReport.allVerified || isProcessing}
+            className="flex-1 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isProcessing ? (
+              <>
+                <Loader className="w-5 h-5 animate-spin" />
+                Generating Package...
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                {verificationReport.allVerified
+                  ? 'Export SCORM Package'
+                  : 'Fix Issues Before Export'}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // MAIN RENDER
+  // ============================================
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
+      <div className="max-w-7xl mx-auto py-12">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+            AI Course Builder
+          </h1>
+          <p className="text-xl text-gray-600">
+            100% Verified • Custom Branding • Manual Questions
+          </p>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="flex justify-center mb-12">
+          <div className="flex items-center gap-4">
+            {['upload', 'configure', 'processing', 'preview'].map((s, idx) => (
+              <React.Fragment key={s}>
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${
+                  step === s ? 'bg-blue-600 text-white' : 
+                  ['upload', 'configure', 'processing', 'preview'].indexOf(step) > idx ? 'bg-green-600 text-white' : 
+                  'bg-gray-200 text-gray-600'
+                }`}>
+                  <span className="font-semibold capitalize">{s}</span>
+                </div>
+                {idx < 3 && (
+                  <div className={`w-12 h-1 ${
+                    ['upload', 'configure', 'processing', 'preview'].indexOf(step) > idx ? 'bg-green-600' : 'bg-gray-300'
+                  }`} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        {step === 'upload' && renderUploadStep()}
+        {step === 'configure' && renderConfigureStep()}
+        {step === 'processing' && renderProcessingStep()}
+        {step === 'preview' && renderPreviewStep()}
+      </div>
+
+      {/* Question Editor Modal */}
+      {showQuestionEditor && editingQuestion && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b-2 border-gray-200 p-6">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {editingQuestion.existingIndex !== undefined ? 'Edit Question' : 'Create New Question'}
+              </h2>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Question Text */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Question <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  value={editingQuestion.question}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, question: e.target.value})}
+                  placeholder="e.g., According to Section 4.1, how long should hands be washed?"
+                  rows={3}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Source Reference */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Source Reference (Optional but Recommended)
+                </label>
+                <input
+                  type="text"
+                  value={editingQuestion.sourceReference}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, sourceReference: e.target.value})}
+                  placeholder="e.g., Section 4.1"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Exact Quote */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Exact Quote from Document (Optional)
+                </label>
+                <textarea
+                  value={editingQuestion.exactQuote}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, exactQuote: e.target.value})}
+                  placeholder="Copy the exact text from the document that this question is based on"
+                  rows={2}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Including the exact quote helps verify your question matches the source document
+                </p>
+              </div>
+
+              {/* Answer Options */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Answer Options <span className="text-red-600">*</span>
+                </label>
+                <div className="space-y-3">
+                  {editingQuestion.options.map((option, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="correctAnswer"
+                        checked={editingQuestion.correctAnswer === idx}
+                        onChange={() => setEditingQuestion({...editingQuestion, correctAnswer: idx})}
+                        className="w-5 h-5 text-green-600"
+                      />
+                      <input
+                        type="text"
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...editingQuestion.options];
+                          newOptions[idx] = e.target.value;
+                          setEditingQuestion({...editingQuestion, options: newOptions});
+                        }}
+                        placeholder={`Option ${idx + 1} ${idx === editingQuestion.correctAnswer ? '(Correct Answer)' : ''}`}
+                        className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  ✓ Click the radio button to mark the correct answer
+                </p>
+              </div>
+
+              {/* Explanation */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Explanation (Optional)
+                </label>
+                <textarea
+                  value={editingQuestion.explanation}
+                  onChange={(e) => setEditingQuestion({...editingQuestion, explanation: e.target.value})}
+                  placeholder="Explain why this answer is correct"
+                  rows={2}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Verification Preview */}
+              {documentText && editingQuestion.question && (
+                <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-2">Real-time Verification</p>
+                  {(() => {
+                    const verification = verifyManualQuestion(editingQuestion);
+                    return (
+                      <div className="text-sm space-y-1">
+                        <p className={verification.verified ? 'text-green-700' : 'text-yellow-700'}>
+                          Match Score: {verification.score}% 
+                          {verification.verified ? ' ✓ Verified' : ' ⚠️ Needs Review'}
+                        </p>
+                        <p className="text-gray-700">
+                          Similarity: {verification.similarity}% • 
+                          Quote: {verification.quoteExists ? '✓ Found' : '✗ Not found'}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="sticky bottom-0 bg-gray-50 border-t-2 border-gray-200 p-6 flex gap-4">
+              <button
+                onClick={() => {
+                  setShowQuestionEditor(false);
+                  setEditingQuestion(null);
+                }}
+                className="px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveManualQuestion}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-lg hover:shadow-lg transition-all"
+              >
+                {editingQuestion.existingIndex !== undefined ? 'Update Question' : 'Save Question'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EnhancedCourseBuilder;

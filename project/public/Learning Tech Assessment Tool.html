@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L&D Technology Assessment Spreadsheet</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; padding: 20px; }
+        .container { max-width: 1600px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .controls { padding: 20px 30px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .filter-section { padding: 15px 30px; background: #fff; border-bottom: 1px solid #e9ecef; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+        .filter-group { display: flex; align-items: center; gap: 8px; }
+        .filter-group label { font-size: 13px; font-weight: 500; color: #495057; }
+        .filter-group select { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; min-width: 150px; }
+        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-secondary { background: white; color: #495057; border: 1px solid #dee2e6; }
+        .btn-secondary:hover { background: #e9ecef; }
+        .table-container { overflow-x: auto; padding: 20px 30px; max-height: 600px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f8f9fa; padding: 12px 8px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; white-space: nowrap; cursor: pointer; user-select: none; }
+        th:hover { background: #e9ecef; }
+        th.sortable::after { content: ' ⇅'; opacity: 0.3; }
+        th.sort-asc::after { content: ' ↑'; opacity: 1; }
+        th.sort-desc::after { content: ' ↓'; opacity: 1; }
+        td { padding: 12px 8px; border-bottom: 1px solid #e9ecef; }
+        tr:hover { background: #f8f9fa; }
+        tr.hidden { display: none; }
+        input[type="text"], select, textarea { width: 100%; padding: 6px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: inherit; }
+        textarea { resize: vertical; min-height: 60px; }
+        input[type="text"]:focus, select:focus, textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        .priority-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-align: center; }
+        .priority-critical { background: #fee; color: #c00; }
+        .priority-high { background: #ffd7a8; color: #b25200; }
+        .priority-medium { background: #fff3cd; color: #856404; }
+        .priority-low { background: #d1f4e0; color: #0f6b3c; }
+        .actions { display: flex; gap: 5px; }
+        .btn-small { padding: 4px 8px; font-size: 12px; }
+        .summary { padding: 20px 30px; background: #f8f9fa; border-top: 1px solid #e9ecef; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
+        .summary-card { background: white; padding: 15px; border-radius: 6px; border: 1px solid #dee2e6; }
+        .summary-card h3 { font-size: 12px; color: #6c757d; margin-bottom: 5px; text-transform: uppercase; }
+        .summary-card p { font-size: 24px; font-weight: 600; color: #212529; }
+        .analysis-section { padding: 30px; background: #f8f9fa; border-top: 2px solid #dee2e6; }
+        .analysis-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .analysis-header h2 { font-size: 20px; color: #212529; }
+        .analysis-tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; }
+        .tab-btn { padding: 12px 20px; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #6c757d; transition: all 0.2s; }
+        .tab-btn:hover { color: #495057; background: #e9ecef; }
+        .tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+        .analysis-tab-content { display: none; background: white; padding: 20px; border-radius: 6px; }
+        .analysis-tab-content.active { display: block; }
+        .analysis-tab-content h3 { font-size: 16px; color: #212529; margin-bottom: 5px; }
+        .tab-description { font-size: 13px; color: #6c757d; margin-bottom: 15px; }
+        .analysis-content { min-height: 200px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #adb5bd; font-size: 14px; }
+        .analysis-card { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #667eea; }
+        .analysis-card.warning { border-left-color: #ffc107; }
+        .analysis-card.danger { border-left-color: #dc3545; }
+        .analysis-card.info { border-left-color: #17a2b8; }
+        .analysis-card h4 { font-size: 14px; font-weight: 600; color: #212529; margin-bottom: 8px; }
+        .analysis-card p { font-size: 13px; color: #495057; margin-bottom: 8px; line-height: 1.5; }
+        .analysis-card .tech-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .tech-tag { display: inline-block; padding: 4px 10px; background: white; border: 1px solid #dee2e6; border-radius: 4px; font-size: 12px; color: #495057; }
+        .metric { display: inline-block; padding: 3px 8px; background: white; border-radius: 4px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+        .reference-library { padding: 30px; background: white; }
+        .reference-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #dee2e6; }
+        .reference-header h2 { font-size: 20px; color: #212529; }
+        .reference-filters { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; }
+        .reference-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+        .ref-card { background: white; border: 2px solid #e9ecef; border-radius: 8px; padding: 20px; transition: all 0.2s; cursor: pointer; }
+        .ref-card:hover { border-color: #667eea; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15); }
+        .ref-card.selected { border-color: #667eea; background: #f0f3ff; }
+        .ref-card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; }
+        .ref-card-title { font-size: 16px; font-weight: 600; color: #212529; margin-bottom: 4px; }
+        .ref-card-vendor { font-size: 13px; color: #6c757d; }
+        .ref-card-rating { display: flex; align-items: center; gap: 5px; }
+        .ref-card-rating .stars { color: #ffc107; font-size: 14px; }
+        .ref-card-rating .score { font-size: 13px; font-weight: 600; color: #495057; }
+        .ref-card-category { display: inline-block; padding: 4px 10px; background: #667eea; color: white; border-radius: 12px; font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+        .ref-card-desc { font-size: 13px; color: #495057; line-height: 1.5; margin-bottom: 12px; }
+        .ref-card-features { margin-bottom: 12px; }
+        .ref-card-features h4 { font-size: 12px; font-weight: 600; color: #6c757d; margin-bottom: 6px; text-transform: uppercase; }
+        .ref-card-features ul { list-style: none; padding-left: 0; }
+        .ref-card-features li { font-size: 12px; color: #495057; padding: 3px 0; padding-left: 16px; position: relative; }
+        .ref-card-features li:before { content: "✓"; position: absolute; left: 0; color: #667eea; font-weight: 600; }
+        .ref-card-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid #e9ecef; }
+        .ref-card-price { font-size: 14px; font-weight: 600; color: #667eea; }
+        .session-manager { padding: 30px; background: white; }
+        .session-list { display: grid; gap: 15px; }
+        .session-card { background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .session-card:hover { border-color: #667eea; }
+        .session-info h3 { font-size: 18px; color: #212529; margin-bottom: 5px; }
+        .session-info p { font-size: 13px; color: #6c757d; margin: 3px 0; }
+        .session-actions { display: flex; gap: 8px; }
+        .btn-icon { padding: 8px 12px; font-size: 18px; }
+        .weights-panel { padding: 20px 30px; background: #fff9e6; border-bottom: 2px solid #ffd966; }
+        .weights-panel h3 { margin-bottom: 8px; color: #495057; font-size: 16px; }
+        .weights-panel p { margin-bottom: 15px; color: #6c757d; font-size: 13px; }
+        .weights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .weight-item { display: flex; align-items: center; gap: 8px; }
+        .weight-item label { font-size: 13px; font-weight: 500; color: #495057; flex: 1; }
+        .weight-item input { width: 70px; padding: 6px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+        .weight-item span { font-size: 13px; color: #6c757d; }
+        .weight-total { margin: 15px 0; padding: 10px; background: white; border-radius: 4px; font-size: 14px; }
+        .score-cell { font-weight: 600; color: #667eea; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>L&D Technology Stack Assessment</h1>
+            <p>Comprehensive evaluation of learning technologies, usage, and optimization opportunities</p>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-primary" onclick="addRow()">+ Add Technology</button>
+            <button class="btn-secondary" onclick="showReferenceLibrary()">📚 Reference Library</button>
+            <button class="btn-secondary" onclick="document.getElementById('csvImport').click()">📥 Import CSV</button>
+            <button class="btn-secondary" onclick="exportData()">📤 Export to CSV</button>
+            <button class="btn-secondary" onclick="toggleWeights()">⚙️ Configure Weights</button>
+            <button class="btn-secondary" onclick="saveToLocalStorage()">💾 Save Session</button>
+            <button class="btn-secondary" onclick="showSessionManager()">📋 Manage Sessions</button>
+            <button class="btn-secondary" onclick="duplicateAssessment()">📑 Duplicate</button>
+            <button class="btn-secondary" onclick="clearAll()">Clear All</button>
+            <input type="file" id="csvImport" accept=".csv" style="display: none;" onchange="importCSV(event)">
+        </div>
+        
+        <div id="weightsPanel" class="weights-panel" style="display: none;">
+            <h3>Evaluation Category Weights</h3>
+            <p>Adjust the importance of each factor in calculating the overall score (total must equal 100%)</p>
+            <div class="weights-grid">
+                <div class="weight-item">
+                    <label>Adoption Rate:</label>
+                    <input type="number" id="weightAdoption" value="25" min="0" max="100" onchange="updateWeights()">
+                    <span>%</span>
+                </div>
+                <div class="weight-item">
+                    <label>User Satisfaction:</label>
+                    <input type="number" id="weightSatisfaction" value="30" min="0" max="100" onchange="updateWeights()">
+                    <span>%</span>
+                </div>
+                <div class="weight-item">
+                    <label>Integration Status:</label>
+                    <input type="number" id="weightIntegration" value="20" min="0" max="100" onchange="updateWeights()">
+                    <span>%</span>
+                </div>
+                <div class="weight-item">
+                    <label>Cost Efficiency:</label>
+                    <input type="number" id="weightCost" value="25" min="0" max="100" onchange="updateWeights()">
+                    <span>%</span>
+                </div>
+            </div>
+            <div class="weight-total">
+                <strong>Total: <span id="weightTotal">100</span>%</strong>
+                <span id="weightWarning" style="color: #c00; margin-left: 10px; display: none;">⚠️ Total must equal 100%</span>
+            </div>
+            <button class="btn-primary" onclick="applyWeights()">Apply Weights</button>
+            <button class="btn-secondary" onclick="resetWeights()">Reset to Default</button>
+        </div>
+        
+        <div class="filter-section">
+            <div class="filter-group">
+                <label>Category:</label>
+                <select id="filterCategory" onchange="applyFilters()">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Priority:</label>
+                <select id="filterPriority" onchange="applyFilters()">
+                    <option value="">All Priorities</option>
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Recommendation:</label>
+                <select id="filterRecommendation" onchange="applyFilters()">
+                    <option value="">All Recommendations</option>
+                </select>
+            </div>
+            <button class="btn-secondary btn-small" onclick="clearFilters()">Clear Filters</button>
+        </div>
+        
+        <div class="table-container">
+            <table id="assessmentTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortTable(0)" style="width: 120px;">Category</th>
+                        <th class="sortable" onclick="sortTable(1)" style="width: 150px;">Technology Type</th>
+                        <th class="sortable" onclick="sortTable(2)" style="width: 150px;">Technology Name</th>
+                        <th class="sortable" onclick="sortTable(3)" style="width: 120px;">Vendor</th>
+                        <th style="width: 180px;">Primary Function</th>
+                        <th class="sortable" onclick="sortTable(5)" style="width: 100px;">Users</th>
+                        <th class="sortable" onclick="sortTable(6)" style="width: 100px;">Adoption %</th>
+                        <th class="sortable" onclick="sortTable(7)" style="width: 120px;">Annual Cost</th>
+                        <th class="sortable" onclick="sortTable(8)" style="width: 110px;">Satisfaction</th>
+                        <th class="sortable" onclick="sortTable(9)" style="width: 140px;">Integration</th>
+                        <th style="width: 200px;">Key Issues/Notes</th>
+                        <th class="sortable" onclick="sortTable(11)" style="width: 130px;">Recommendation</th>
+                        <th class="sortable" onclick="sortTable(12)" style="width: 100px;">Priority</th>
+                        <th class="sortable" onclick="sortTable(13)" style="width: 100px;">Overall Score</th>
+                        <th style="width: 80px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+        
+        <div class="summary">
+            <h2 style="margin-bottom: 10px;">Assessment Summary</h2>
+            <div class="summary-grid">
+                <div class="summary-card"><h3>Total Technologies</h3><p id="totalCount">0</p></div>
+                <div class="summary-card"><h3>Total Annual Cost</h3><p id="totalCost">$0</p></div>
+                <div class="summary-card"><h3>Avg Adoption Rate</h3><p id="avgAdoption">0%</p></div>
+                <div class="summary-card"><h3>Avg Satisfaction</h3><p id="avgSatisfaction">0/5</p></div>
+                <div class="summary-card"><h3>Critical Priority</h3><p id="criticalCount">0</p></div>
+                <div class="summary-card"><h3>High Priority</h3><p id="highCount">0</p></div>
+            </div>
+        </div>
+        
+        <div class="analysis-section">
+            <div class="analysis-header">
+                <h2>Gap & Redundancy Analysis</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-primary" onclick="generateAnalysis()">Generate Analysis</button>
+                    <button class="btn-secondary" onclick="exportAnalysis()">📤 Export Analysis</button>
+                </div>
+            </div>
+            
+            <div class="analysis-tabs">
+                <button class="tab-btn active" onclick="switchTab('gaps')">Capability Gaps</button>
+                <button class="tab-btn" onclick="switchTab('redundancies')">Redundancies</button>
+                <button class="tab-btn" onclick="switchTab('underutilized')">Underutilized</button>
+                <button class="tab-btn" onclick="switchTab('integration')">Integration Issues</button>
+            </div>
+            
+            <div id="gapsTab" class="analysis-tab-content active">
+                <h3>Missing Capabilities</h3>
+                <p class="tab-description">Technology types with no solutions or insufficient coverage</p>
+                <div id="gapsContent" class="analysis-content">
+                    <p class="empty-state">Click "Generate Analysis" to identify capability gaps</p>
+                </div>
+            </div>
+            
+            <div id="redundanciesTab" class="analysis-tab-content">
+                <h3>Redundant Technologies</h3>
+                <p class="tab-description">Multiple tools serving similar functions in the same category</p>
+                <div id="redundanciesContent" class="analysis-content">
+                    <p class="empty-state">Click "Generate Analysis" to identify redundancies</p>
+                </div>
+            </div>
+            
+            <div id="underutilizedTab" class="analysis-tab-content">
+                <h3>Underutilized Technologies</h3>
+                <p class="tab-description">Paid tools with low adoption rates (below 50%)</p>
+                <div id="underutilizedContent" class="analysis-content">
+                    <p class="empty-state">Click "Generate Analysis" to identify underutilized technologies</p>
+                </div>
+            </div>
+            
+            <div id="integrationTab" class="analysis-tab-content">
+                <h3>Integration Issues</h3>
+                <p class="tab-description">Technologies with poor integration or operating in silos</p>
+                <div id="integrationContent" class="analysis-content">
+                    <p class="empty-state">Click "Generate Analysis" to identify integration issues</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="sessionManager" class="session-manager" style="display: none;">
+            <div class="reference-header">
+                <h2>Session Manager</h2>
+                <button class="btn-secondary" onclick="hideSessionManager()">← Back to Assessment</button>
+            </div>
+            
+            <div class="session-list" id="sessionList">
+                <!-- Sessions will be populated here -->
+            </div>
+        </div>
+        
+        <div id="referenceLibrary" class="reference-library" style="display: none;">
+            <div class="reference-header">
+                <h2>Learning Technology Reference Library</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-secondary" onclick="hideReferenceLibrary()">← Back to Assessment</button>
+                    <button class="btn-primary" onclick="addToAssessment()">Add Selected to Assessment</button>
+                </div>
+            </div>
+            
+            <div class="reference-filters">
+                <div class="filter-group">
+                    <label>Search:</label>
+                    <input type="text" id="refSearch" placeholder="Search by name or vendor..." onkeyup="filterReference()">
+                </div>
+                <div class="filter-group">
+                    <label>Category:</label>
+                    <select id="refCategoryFilter" onchange="filterReference()">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Price Range:</label>
+                    <select id="refPriceFilter" onchange="filterReference()">
+                        <option value="">All Prices</option>
+                        <option value="free">Free</option>
+                        <option value="low">Low ($0-$5k/year)</option>
+                        <option value="medium">Medium ($5k-$50k/year)</option>
+                        <option value="high">High ($50k+/year)</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Min Rating:</label>
+                    <select id="refRatingFilter" onchange="filterReference()">
+                        <option value="">Any Rating</option>
+                        <option value="4">4+ Stars</option>
+                        <option value="4.5">4.5+ Stars</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="reference-grid" id="referenceGrid">
+                <!-- Reference cards will be populated here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const categories = {
+            'Plan': ['Career Planning', 'Skills Tracking', 'Assessment'],
+            'Discover': ['Content Curation', 'Recommendation'],
+            'Consume': ['Video Library', 'Content Libraries', 'Microlearning', 'LEP / LXP', 'MOOC / Cohort', 'Gamification'],
+            'Experiment': ['Video Practice', 'AR/VR', 'Project Marketplace'],
+            'Connect': ['Mentoring / Coaching', 'Collaborative Learning', 'Expertise Directories'],
+            'Perform': ['Performance Tracking', 'Enablement', 'Certification', 'Knowledge Repositories'],
+            'Manage & Create': ['Back Office Training Mgt', 'LMS', 'LCMS', 'Content Creation', 'Extended Enterprise'],
+            'Analyze': ['LRS', 'Analytics', 'Surveys & Evaluations']
+        };
+        
+        const categoryList = Object.keys(categories);
+        const recommendations = ['Keep & Optimize', 'Consolidate', 'Replace', 'Retire', 'Expand Usage', 'Under Review'];
+        const priorities = ['Critical', 'High', 'Medium', 'Low'];
+        const satisfactionLevels = ['1 - Poor', '2 - Fair', '3 - Good', '4 - Very Good', '5 - Excellent'];
+        const integrationStatus = ['Fully Integrated', 'Partially Integrated', 'Not Integrated', 'Standalone', 'Unknown'];
+        
+        let sortColumn = -1;
+        let sortAscending = true;
+        let weights = { adoption: 25, satisfaction: 30, integration: 20, cost: 25 };
+        
+        function toggleWeights() {
+            const panel = document.getElementById('weightsPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function updateWeights() {
+            const adoption = parseFloat(document.getElementById('weightAdoption').value) || 0;
+            const satisfaction = parseFloat(document.getElementById('weightSatisfaction').value) || 0;
+            const integration = parseFloat(document.getElementById('weightIntegration').value) || 0;
+            const cost = parseFloat(document.getElementById('weightCost').value) || 0;
+            
+            const total = adoption + satisfaction + integration + cost;
+            document.getElementById('weightTotal').textContent = total;
+            
+            const warning = document.getElementById('weightWarning');
+            if (total !== 100) {
+                warning.style.display = 'inline';
+            } else {
+                warning.style.display = 'none';
+            }
+        }
+        
+        function applyWeights() {
+            const total = parseFloat(document.getElementById('weightTotal').textContent);
+            if (total !== 100) {
+                alert('Weights must total 100% before applying.');
+                return;
+            }
+            
+            weights.adoption = parseFloat(document.getElementById('weightAdoption').value);
+            weights.satisfaction = parseFloat(document.getElementById('weightSatisfaction').value);
+            weights.integration = parseFloat(document.getElementById('weightIntegration').value);
+            weights.cost = parseFloat(document.getElementById('weightCost').value);
+            
+            calculateAllScores();
+            toggleWeights();
+        }
+        
+        function resetWeights() {
+            document.getElementById('weightAdoption').value = 25;
+            document.getElementById('weightSatisfaction').value = 30;
+            document.getElementById('weightIntegration').value = 20;
+            document.getElementById('weightCost').value = 25;
+            updateWeights();
+        }
+        
+        function calculateScore(row) {
+            const adoptionVal = parseFloat(row.cells[6].querySelector('input').value) || 0;
+            const adoptionScore = (adoptionVal / 100) * (weights.adoption / 100);
+            
+            const satisfactionVal = row.cells[8].querySelector('select').value;
+            const satisfactionNum = satisfactionVal ? parseInt(satisfactionVal.charAt(0)) : 0;
+            const satisfactionScore = (satisfactionNum / 5) * (weights.satisfaction / 100);
+            
+            const integrationVal = row.cells[9].querySelector('select').value;
+            const integrationMap = { 'Fully Integrated': 1, 'Partially Integrated': 0.7, 'Standalone': 0.5, 'Not Integrated': 0.3, 'Unknown': 0.5 };
+            const integrationScore = (integrationMap[integrationVal] || 0) * (weights.integration / 100);
+            
+            const usersVal = parseFloat(row.cells[5].querySelector('input').value.replace(/[^0-9]/g, '')) || 1;
+            const costVal = parseFloat(row.cells[7].querySelector('input').value.replace(/[^0-9.]/g, '')) || 0;
+            const costPerUser = costVal / usersVal;
+            const costScore = costPerUser === 0 ? 0 : Math.max(0, 1 - (costPerUser / 100)) * (weights.cost / 100);
+            
+            const totalScore = (adoptionScore + satisfactionScore + integrationScore + costScore) * 100;
+            return Math.round(totalScore);
+        }
+        
+        function calculateAllScores() {
+            const rows = document.querySelectorAll('#tableBody tr');
+            rows.forEach(row => {
+                const score = calculateScore(row);
+                const scoreCell = row.cells[13];
+                scoreCell.textContent = score;
+                scoreCell.className = 'score-cell';
+            });
+        }
+        
+        function initFilters() {
+            const catFilter = document.getElementById('filterCategory');
+            const recFilter = document.getElementById('filterRecommendation');
+            categoryList.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catFilter.appendChild(opt);
+            });
+            recommendations.forEach(rec => {
+                const opt = document.createElement('option');
+                opt.value = rec;
+                opt.textContent = rec;
+                recFilter.appendChild(opt);
+            });
+        }
+        
+        function addRow(data = {}) {
+            const tbody = document.getElementById('tableBody');
+            const row = tbody.insertRow();
+            
+            row.innerHTML = `
+                <td>
+                    <select onchange="updateSummary(); applyFilters(); updateSubcategories(this)">
+                        <option value="">Select...</option>
+                        ${categoryList.map(p => `<option value="${p}" ${data.priority === p ? 'selected' : ''}>${p}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <select class="subcategory-select" onchange="updateSummary(); applyFilters()">
+                        <option value="">Select category first...</option>
+                    </select>
+                </td>
+                <td><input type="text" placeholder="e.g., Workday Learning" value="${data.name || ''}" onchange="updateSummary()"></td>
+                <td><input type="text" placeholder="e.g., Workday" value="${data.vendor || ''}" onchange="updateSummary()"></td>
+                <td><textarea placeholder="Brief description" onchange="updateSummary()">${data.function || ''}</textarea></td>
+                <td><input type="text" placeholder="# users" value="${data.users || ''}" onchange="updateSummary(); calculateAllScores()"></td>
+                <td><input type="text" placeholder="65" value="${data.adoption || ''}" onchange="updateSummary(); calculateAllScores()"></td>
+                <td><input type="text" placeholder="150000" value="${data.cost || ''}" onchange="updateSummary(); calculateAllScores()"></td>
+                <td>
+                    <select onchange="updateSummary(); calculateAllScores()">
+                        <option value="">Select...</option>
+                        ${satisfactionLevels.map(level => `<option value="${level}" ${data.satisfaction === level ? 'selected' : ''}>${level}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <select onchange="updateSummary(); calculateAllScores()">
+                        <option value="">Select...</option>
+                        ${integrationStatus.map(status => `<option value="${status}" ${data.integration === status ? 'selected' : ''}>${status}</option>`).join('')}
+                    </select>
+                </td>
+                <td><textarea placeholder="Pain points, gaps" onchange="updateSummary()">${data.notes || ''}</textarea></td>
+                <td>
+                    <select onchange="updateSummary(); applyFilters()">
+                        <option value="">Select...</option>
+                        ${recommendations.map(rec => `<option value="${rec}" ${data.recommendation === rec ? 'selected' : ''}>${rec}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <select onchange="updateSummary(); applyFilters()">
+                        <option value="">Select...</option>
+                        ${priorities.map(p => `<option value="${p}" ${data.projectPriority === p ? 'selected' : ''}>${p}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="score-cell">-</td>
+                <td><button class="btn-secondary btn-small" onclick="deleteRow(this)">Delete</button></td>
+            `;
+            
+            updateSummary();
+            calculateAllScores();
+            
+            if (data.priority) {
+                const prioritySelect = row.cells[0].querySelector('select');
+                const subcategorySelect = row.cells[1].querySelector('select');
+                updateSubcategoryOptions(prioritySelect.value, subcategorySelect);
+                if (data.category) {
+                    subcategorySelect.value = data.category;
+                }
+            }
+        }
+        
+        function updateSubcategories(selectElement) {
+            const row = selectElement.closest('tr');
+            const subcategorySelect = row.cells[1].querySelector('select');
+            const category = selectElement.value;
+            updateSubcategoryOptions(category, subcategorySelect);
+        }
+        
+        function updateSubcategoryOptions(category, selectElement) {
+            selectElement.innerHTML = '<option value="">Select...</option>';
+            if (category && categories[category]) {
+                categories[category].forEach(subcat => {
+                    const opt = document.createElement('option');
+                    opt.value = subcat;
+                    opt.textContent = subcat;
+                    selectElement.appendChild(opt);
+                });
+            } else {
+                selectElement.innerHTML = '<option value="">Select category first...</option>';
+            }
+        }
+        
+        function deleteRow(btn) {
+            btn.closest('tr').remove();
+            updateSummary();
+            applyFilters();
+        }
+        
+        function sortTable(colIndex) {
+            const table = document.getElementById('assessmentTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            if (sortColumn === colIndex) {
+                sortAscending = !sortAscending;
+            } else {
+                sortColumn = colIndex;
+                sortAscending = true;
+            }
+            
+            rows.sort((a, b) => {
+                let aVal = a.cells[colIndex].querySelector('input, select, textarea')?.value || '';
+                let bVal = b.cells[colIndex].querySelector('input, select, textarea')?.value || '';
+                
+                const aNum = parseFloat(aVal.replace(/[^0-9.]/g, ''));
+                const bNum = parseFloat(bVal.replace(/[^0-9.]/g, ''));
+                
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return sortAscending ? aNum - bNum : bNum - aNum;
+                }
+                
+                return sortAscending ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            
+            rows.forEach(row => tbody.appendChild(row));
+            
+            document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+            const header = table.querySelectorAll('th')[colIndex];
+            header.classList.add(sortAscending ? 'sort-asc' : 'sort-desc');
+        }
+        
+        function applyFilters() {
+            const catFilter = document.getElementById('filterCategory').value;
+            const priFilter = document.getElementById('filterPriority').value;
+            const recFilter = document.getElementById('filterRecommendation').value;
+            
+            const rows = document.querySelectorAll('#tableBody tr');
+            rows.forEach(row => {
+                const category = row.cells[0].querySelector('select').value;
+                const priority = row.cells[12].querySelector('select').value;
+                const recommendation = row.cells[11].querySelector('select').value;
+                
+                const showCat = !catFilter || category === catFilter;
+                const showPri = !priFilter || priority === priFilter;
+                const showRec = !recFilter || recommendation === recFilter;
+                
+                row.classList.toggle('hidden', !(showCat && showPri && showRec));
+            });
+            
+            updateSummary();
+        }
+        
+        function clearFilters() {
+            document.getElementById('filterCategory').value = '';
+            document.getElementById('filterPriority').value = '';
+            document.getElementById('filterRecommendation').value = '';
+            applyFilters();
+        }
+        
+        function updateSummary() {
+            const rows = Array.from(document.querySelectorAll('#tableBody tr')).filter(r => !r.classList.contains('hidden'));
+            
+            let totalCost = 0, adoptionSum = 0, adoptionCount = 0, satisfactionSum = 0, satisfactionCount = 0;
+            let criticalCount = 0, highCount = 0;
+            
+            rows.forEach(row => {
+                const cost = parseFloat(row.cells[7].querySelector('input').value.replace(/[^0-9.]/g, '')) || 0;
+                totalCost += cost;
+                
+                const adoption = parseFloat(row.cells[6].querySelector('input').value.replace(/[^0-9.]/g, ''));
+                if (adoption) { adoptionSum += adoption; adoptionCount++; }
+                
+                const satisfaction = row.cells[8].querySelector('select').value;
+                if (satisfaction) { satisfactionSum += parseInt(satisfaction.charAt(0)); satisfactionCount++; }
+                
+                const priority = row.cells[12].querySelector('select').value;
+                if (priority === 'Critical') criticalCount++;
+                if (priority === 'High') highCount++;
+            });
+            
+            document.getElementById('totalCount').textContent = rows.length;
+            document.getElementById('totalCost').textContent = '$' + totalCost.toLocaleString();
+            document.getElementById('avgAdoption').textContent = adoptionCount > 0 ? Math.round(adoptionSum / adoptionCount) + '%' : '0%';
+            document.getElementById('avgSatisfaction').textContent = satisfactionCount > 0 ? (satisfactionSum / satisfactionCount).toFixed(1) + '/5' : '0/5';
+            document.getElementById('criticalCount').textContent = criticalCount;
+            document.getElementById('highCount').textContent = highCount;
+        }
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.analysis-tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+        
+        function generateAnalysis() {
+            analyzeGaps();
+            analyzeRedundancies();
+            analyzeUnderutilized();
+            analyzeIntegration();
+        }
+        
+        function analyzeGaps() {
+            const content = document.getElementById('gapsContent');
+            const techByType = {};
+            
+            const rows = Array.from(document.querySelectorAll('#tableBody tr')).filter(r => !r.classList.contains('hidden'));
+            rows.forEach(row => {
+                const category = row.cells[0].querySelector('select').value;
+                const techType = row.cells[1].querySelector('select').value;
+                if (category && techType) {
+                    const key = `${category}|${techType}`;
+                    if (!techByType[key]) techByType[key] = [];
+                    techByType[key].push(row);
+                }
+            });
+            
+            let html = '';
+            let gapCount = 0;
+            
+            Object.keys(categories).forEach(category => {
+                categories[category].forEach(techType => {
+                    const key = `${category}|${techType}`;
+                    if (!techByType[key] || techByType[key].length === 0) {
+                        gapCount++;
+                        html += `
+                            <div class="analysis-card danger">
+                                <h4>🔴 ${category}: ${techType}</h4>
+                                <p><strong>Gap Identified:</strong> No technology solution currently in place for this capability.</p>
+                                <p><strong>Business Impact:</strong> Limited ability to support ${techType.toLowerCase()} initiatives. This may be creating workflow gaps or forcing workarounds.</p>
+                                <p><strong>Recommendation:</strong> Evaluate whether this capability is needed based on L&D strategy. If yes, research and implement appropriate solution.</p>
+                            </div>
+                        `;
+                    } else if (techByType[key].length === 1) {
+                        const row = techByType[key][0];
+                        const adoption = parseFloat(row.cells[6].querySelector('input').value) || 0;
+                        const satisfaction = row.cells[8].querySelector('select').value;
+                        const satNum = satisfaction ? parseInt(satisfaction.charAt(0)) : 0;
+                        
+                        if (adoption < 40 || satNum < 3) {
+                            const name = row.cells[2].querySelector('input').value;
+                            html += `
+                                <div class="analysis-card warning">
+                                    <h4>⚠️ ${category}: ${techType}</h4>
+                                    <p><strong>Weak Coverage:</strong> Only one solution (${name}) with ${adoption < 40 ? 'low adoption (' + adoption + '%)' : 'low satisfaction (' + satNum + '/5)'}.</p>
+                                    <p><strong>Risk:</strong> Single point of failure with poor performance may indicate unmet needs.</p>
+                                    <p><strong>Recommendation:</strong> Investigate root causes and consider alternative or supplementary solutions.</p>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+            });
+            
+            if (html === '') {
+                html = '<div class="analysis-card info"><h4>✅ No Critical Gaps Identified</h4><p>All major technology categories have at least one solution in place.</p></div>';
+            } else {
+                html = `<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px;"><strong>${gapCount} capability gaps</strong> identified that may need attention.</div>` + html;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        function exportAnalysis() {
+            const date = new Date().toISOString().split('T')[0];
+            let report = `L&D TECHNOLOGY STACK - GAP & REDUNDANCY ANALYSIS\n`;
+            report += `Generated: ${date}\n`;
+            report += `${'='.repeat(80)}\n\n`;
+            
+            // Gaps
+            report += `CAPABILITY GAPS\n${'='.repeat(80)}\n`;
+            const gapsContent = document.getElementById('gapsContent').innerText;
+            report += gapsContent + '\n\n';
+            
+            // Redundancies
+            report += `REDUNDANCIES\n${'='.repeat(80)}\n`;
+            const redundanciesContent = document.getElementById('redundanciesContent').innerText;
+            report += redundanciesContent + '\n\n';
+            
+            // Underutilized
+            report += `UNDERUTILIZED TECHNOLOGIES\n${'='.repeat(80)}\n`;
+            const underutilizedContent = document.getElementById('underutilizedContent').innerText;
+            report += underutilizedContent + '\n\n';
+            
+            // Integration
+            report += `INTEGRATION ISSUES\n${'='.repeat(80)}\n`;
+            const integrationContent = document.getElementById('integrationContent').innerText;
+            report += integrationContent + '\n\n';
+            
+            // Summary stats
+            report += `SUMMARY STATISTICS\n${'='.repeat(80)}\n`;
+            report += `Total Technologies: ${document.getElementById('totalCount').textContent}\n`;
+            report += `Total Annual Cost: ${document.getElementById('totalCost').textContent}\n`;
+            report += `Average Adoption Rate: ${document.getElementById('avgAdoption').textContent}\n`;
+            report += `Average Satisfaction: ${document.getElementById('avgSatisfaction').textContent}\n`;
+            report += `Critical Priority Items: ${document.getElementById('criticalCount').textContent}\n`;
+            report += `High Priority Items: ${document.getElementById('highCount').textContent}\n`;
+            
+            const blob = new Blob([report], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Gap_Analysis_Report_${date}.txt`;
+            a.click();
+        }
+        
+        function duplicateAssessment() {
+            const currentName = prompt('Enter a name for this duplicated assessment:');
+            if (!currentName) return;
+            
+            const rows = document.querySelectorAll('#tableBody tr');
+            const data = [];
+            
+            rows.forEach(row => {
+                const rowData = {
+                    priority: row.cells[0].querySelector('select').value,
+                    category: row.cells[1].querySelector('select').value,
+                    name: row.cells[2].querySelector('input').value,
+                    vendor: row.cells[3].querySelector('input').value,
+                    function: row.cells[4].querySelector('textarea').value,
+                    users: row.cells[5].querySelector('input').value,
+                    adoption: row.cells[6].querySelector('input').value,
+                    cost: row.cells[7].querySelector('input').value,
+                    satisfaction: row.cells[8].querySelector('select').value,
+                    integration: row.cells[9].querySelector('select').value,
+                    notes: row.cells[10].querySelector('textarea').value,
+                    recommendation: row.cells[11].querySelector('select').value,
+                    projectPriority: row.cells[12].querySelector('select').value
+                };
+                data.push(rowData);
+            });
+            
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            sessions[currentName] = {
+                data: data,
+                savedDate: new Date().toISOString(),
+                weights: weights
+            };
+            localStorage.setItem('ldAssessments', JSON.stringify(sessions));
+            alert(`Assessment duplicated and saved as "${currentName}"!`);
+        }
+        
+        function showSessionManager() {
+            document.getElementById('sessionManager').style.display = 'block';
+            document.querySelectorAll('.container > *:not(#sessionManager)').forEach(el => el.style.display = 'none');
+            renderSessionList();
+        }
+        
+        function hideSessionManager() {
+            document.getElementById('sessionManager').style.display = 'none';
+            document.querySelectorAll('.container > *:not(#sessionManager)').forEach(el => el.style.display = '');
+        }
+        
+        function renderSessionList() {
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            const sessionNames = Object.keys(sessions);
+            const listDiv = document.getElementById('sessionList');
+            
+            if (sessionNames.length === 0) {
+                listDiv.innerHTML = '<div class="empty-state">No saved sessions found. Save your current assessment to get started.</div>';
+                return;
+            }
+            
+            let html = '';
+            sessionNames.forEach(name => {
+                const session = sessions[name];
+                const date = new Date(session.savedDate).toLocaleString();
+                const techCount = session.data.length;
+                
+                html += `
+                    <div class="session-card">
+                        <div class="session-info">
+                            <h3>${name}</h3>
+                            <p>📅 Last saved: ${date}</p>
+                            <p>💼 ${techCount} technologies | 📊 Custom weights: ${session.weights ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div class="session-actions">
+                            <button class="btn-primary btn-icon" onclick="loadSession('${name}')" title="Load">📂</button>
+                            <button class="btn-secondary btn-icon" onclick="renameSession('${name}')" title="Rename">✏️</button>
+                            <button class="btn-secondary btn-icon" onclick="exportSession('${name}')" title="Export">📤</button>
+                            <button class="btn-secondary btn-icon" onclick="deleteSession('${name}')" title="Delete" style="color: #dc3545;">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            listDiv.innerHTML = html;
+        }
+        
+        function loadSession(name) {
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            const session = sessions[name];
+            
+            if (!session) {
+                alert('Session not found.');
+                return;
+            }
+            
+            // Clear existing data
+            document.getElementById('tableBody').innerHTML = '';
+            
+            // Load data
+            session.data.forEach(rowData => addRow(rowData));
+            
+            // Load weights if saved
+            if (session.weights) {
+                weights = session.weights;
+                document.getElementById('weightAdoption').value = weights.adoption;
+                document.getElementById('weightSatisfaction').value = weights.satisfaction;
+                document.getElementById('weightIntegration').value = weights.integration;
+                document.getElementById('weightCost').value = weights.cost;
+            }
+            
+            calculateAllScores();
+            updateSummary();
+            hideSessionManager();
+            alert(`Loaded session: ${name}`);
+        }
+        
+        function renameSession(oldName) {
+            const newName = prompt(`Rename "${oldName}" to:`, oldName);
+            if (!newName || newName === oldName) return;
+            
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            
+            if (sessions[newName]) {
+                alert('A session with that name already exists.');
+                return;
+            }
+            
+            sessions[newName] = sessions[oldName];
+            delete sessions[oldName];
+            localStorage.setItem('ldAssessments', JSON.stringify(sessions));
+            renderSessionList();
+        }
+        
+        function exportSession(name) {
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            const session = sessions[name];
+            
+            if (!session) return;
+            
+            let csv = 'Category,Technology Type,Technology Name,Vendor,Primary Function,Users,Adoption %,Annual Cost,Satisfaction,Integration,Key Issues/Notes,Recommendation,Priority\n';
+            
+            session.data.forEach(row => {
+                const values = [
+                    row.priority || '',
+                    row.category || '',
+                    row.name || '',
+                    row.vendor || '',
+                    row.function || '',
+                    row.users || '',
+                    row.adoption || '',
+                    row.cost || '',
+                    row.satisfaction || '',
+                    row.integration || '',
+                    row.notes || '',
+                    row.recommendation || '',
+                    row.projectPriority || ''
+                ];
+                csv += values.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',') + '\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const safeName = name.replace(/[^a-z0-9]/gi, '_');
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `${safeName}_${date}.csv`;
+            a.click();
+        }
+        
+        function deleteSession(name) {
+            if (!confirm(`Are you sure you want to delete "${name}"? This cannot be undone.`)) return;
+            
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            delete sessions[name];
+            localStorage.setItem('ldAssessments', JSON.stringify(sessions));
+            renderSessionList();
+            alert(`Session "${name}" deleted.`);
+        }
+        
+        const referenceLibraryData = [
+            { id: 1, name: 'TalentLMS', vendor: 'Epignosis', category: 'Manage & Create', subcategory: 'LMS', description: 'Cloud-based LMS perfect for creating and managing online courses with intuitive interface and no learning curve.', features: ['Course builder', 'Mobile learning', 'Gamification', 'Reports & analytics', 'Integrations'], pricing: 'From $69/month', priceRange: 'low', rating: 4.6 },
+            { id: 2, name: 'Cornerstone LMS', vendor: 'Cornerstone OnDemand', category: 'Manage & Create', subcategory: 'LMS', description: 'Enterprise learning management system with strong compliance tracking and talent development features.', features: ['Compliance management', 'Content library', 'Performance tracking', 'Mobile access', 'Advanced reporting'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.2 },
+            { id: 3, name: 'Articulate 360', vendor: 'Articulate', category: 'Manage & Create', subcategory: 'Content Creation', description: 'Comprehensive e-learning authoring suite including Storyline, Rise, and content library for creating interactive courses.', features: ['Storyline 360', 'Rise 360', 'Content library', 'Review 360', 'Templates'], pricing: 'From $1,399/year', priceRange: 'medium', rating: 4.7 },
+            { id: 4, name: 'Absorb LMS', vendor: 'Absorb Software', category: 'Manage & Create', subcategory: 'LMS', description: 'AI-powered LMS for building excellent learning processes with scalability and ease of use.', features: ['AI recommendations', 'Custom branding', 'Mobile app', 'E-commerce', 'Advanced analytics'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.5 },
+            { id: 5, name: 'LinkedIn Learning', vendor: 'LinkedIn', category: 'Consume', subcategory: 'Video Library', description: 'Vast library of professional development courses taught by industry experts across business, technology, and creative skills.', features: ['16,000+ courses', 'Personalized recommendations', 'Offline viewing', 'Certificates', 'LinkedIn integration'], pricing: 'From $29.99/month per user', priceRange: 'low', rating: 4.4 },
+            { id: 6, name: 'Docebo', vendor: 'Docebo', category: 'Manage & Create', subcategory: 'LMS', description: 'AI-powered learning platform for employee onboarding, compliance training, and talent development.', features: ['AI content creation', 'Social learning', 'Extended enterprise', 'Mobile learning', 'Analytics'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.4 },
+            { id: 7, name: 'Moodle', vendor: 'Moodle', category: 'Manage & Create', subcategory: 'LMS', description: 'Open-source learning platform with customizable features and active community support.', features: ['Open source', 'Plugins library', 'Course management', 'Collaborative tools', 'Assessments'], pricing: 'Free (self-hosted)', priceRange: 'free', rating: 4.1 },
+            { id: 8, name: '360Learning', vendor: '360Learning', category: 'Discover', subcategory: 'Content Curation', description: 'Collaborative learning platform combining LMS and LXP with social learning features and content curation.', features: ['Collaborative learning', 'Rapid authoring', 'Peer learning', 'Skills mapping', 'AI recommendations'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.6 },
+            { id: 9, name: 'Udemy Business', vendor: 'Udemy', category: 'Consume', subcategory: 'Video Library', description: 'Curated collection of courses from Udemy marketplace for business skill development and training.', features: ['12,000+ courses', 'Learning paths', 'Hands-on exercises', 'Certifications', 'Analytics'], pricing: 'From $360/year per user', priceRange: 'medium', rating: 4.5 },
+            { id: 10, name: 'SAP Litmos', vendor: 'SAP', category: 'Manage & Create', subcategory: 'LMS', description: 'Enterprise LMS with extensive course library and quick deployment for compliance and skills training.', features: ['Course library', 'Mobile app', 'E-commerce', 'Integrations', 'Reporting'], pricing: 'From $4/user/month', priceRange: 'medium', rating: 4.2 },
+            { id: 11, name: 'Coursera for Business', vendor: 'Coursera', category: 'Consume', subcategory: 'MOOC / Cohort', description: 'Access to world-class courses from universities and companies for professional development.', features: ['7,000+ courses', 'Professional certificates', 'Degree programs', 'Skill assessments', 'Learning analytics'], pricing: 'From $399/user/year', priceRange: 'medium', rating: 4.6 },
+            { id: 12, name: 'iSpring Learn', vendor: 'iSpring', category: 'Manage & Create', subcategory: 'LMS', description: 'User-friendly LMS tailored for businesses with powerful authoring tools and mobile support.', features: ['Course authoring', 'Mobile learning', 'Gamification', 'Reports', 'iSpring Suite integration'], pricing: 'From $2.99/user/month', priceRange: 'low', rating: 4.5 },
+            { id: 13, name: 'Workday Learning', vendor: 'Workday', category: 'Manage & Create', subcategory: 'LMS', description: 'Enterprise HCM-integrated learning platform for talent development and compliance.', features: ['HCM integration', 'Skills cloud', 'Career development', 'Compliance tracking', 'Advanced analytics'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.0 },
+            { id: 14, name: 'Degreed', vendor: 'Degreed', category: 'Plan', subcategory: 'Skills Tracking', description: 'Upskilling platform that measures skills and connects people to learning opportunities.', features: ['Skills measurement', 'Learning pathways', 'Content aggregation', 'Career mobility', 'Analytics'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.3 },
+            { id: 15, name: 'LearnUpon', vendor: 'LearnUpon', category: 'Manage & Create', subcategory: 'LMS', description: 'Powerful LMS for training employees, partners, and customers with white-label options.', features: ['Multi-portal', 'White label', 'E-commerce', 'Integrations', 'Reporting'], pricing: 'Custom pricing', priceRange: 'medium', rating: 4.6 },
+            { id: 16, name: 'Adobe Captivate', vendor: 'Adobe', category: 'Manage & Create', subcategory: 'Content Creation', description: 'Responsive authoring tool for creating interactive e-learning content with VR support.', features: ['Responsive design', 'VR projects', 'Interactive videos', 'Software simulations', 'Multi-device publishing'], pricing: 'From $33.99/month', priceRange: 'medium', rating: 4.1 },
+            { id: 17, name: 'Skillsoft Percipio', vendor: 'Skillsoft', category: 'Consume', subcategory: 'Content Libraries', description: 'Immersive learning platform with extensive content library across leadership, tech, and compliance.', features: ['Content library', 'Personalized learning', 'Skill benchmarking', 'Mobile app', 'Analytics'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.2 },
+            { id: 18, name: 'Kahoot!', vendor: 'Kahoot!', category: 'Consume', subcategory: 'Gamification', description: 'Game-based learning platform making training fun and engaging through quizzes and challenges.', features: ['Interactive quizzes', 'Live gameplay', 'Reports', 'Content creation', 'Mobile app'], pricing: 'Free - $9/month', priceRange: 'free', rating: 4.6 },
+            { id: 19, name: 'EdCast', vendor: 'EdCast', category: 'Discover', subcategory: 'Recommendation', description: 'AI-powered knowledge cloud for personalized learning experiences and content curation.', features: ['AI recommendations', 'Content curation', 'Knowledge graphs', 'Social learning', 'Skills taxonomy'], pricing: 'Custom pricing', priceRange: 'high', rating: 4.3 },
+            { id: 20, name: 'Lessonly', vendor: 'Seismic', category: 'Perform', subcategory: 'Enablement', description: 'Modern training software for teams focused on enablement and performance improvement.', features: ['Quick authoring', 'Practice scenarios', 'Feedback loops', 'Integrations', 'Analytics'], pricing: 'Custom pricing', priceRange: 'medium', rating: 4.5 }
+        ];
+        
+        let selectedReferenceItems = [];
+        
+        function showReferenceLibrary() {
+            document.getElementById('referenceLibrary').style.display = 'block';
+            document.querySelector('.container > :not(#referenceLibrary)').style.display = 'none';
+            
+            const catFilter = document.getElementById('refCategoryFilter');
+            catFilter.innerHTML = '<option value="">All Categories</option>';
+            categoryList.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catFilter.appendChild(opt);
+            });
+            
+            renderReferenceLibrary();
+        }
+        
+        function hideReferenceLibrary() {
+            document.getElementById('referenceLibrary').style.display = 'none';
+            document.querySelectorAll('.container > *:not(#referenceLibrary)').forEach(el => el.style.display = '');
+        }
+        
+        function renderReferenceLibrary() {
+            const grid = document.getElementById('referenceGrid');
+            let html = '';
+            
+            referenceLibraryData.forEach(tool => {
+                const isSelected = selectedReferenceItems.includes(tool.id);
+                const stars = '★'.repeat(Math.floor(tool.rating)) + (tool.rating % 1 >= 0.5 ? '½' : '') + '☆'.repeat(Math.floor(5 - tool.rating));
+                
+                html += `
+                    <div class="ref-card ${isSelected ? 'selected' : ''}" onclick="toggleReferenceSelection(${tool.id})">
+                        <div class="ref-card-header">
+                            <div>
+                                <div class="ref-card-title">${tool.name}</div>
+                                <div class="ref-card-vendor">${tool.vendor}</div>
+                            </div>
+                            <div class="ref-card-rating">
+                                <span class="stars">${stars}</span>
+                                <span class="score">${tool.rating}</span>
+                            </div>
+                        </div>
+                        <div class="ref-card-category">${tool.subcategory}</div>
+                        <div class="ref-card-desc">${tool.description}</div>
+                        <div class="ref-card-features">
+                            <h4>Key Features</h4>
+                            <ul>
+                                ${tool.features.slice(0, 4).map(f => `<li>${f}</li>`).join('')}
+                            </ul>
+                        </div>
+                        <div class="ref-card-footer">
+                            <div class="ref-card-price">${tool.pricing}</div>
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleReferenceSelection(${tool.id})">
+                        </div>
+                    </div>
+                `;
+            });
+            
+            grid.innerHTML = html;
+        }
+        
+        function toggleReferenceSelection(id) {
+            const index = selectedReferenceItems.indexOf(id);
+            if (index > -1) {
+                selectedReferenceItems.splice(index, 1);
+            } else {
+                selectedReferenceItems.push(id);
+            }
+            renderReferenceLibrary();
+        }
+        
+        function filterReference() {
+            const searchTerm = document.getElementById('refSearch').value.toLowerCase();
+            const categoryFilter = document.getElementById('refCategoryFilter').value;
+            const priceFilter = document.getElementById('refPriceFilter').value;
+            const ratingFilter = parseFloat(document.getElementById('refRatingFilter').value) || 0;
+            
+            const cards = document.querySelectorAll('.ref-card');
+            
+            referenceLibraryData.forEach((tool, index) => {
+                const matchesSearch = tool.name.toLowerCase().includes(searchTerm) || tool.vendor.toLowerCase().includes(searchTerm) || tool.description.toLowerCase().includes(searchTerm);
+                const matchesCategory = !categoryFilter || tool.category === categoryFilter;
+                const matchesPrice = !priceFilter || tool.priceRange === priceFilter;
+                const matchesRating = tool.rating >= ratingFilter;
+                
+                if (cards[index]) {
+                    cards[index].style.display = (matchesSearch && matchesCategory && matchesPrice && matchesRating) ? 'block' : 'none';
+                }
+            });
+        }
+        
+        function addToAssessment() {
+            if (selectedReferenceItems.length === 0) {
+                alert('Please select at least one technology from the reference library.');
+                return;
+            }
+            
+            selectedReferenceItems.forEach(id => {
+                const tool = referenceLibraryData.find(t => t.id === id);
+                if (tool) {
+                    addRow({
+                        priority: tool.category,
+                        category: tool.subcategory,
+                        name: tool.name,
+                        vendor: tool.vendor,
+                        function: tool.description,
+                        users: '',
+                        adoption: '',
+                        cost: '',
+                        satisfaction: '',
+                        integration: '',
+                        notes: `Features: ${tool.features.join(', ')}. Pricing: ${tool.pricing}`,
+                        recommendation: '',
+                        projectPriority: ''
+                    });
+                }
+            });
+            
+            selectedReferenceItems = [];
+            hideReferenceLibrary();
+            alert(`${selectedReferenceItems.length || 'Selected'} technologies added to your assessment!`);
+        }
+        
+        function analyzeRedundancies() {
+            const content = document.getElementById('redundanciesContent');
+            const techByType = {};
+            
+            const rows = Array.from(document.querySelectorAll('#tableBody tr')).filter(r => !r.classList.contains('hidden'));
+            rows.forEach(row => {
+                const category = row.cells[0].querySelector('select').value;
+                const techType = row.cells[1].querySelector('select').value;
+                if (category && techType) {
+                    const key = `${category}|${techType}`;
+                    if (!techByType[key]) techByType[key] = [];
+                    techByType[key].push(row);
+                }
+            });
+            
+            let html = '';
+            let redundancyCount = 0;
+            
+            Object.keys(techByType).forEach(key => {
+                const techs = techByType[key];
+                if (techs.length > 1) {
+                    redundancyCount++;
+                    const [category, techType] = key.split('|');
+                    const totalCost = techs.reduce((sum, row) => {
+                        return sum + (parseFloat(row.cells[7].querySelector('input').value.replace(/[^0-9.]/g, '')) || 0);
+                    }, 0);
+                    
+                    const techNames = techs.map(row => {
+                        const name = row.cells[2].querySelector('input').value;
+                        const adoption = row.cells[6].querySelector('input').value;
+                        const cost = row.cells[7].querySelector('input').value;
+                        return `<span class="tech-tag">${name} (${adoption}% adoption, ${cost})</span>`;
+                    }).join('');
+                    
+                    html += `
+                        <div class="analysis-card warning">
+                            <h4>⚠️ ${category}: ${techType}</h4>
+                            <p><strong>Redundancy Detected:</strong> ${techs.length} technologies serving similar functions.<span class="metric">Combined Cost: ${totalCost.toLocaleString()}</span></p>
+                            <div class="tech-list">${techNames}</div>
+                            <p style="margin-top: 10px;"><strong>Recommendation:</strong> Evaluate whether all ${techs.length} solutions are necessary. Consider consolidating to reduce costs, simplify user experience, and improve data consistency.</p>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (html === '') {
+                html = '<div class="analysis-card info"><h4>✅ No Redundancies Detected</h4><p>Each technology type has a single dedicated solution.</p></div>';
+            } else {
+                html = `<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px;"><strong>${redundancyCount} redundant technology types</strong> identified with potential for consolidation.</div>` + html;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        function analyzeUnderutilized() {
+            const content = document.getElementById('underutilizedContent');
+            const rows = Array.from(document.querySelectorAll('#tableBody tr')).filter(r => !r.classList.contains('hidden'));
+            
+            let html = '';
+            let underutilizedCount = 0;
+            
+            rows.forEach(row => {
+                const adoption = parseFloat(row.cells[6].querySelector('input').value) || 0;
+                const cost = parseFloat(row.cells[7].querySelector('input').value.replace(/[^0-9.]/g, '')) || 0;
+                
+                if (adoption < 50 && cost > 0) {
+                    underutilizedCount++;
+                    const name = row.cells[2].querySelector('input').value;
+                    const category = row.cells[0].querySelector('select').value;
+                    const techType = row.cells[1].querySelector('select').value;
+                    const users = row.cells[5].querySelector('input').value;
+                    const wastedCost = Math.round(cost * ((100 - adoption) / 100));
+                    
+                    const severity = adoption < 25 ? 'danger' : 'warning';
+                    const icon = adoption < 25 ? '🔴' : '⚠️';
+                    
+                    html += `
+                        <div class="analysis-card ${severity}">
+                            <h4>${icon} ${name}</h4>
+                            <p><strong>Category:</strong> ${category} - ${techType} | <strong>Adoption:</strong> ${adoption}% | <strong>Total Users:</strong> ${users}</p>
+                            <p><strong>Annual Cost:</strong> ${cost.toLocaleString()}<span class="metric">Est. Wasted: ${wastedCost.toLocaleString()}</span></p>
+                            <p><strong>Issue:</strong> Low adoption suggests the technology isn't meeting user needs, lacks awareness, or faces adoption barriers.</p>
+                            <p><strong>Recommendation:</strong> ${adoption < 25 ? 'Strong candidate for retirement or replacement. Investigate why adoption is so low.' : 'Launch adoption campaign, provide training, or investigate usability issues. If adoption doesn\'t improve, consider retirement.'}</p>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (html === '') {
+                html = '<div class="analysis-card info"><h4>✅ Good Utilization</h4><p>All paid technologies have adoption rates above 50%.</p></div>';
+            } else {
+                html = `<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px;"><strong>${underutilizedCount} underutilized technologies</strong> identified with potential cost savings.</div>` + html;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        function analyzeIntegration() {
+            const content = document.getElementById('integrationContent');
+            const rows = Array.from(document.querySelectorAll('#tableBody tr')).filter(r => !r.classList.contains('hidden'));
+            
+            let html = '';
+            let issueCount = 0;
+            
+            rows.forEach(row => {
+                const integration = row.cells[9].querySelector('select').value;
+                const name = row.cells[2].querySelector('input').value;
+                const category = row.cells[0].querySelector('select').value;
+                const techType = row.cells[1].querySelector('select').value;
+                const notes = row.cells[10].querySelector('textarea').value;
+                
+                if (integration === 'Not Integrated' || integration === 'Partially Integrated' || integration === 'Unknown') {
+                    issueCount++;
+                    const severity = integration === 'Not Integrated' ? 'danger' : 'warning';
+                    const icon = integration === 'Not Integrated' ? '🔴' : '⚠️';
+                    
+                    html += `
+                        <div class="analysis-card ${severity}">
+                            <h4>${icon} ${name}</h4>
+                            <p><strong>Category:</strong> ${category} - ${techType} | <strong>Status:</strong> ${integration}</p>
+                            ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ''}
+                            <p><strong>Impact:</strong> ${integration === 'Not Integrated' ? 'Operating in complete silo. Users must manually transfer data, leading to inefficiency and data inconsistency.' : integration === 'Unknown' ? 'Integration status unclear. May be creating hidden workflow issues.' : 'Limited integration creates friction and may require manual workarounds.'}</p>
+                            <p><strong>Recommendation:</strong> ${integration === 'Not Integrated' ? 'High priority for integration or replacement with integrated solution.' : 'Evaluate feasibility of improved integration via APIs, SSO, or middleware.'}</p>
+                        </div>
+                    `;
+                }
+            });
+            
+            const standalone = rows.filter(row => row.cells[9].querySelector('select').value === 'Standalone');
+            if (standalone.length > 0) {
+                html += `
+                    <div class="analysis-card info">
+                        <h4>ℹ️ Standalone Tools</h4>
+                        <p><strong>${standalone.length} technologies</strong> are designed to operate standalone. While integration would be ideal, these may be acceptable as-is depending on use case.</p>
+                        <div class="tech-list">
+                            ${standalone.map(row => `<span class="tech-tag">${row.cells[2].querySelector('input').value}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (html === '') {
+                html = '<div class="analysis-card info"><h4>✅ Strong Integration</h4><p>All technologies are fully integrated.</p></div>';
+            } else if (issueCount > 0) {
+                html = `<div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px;"><strong>${issueCount} integration issues</strong> identified that may be creating workflow friction.</div>` + html;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        function exportData() {
+            const rows = document.querySelectorAll('#tableBody tr');
+            let csv = 'Category,Technology Type,Technology Name,Vendor,Primary Function,Users,Adoption %,Annual Cost,Satisfaction,Integration,Key Issues/Notes,Recommendation,Priority,Overall Score\n';
+            
+            rows.forEach(row => {
+                const data = [];
+                for (let i = 0; i < row.cells.length - 1; i++) {
+                    if (i === 13) {
+                        data.push(row.cells[i].textContent);
+                    } else {
+                        const val = row.cells[i].querySelector('input, select, textarea')?.value || '';
+                        data.push(`"${val.replace(/"/g, '""')}"`);
+                    }
+                }
+                csv += data.join(',') + '\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `ld_tech_assessment_${date}.csv`;
+            a.click();
+        }
+        
+        function importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                
+                // Clear existing data
+                document.getElementById('tableBody').innerHTML = '';
+                
+                // Skip header row
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    // Parse CSV line (handling quoted values)
+                    const values = [];
+                    let current = '';
+                    let inQuotes = false;
+                    
+                    for (let char of line) {
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            values.push(current.trim());
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    values.push(current.trim());
+                    
+                    if (values.length >= 12) {
+                        addRow({
+                            priority: values[0],
+                            category: values[1],
+                            name: values[2],
+                            vendor: values[3],
+                            function: values[4],
+                            users: values[5],
+                            adoption: values[6],
+                            cost: values[7],
+                            satisfaction: values[8],
+                            integration: values[9],
+                            notes: values[10],
+                            recommendation: values[11],
+                            projectPriority: values[12]
+                        });
+                    }
+                }
+                
+                calculateAllScores();
+                updateSummary();
+                alert('CSV imported successfully!');
+            };
+            
+            reader.readAsText(file);
+            event.target.value = ''; // Reset file input
+        }
+        
+        function saveToLocalStorage() {
+            const rows = document.querySelectorAll('#tableBody tr');
+            const data = [];
+            
+            rows.forEach(row => {
+                const rowData = {
+                    priority: row.cells[0].querySelector('select').value,
+                    category: row.cells[1].querySelector('select').value,
+                    name: row.cells[2].querySelector('input').value,
+                    vendor: row.cells[3].querySelector('input').value,
+                    function: row.cells[4].querySelector('textarea').value,
+                    users: row.cells[5].querySelector('input').value,
+                    adoption: row.cells[6].querySelector('input').value,
+                    cost: row.cells[7].querySelector('input').value,
+                    satisfaction: row.cells[8].querySelector('select').value,
+                    integration: row.cells[9].querySelector('select').value,
+                    notes: row.cells[10].querySelector('textarea').value,
+                    recommendation: row.cells[11].querySelector('select').value,
+                    projectPriority: row.cells[12].querySelector('select').value
+                };
+                data.push(rowData);
+            });
+            
+            const clientName = prompt('Enter client name for this session:');
+            if (clientName) {
+                const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+                sessions[clientName] = {
+                    data: data,
+                    savedDate: new Date().toISOString(),
+                    weights: weights
+                };
+                localStorage.setItem('ldAssessments', JSON.stringify(sessions));
+                alert(`Session saved for ${clientName}!`);
+            }
+        }
+        
+        function loadFromLocalStorage() {
+            const sessions = JSON.parse(localStorage.getItem('ldAssessments') || '{}');
+            const sessionNames = Object.keys(sessions);
+            
+            if (sessionNames.length === 0) {
+                alert('No saved sessions found. Use the Session Manager to view and manage saved assessments.');
+                return;
+            }
+            
+            showSessionManager();
+        }
+        
+        function clearAll() {
+            if (confirm('Clear all data? This cannot be undone.')) {
+                document.getElementById('tableBody').innerHTML = '';
+                updateSummary();
+            }
+        }
+        
+        window.onload = function() {
+            initFilters();
+            addRow({ priority: 'Manage & Create', category: 'LMS', name: 'Cornerstone LMS', vendor: 'Cornerstone', function: 'Primary LMS for course delivery and tracking', users: '5000', adoption: '72', cost: '150000', satisfaction: '3 - Good', integration: 'Fully Integrated', notes: 'Strong compliance but UI outdated', recommendation: 'Keep & Optimize', projectPriority: 'High' });
+            addRow({ priority: 'Manage & Create', category: 'Content Creation', name: 'Articulate 360', vendor: 'Articulate', function: 'Course authoring suite', users: '25', adoption: '85', cost: '15000', satisfaction: '5 - Excellent', integration: 'Standalone', notes: 'Highly valued by design team', recommendation: 'Keep & Optimize', projectPriority: 'Low' });
+            addRow({ priority: 'Consume', category: 'Video Library', name: 'LinkedIn Learning', vendor: 'LinkedIn', function: 'Video-based learning library', users: '5000', adoption: '45', cost: '75000', satisfaction: '4 - Very Good', integration: 'Partially Integrated', notes: 'Good content but low engagement', recommendation: 'Expand Usage', projectPriority: 'Medium' });
+        };
+    </script>
+</body>
+</html>
