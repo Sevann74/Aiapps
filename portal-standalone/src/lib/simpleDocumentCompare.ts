@@ -643,9 +643,16 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
       const oldNorm = normalizeContent(oldSec.content);
       const newNorm = normalizeContent(newSec.content);
       
+      // DEBUG: Log comparison details
+      console.log(`[COMPARE] Section: "${oldSec.fullTitle}"`);
+      console.log(`[COMPARE] Old normalized (first 100): "${oldNorm.substring(0, 100)}"`);
+      console.log(`[COMPARE] New normalized (first 100): "${newNorm.substring(0, 100)}"`);
+      console.log(`[COMPARE] Are equal: ${oldNorm === newNorm}`);
+      
       // If normalized content is identical, skip - no real change
       if (oldNorm === newNorm) {
         // Content is identical after normalization - skip
+        console.log(`[COMPARE] SKIPPING - content identical`);
         continue;
       }
       
