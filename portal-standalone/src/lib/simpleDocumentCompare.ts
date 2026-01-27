@@ -34,6 +34,10 @@ export interface SectionChange {
   diffParts?: Diff.Change[];
   keyChanges: string[];
   parentSection?: string; // For hierarchical context
+  // Uncertainty signaling fields
+  matchConfidence?: number; // 0-1, for uncertainty badges
+  possibleRelocation?: boolean; // Content may have moved
+  structureUnclear?: boolean; // Section boundaries uncertain
 }
 
 // New: Change region for full-text diff approach
