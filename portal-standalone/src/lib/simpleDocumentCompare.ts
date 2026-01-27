@@ -33,6 +33,52 @@ export interface SectionChange {
   newContent: string;
   diffParts?: Diff.Change[];
   keyChanges: string[];
+  parentSection?: string; // For hierarchical context
+}
+
+// New: Change region for full-text diff approach
+export interface ChangeRegion {
+  id: string;
+  startIndex: number;
+  endIndex: number;
+  changeType: 'added' | 'removed' | 'modified';
+  significance: ChangeSignificance;
+  category: ChangeCategory;
+  parentSection: string;
+  oldText: string;
+  newText: string;
+  diffParts: Diff.Change[];
+  descriptor: string; // Human-readable description
+}
+
+export interface FullTextComparisonResult {
+  // Full document diff with inline highlighting
+  fullDiff: Diff.Change[];
+  // Grouped change regions with section context
+  changeRegions: ChangeRegion[];
+  // Section markers for navigation
+  sections: Array<{
+    id: string;
+    title: string;
+    level: number;
+    hasChanges: boolean;
+    changeCount: number;
+    oldIndex: number;
+    newIndex: number;
+  }>;
+  // Summary stats
+  summary: {
+    totalChanges: number;
+    wordsAdded: number;
+    wordsRemoved: number;
+    wordsModified: number;
+    substantive: number;
+    editorial: number;
+    sectionsAffected: number;
+  };
+  // Raw text for reference
+  oldText: string;
+  newText: string;
 }
 
 export interface SimpleComparisonResult {
@@ -48,12 +94,66 @@ export interface SimpleComparisonResult {
   };
   oldSections: DocumentSection[];
   newSections: DocumentSection[];
+  // New: Full-text diff result
+  fullTextResult?: FullTextComparisonResult;
 }
 
 export interface ExtractedDocument {
   sections: DocumentSection[];
   metadata: { title: string; version: string };
   rawText: string;
+}
+
+// ============================================
+// CHANGE DESCRIPTOR - Rule-based summaries
+// ============================================
+
+function generateChangeDescriptor(oldText: string, newText: string, changeType: string): string {
+  if (changeType === 'added') return 'New content added';
+  if (changeType === 'removed') return 'Content removed';
+  
+  const oldLower = oldText.toLowerCase();
+  const newLower = newText.toLowerCase();
+  
+  // Frequency change
+  const freqTerms = ['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'hourly'];
+  for (const term of freqTerms) {
+    const oldFreq = freqTerms.find(t => oldLower.includes(t));
+    const newFreq = freqTerms.find(t => newLower.includes(t));
+    if (oldFreq && newFreq && oldFreq !== newFreq) {
+      return `Frequency changed: ${oldFreq} → ${newFreq}`;
+    }
+  }
+  
+  // Number/threshold change
+  const oldNums = oldText.match(/\d+\.?\d*/g) || [];
+  const newNums = newText.match(/\d+\.?\d*/g) || [];
+  if (oldNums.length > 0 && newNums.length > 0 && JSON.stringify(oldNums) !== JSON.stringify(newNums)) {
+    return `Values changed: ${oldNums.slice(0,2).join(', ')} → ${newNums.slice(0,2).join(', ')}`;
+  }
+  
+  // Role change
+  const roleTerms = ['operator', 'supervisor', 'manager', 'technician', 'analyst', 'qa', 'qc'];
+  for (const term of roleTerms) {
+    if ((oldLower.includes(term) && !newLower.includes(term)) || 
+        (!oldLower.includes(term) && newLower.includes(term))) {
+      return 'Role or responsibility updated';
+    }
+  }
+  
+  // Documentation change
+  const docTerms = ['document', 'record', 'log', 'form', 'signature'];
+  if (docTerms.some(t => newLower.includes(t) && !oldLower.includes(t))) {
+    return 'Documentation requirement added';
+  }
+  
+  // Safety change
+  const safetyTerms = ['warning', 'caution', 'danger', 'safety', 'ppe', 'hazard'];
+  if (safetyTerms.some(t => oldLower.includes(t) || newLower.includes(t))) {
+    return 'Safety-related content updated';
+  }
+  
+  return 'Content revised';
 }
 
 // ============================================
@@ -601,6 +701,182 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
 }
 
 // ============================================
+// FULL-TEXT DIFF WITH SECTION MARKERS
+// ============================================
+
+interface SectionMarker {
+  id: string;
+  title: string;
+  level: number;
+  index: number;
+}
+
+function findSectionMarkers(text: string): SectionMarker[] {
+  const markers: SectionMarker[] = [];
+  
+  // Numbered sections (1.0, 2.1, etc.)
+  const numberedPattern = /^(?:Section\s+)?(\d+(?:\.\d+)*\.?)\s*[:\.]?\s*([A-Z][^\n]{2,80})/gm;
+  let match;
+  while ((match = numberedPattern.exec(text)) !== null) {
+    const number = match[1].replace(/\.$/, '');
+    const heading = match[2].trim();
+    markers.push({
+      id: number,
+      title: `${number} ${heading}`,
+      level: (number.match(/\./g) || []).length + 1,
+      index: match.index
+    });
+  }
+  
+  // Keyword headings
+  const keywordPattern = /^(Purpose|Scope|Procedure|Responsibilities|References|Definitions|Equipment|Materials|Safety|Quality|Documentation|Objective|Background|Introduction|Summary|Glossary|Appendix\s*[A-Z0-9]*)[:\s]*/gim;
+  while ((match = keywordPattern.exec(text)) !== null) {
+    if (!markers.some(m => Math.abs(m.index - match!.index) < 10)) {
+      markers.push({
+        id: match[1].toLowerCase().replace(/\s+/g, '_'),
+        title: match[1].trim(),
+        level: 1,
+        index: match.index
+      });
+    }
+  }
+  
+  markers.sort((a, b) => a.index - b.index);
+  return markers;
+}
+
+function findParentSection(index: number, markers: SectionMarker[]): string {
+  let parent = 'Document';
+  for (const marker of markers) {
+    if (marker.index <= index) {
+      parent = marker.title;
+    } else {
+      break;
+    }
+  }
+  return parent;
+}
+
+export function performFullTextComparison(oldText: string, newText: string): FullTextComparisonResult {
+  // Perform word-level diff on entire document
+  const fullDiff = Diff.diffWords(oldText, newText);
+  
+  // Find section markers in both documents
+  const oldMarkers = findSectionMarkers(oldText);
+  const newMarkers = findSectionMarkers(newText);
+  
+  // Group consecutive changes into regions
+  const changeRegions: ChangeRegion[] = [];
+  let currentIndex = 0;
+  let regionId = 0;
+  
+  let wordsAdded = 0;
+  let wordsRemoved = 0;
+  
+  // Track which sections have changes
+  const sectionsWithChanges = new Set<string>();
+  
+  for (let i = 0; i < fullDiff.length; i++) {
+    const part = fullDiff[i];
+    
+    if (part.added || part.removed) {
+      const parentSection = findParentSection(currentIndex, part.added ? newMarkers : oldMarkers);
+      sectionsWithChanges.add(parentSection);
+      
+      // Count words
+      const wordCount = part.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+      if (part.added) wordsAdded += wordCount;
+      if (part.removed) wordsRemoved += wordCount;
+      
+      // Look for adjacent changes to group them
+      let oldText = part.removed ? part.value : '';
+      let newText = part.added ? part.value : '';
+      let endIndex = i;
+      
+      // Check if next part is the counterpart (removed followed by added or vice versa)
+      if (i + 1 < fullDiff.length) {
+        const nextPart = fullDiff[i + 1];
+        if ((part.removed && nextPart.added) || (part.added && nextPart.removed)) {
+          if (nextPart.added) {
+            newText = nextPart.value;
+            wordsAdded += nextPart.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+          }
+          if (nextPart.removed) {
+            oldText = nextPart.value;
+            wordsRemoved += nextPart.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+          }
+          endIndex = i + 1;
+          i++; // Skip next part since we've processed it
+        }
+      }
+      
+      // Determine change type
+      let changeType: 'added' | 'removed' | 'modified' = 'modified';
+      if (!oldText.trim()) changeType = 'added';
+      else if (!newText.trim()) changeType = 'removed';
+      
+      // Classify significance
+      const significance = detectSignificance(oldText, newText);
+      const category = detectCategory(oldText, newText);
+      const descriptor = generateChangeDescriptor(oldText, newText, changeType);
+      
+      // Only add if there's meaningful content
+      if (oldText.trim().length > 2 || newText.trim().length > 2) {
+        changeRegions.push({
+          id: `change_${regionId++}`,
+          startIndex: currentIndex,
+          endIndex: currentIndex + (part.value?.length || 0),
+          changeType,
+          significance,
+          category,
+          parentSection,
+          oldText: oldText.trim(),
+          newText: newText.trim(),
+          diffParts: [part, ...(endIndex > i ? [fullDiff[endIndex]] : [])].filter(Boolean),
+          descriptor
+        });
+      }
+    }
+    
+    if (!part.added) {
+      currentIndex += part.value.length;
+    }
+  }
+  
+  // Build section summary with change counts
+  const allMarkers = [...new Map([...oldMarkers, ...newMarkers].map(m => [m.title, m])).values()];
+  const sections = allMarkers.map(marker => {
+    const changeCount = changeRegions.filter(r => r.parentSection === marker.title).length;
+    return {
+      id: marker.id,
+      title: marker.title,
+      level: marker.level,
+      hasChanges: changeCount > 0,
+      changeCount,
+      oldIndex: oldMarkers.find(m => m.title === marker.title)?.index ?? -1,
+      newIndex: newMarkers.find(m => m.title === marker.title)?.index ?? -1
+    };
+  });
+  
+  return {
+    fullDiff,
+    changeRegions,
+    sections,
+    summary: {
+      totalChanges: changeRegions.length,
+      wordsAdded,
+      wordsRemoved,
+      wordsModified: Math.min(wordsAdded, wordsRemoved),
+      substantive: changeRegions.filter(r => r.significance === 'substantive').length,
+      editorial: changeRegions.filter(r => r.significance === 'editorial').length,
+      sectionsAffected: sectionsWithChanges.size
+    },
+    oldText,
+    newText
+  };
+}
+
+// ============================================
 // ENTRY POINT
 // ============================================
 
@@ -610,4 +886,29 @@ export async function compareDocumentsSimple(oldFile: File, newFile: File): Prom
     extractDocument(newFile)
   ]);
   return compareDocuments(oldDoc, newDoc);
+}
+
+// New entry point for full-text comparison
+export async function compareDocumentsFullText(oldFile: File, newFile: File): Promise<FullTextComparisonResult> {
+  const [oldDoc, newDoc] = await Promise.all([
+    extractDocument(oldFile),
+    extractDocument(newFile)
+  ]);
+  return performFullTextComparison(oldDoc.rawText, newDoc.rawText);
+}
+
+// Combined comparison - returns both section-based and full-text results
+export async function compareDocumentsCombined(oldFile: File, newFile: File): Promise<SimpleComparisonResult> {
+  const [oldDoc, newDoc] = await Promise.all([
+    extractDocument(oldFile),
+    extractDocument(newFile)
+  ]);
+  
+  const sectionResult = compareDocuments(oldDoc, newDoc);
+  const fullTextResult = performFullTextComparison(oldDoc.rawText, newDoc.rawText);
+  
+  return {
+    ...sectionResult,
+    fullTextResult
+  };
 }
