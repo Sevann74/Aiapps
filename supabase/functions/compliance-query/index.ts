@@ -7,12 +7,19 @@ const corsHeaders = {
 };
 
 interface ComplianceQueryRequest {
-  operation: 'search' | 'chat' | 'compare-sops';
+  operation: 'search' | 'chat' | 'compare-sops' | 'summarize-sop-changes';
   query?: string;
   conversationHistory?: Array<{ role: string; content: string }>;
   documents?: Array<{ id: string; title: string; content: string; metadata?: any }>;
   sop1?: { id: string; title: string; content: string; version?: string };
   sop2?: { id: string; title: string; content: string; version?: string };
+  changes?: Array<{
+    sectionId: string;
+    sectionTitle: string;
+    changeType: 'added' | 'removed' | 'modified';
+    oldContent: string;
+    newContent: string;
+  }>;
 }
 
 Deno.serve(async (req: Request) => {
@@ -31,7 +38,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const requestData: ComplianceQueryRequest = await req.json();
-    const { operation, query, conversationHistory, documents, sop1, sop2 } = requestData;
+    const { operation, query, conversationHistory, documents, sop1, sop2, changes } = requestData;
 
     let prompt = "";
     let maxTokens = 4096;
@@ -191,6 +198,73 @@ Respond in this JSON format:
   ]
 }`;
         maxTokens = 8192;
+        break;
+
+      case 'summarize-sop-changes':
+        if (!sop1 || !sop2) {
+          throw new Error("Both SOP references are required");
+        }
+        if (!changes || !Array.isArray(changes) || changes.length === 0) {
+          throw new Error("changes[] is required");
+        }
+
+        prompt = `You are an expert SOP change analyst. You will receive a list of section-level changes that were detected deterministically. Your job is to:
+
+1. SUMMARIZE each change in 1-2 clear sentences describing exactly what changed
+2. CLASSIFY the significance: "substantive" (affects compliance/safety/process/obligations) or "editorial" (formatting/wording/grammar only)
+3. CATEGORIZE the change type: "obligation" | "timing" | "threshold" | "role" | "records" | "procedure" | "definition" | "other"
+4. PROVIDE exact evidence quotes from the old/new content (max 50 chars each)
+5. ASSIGN confidence 70-100 (never below 70 if content is provided; use 70 if ambiguous, 90+ if clear)
+
+CRITICAL RULES:
+- Do NOT invent changes. Use ONLY the provided oldContent/newContent.
+- Do NOT provide impact assessments, recommendations, risk language, or actions.
+- Return STRICT JSON only. No markdown, no explanation, no preamble.
+- If oldContent or newContent is empty, note that in the summary (e.g., "New section added" or "Section removed").
+- Focus on WHAT changed, not WHY or what to do about it.
+
+SOP 1 (Previous Version):
+Title: ${sop1.title}
+Version: ${sop1.version || 'Unknown'}
+
+SOP 2 (New Version):
+Title: ${sop2.title}
+Version: ${sop2.version || 'Unknown'}
+
+CHANGES TO SUMMARIZE:
+${JSON.stringify(changes, null, 2)}
+
+EXAMPLE OUTPUT FORMAT:
+{
+  "summaries": [
+    {
+      "sectionId": "3.2",
+      "sectionTitle": "3.2 Temperature Control",
+      "changeType": "modified",
+      "summary": "Temperature storage range changed from 2-8°C to 2-6°C.",
+      "significance": "substantive",
+      "category": "threshold",
+      "confidence": 95,
+      "evidenceOld": "Store at 2-8°C",
+      "evidenceNew": "Store at 2-6°C"
+    },
+    {
+      "sectionId": "5.1",
+      "sectionTitle": "5.1 Documentation",
+      "changeType": "modified",
+      "summary": "Minor wording change from 'shall document' to 'must document'.",
+      "significance": "editorial",
+      "category": "records",
+      "confidence": 85,
+      "evidenceOld": "shall document",
+      "evidenceNew": "must document"
+    }
+  ]
+}
+
+Now analyze the provided changes and return JSON only:`;
+        maxTokens = 8192;
+        temperature = 0.1;
         break;
 
       default:
