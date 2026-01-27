@@ -174,10 +174,13 @@ const DEFINITION_KEYWORDS = ['means', 'defined as', 'refers to', 'definition', '
 
 const KEYWORD_HEADINGS = [
   'purpose', 'scope', 'procedure', 'responsibilities', 'references', 'definitions',
-  'equipment', 'materials', 'safety', 'quality', 'documentation', 'objective',
+  'materials', 'safety', 'quality', 'documentation', 'objective',
   'background', 'introduction', 'summary', 'glossary', 'revision history',
   'training requirements', 'related documents', 'attachments', 'forms'
 ];
+
+// Words that indicate table cell content, not section headers
+const TABLE_CELL_INDICATORS = ['overdue', 'pending', 'completed', 'in progress', 'open', 'closed', 'calibration', 'deviation', 'capa', 'status'];
 
 // ============================================
 // SECTION DETECTION - MULTI-STRATEGY
@@ -220,6 +223,12 @@ function detectSections(text: string): DetectedSection[] {
       const heading = match[1].trim();
       const subtitle = match[2]?.trim() || '';
       const fullTitle = subtitle ? `${heading}: ${subtitle}` : heading;
+      
+      // Skip if this looks like table cell content (contains indicators like 'overdue', 'pending', etc.)
+      const fullLineLower = fullTitle.toLowerCase();
+      const isTableCell = TABLE_CELL_INDICATORS.some(ind => fullLineLower.includes(ind));
+      if (isTableCell) continue;
+      
       // Avoid duplicates at same index
       if (!detected.some(d => Math.abs(d.index - match!.index) < 5)) {
         detected.push({
@@ -396,7 +405,12 @@ function chunkIntoParagraphs(text: string, targetWords: number = 300): DocumentS
 // ============================================
 
 function normalizeContent(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+  // More aggressive normalization to avoid false positives
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, ' ')  // Collapse whitespace
+    .replace(/[^a-z0-9\s]/g, '')  // Remove punctuation
+    .trim();
 }
 
 function normalizeHeading(heading: string): string {

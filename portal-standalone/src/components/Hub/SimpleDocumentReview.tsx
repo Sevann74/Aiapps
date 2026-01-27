@@ -135,6 +135,52 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
     }
   };
 
+  // Detect if content looks like tabular data (multiple short lines with similar patterns)
+  const isTabularContent = (content: string): boolean => {
+    const lines = content.split('\n').filter(l => l.trim().length > 0);
+    if (lines.length < 3) return false;
+    
+    // Check for patterns: dates, IDs, status words, short lines
+    const datePattern = /\d{1,2}\/\d{1,2}\/\d{2,4}/;
+    const idPattern = /[A-Z]{2,}-\d{4}-\d{3}/;
+    const statusWords = ['open', 'closed', 'pending', 'in progress', 'completed'];
+    
+    let patternMatches = 0;
+    for (const line of lines) {
+      const lineLower = line.toLowerCase().trim();
+      if (datePattern.test(line) || idPattern.test(line) || 
+          statusWords.some(s => lineLower === s) || 
+          lineLower.length < 30) {
+        patternMatches++;
+      }
+    }
+    
+    return patternMatches / lines.length > 0.5;
+  };
+
+  // Render content as table if it looks tabular
+  const renderContentAsTable = (content: string, isNew: boolean) => {
+    const lines = content.split('\n').filter(l => l.trim().length > 0);
+    
+    // Try to detect column structure by finding repeating patterns
+    // For now, render as a simple grid
+    const cellClass = isNew ? 'border-emerald-200' : 'border-gray-200';
+    
+    return (
+      <div className="overflow-x-auto">
+        <table className={`min-w-full text-sm border ${cellClass}`}>
+          <tbody>
+            {lines.map((line, i) => (
+              <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                <td className={`px-3 py-2 border ${cellClass}`}>{line.trim()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const getUncertaintyBadges = (change: SectionChange) => {
     const badges: { icon: React.ReactNode; text: string; color: string }[] = [];
     
@@ -211,14 +257,22 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
             {change.changeType === 'added' && (
               <div className="bg-green-100 border border-green-300 rounded-lg p-4">
                 <p className="text-xs font-semibold text-green-700 mb-2">Current version content:</p>
-                <p className="text-gray-800 whitespace-pre-wrap">{change.newContent}</p>
+                {isTabularContent(change.newContent) ? (
+                  renderContentAsTable(change.newContent, true)
+                ) : (
+                  <p className="text-gray-800 whitespace-pre-wrap">{change.newContent}</p>
+                )}
               </div>
             )}
             
             {change.changeType === 'removed' && (
               <div className="bg-red-100 border border-red-300 rounded-lg p-4">
                 <p className="text-xs font-semibold text-red-700 mb-2">Previous version content:</p>
-                <p className="text-gray-800 whitespace-pre-wrap">{change.oldContent}</p>
+                {isTabularContent(change.oldContent) ? (
+                  renderContentAsTable(change.oldContent, false)
+                ) : (
+                  <p className="text-gray-800 whitespace-pre-wrap">{change.oldContent}</p>
+                )}
               </div>
             )}
             
