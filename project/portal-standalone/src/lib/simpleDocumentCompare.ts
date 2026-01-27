@@ -34,6 +34,10 @@ export interface SectionChange {
   diffParts?: Diff.Change[];
   keyChanges: string[];
   parentSection?: string; // For hierarchical context
+  // Uncertainty signaling fields
+  matchConfidence?: number; // 0-1, for uncertainty badges
+  possibleRelocation?: boolean; // Content may have moved
+  structureUnclear?: boolean; // Section boundaries uncertain
 }
 
 // New: Change region for full-text diff approach
@@ -479,6 +483,29 @@ function extractKeyChanges(diffParts: Diff.Change[]): string[] {
   return keyChanges;
 }
 
+function checkPossibleRelocation(content: string, otherSections: DocumentSection[]): boolean {
+  if (!content || content.trim().length < 20) return false;
+  
+  const normalizedContent = content.toLowerCase().replace(/\s+/g, ' ').trim();
+  const contentWords = normalizedContent.split(' ').filter(w => w.length > 3);
+  
+  if (contentWords.length < 5) return false;
+  
+  for (const section of otherSections) {
+    const sectionNorm = section.content.toLowerCase().replace(/\s+/g, ' ').trim();
+    
+    let matchingWords = 0;
+    for (const word of contentWords) {
+      if (sectionNorm.includes(word)) matchingWords++;
+    }
+    
+    const similarity = matchingWords / contentWords.length;
+    if (similarity > 0.5) return true;
+  }
+  
+  return false;
+}
+
 // ============================================
 // 3-PASS MATCHING ENGINE
 // ============================================
@@ -621,6 +648,9 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
           const category = detectCategory(oldSec.content, newSec.content);
           const keyChanges = extractKeyChanges(diffParts);
           
+          // Calculate match confidence based on similarity
+          const matchConfidence = result.confidence;
+          
           changes.push({
             sectionId: oldSec.id,
             sectionNumber: oldSec.number || '',
@@ -631,13 +661,18 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
             oldContent: oldSec.content,
             newContent: newSec.content,
             diffParts,
-            keyChanges
+            keyChanges,
+            matchConfidence,
+            possibleRelocation: false,
+            structureUnclear: oldSec.level === 0 || !oldSec.number
           });
         }
       }
       // else: unchanged
     } else {
-      // Removed section
+      // Removed section - check if content might have relocated
+      const possibleRelocation = checkPossibleRelocation(oldSec.content, newDoc.sections);
+      
       if (oldSec.content.trim().length > 10) {
         changes.push({
           sectionId: oldSec.id,
@@ -648,7 +683,10 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
           category: detectCategory(oldSec.content, ''),
           oldContent: oldSec.content,
           newContent: '',
-          keyChanges: ['Entire section removed']
+          keyChanges: ['Entire section removed'],
+          matchConfidence: 0,
+          possibleRelocation,
+          structureUnclear: oldSec.level === 0 || !oldSec.number
         });
       }
     }
@@ -657,6 +695,9 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
   // Find added sections (in new but not matched)
   for (const newSec of newDoc.sections) {
     if (!matchedNewKeys.has(newSec.matchKey) && newSec.content.trim().length > 10) {
+      // Check if content might have relocated from old document
+      const possibleRelocation = checkPossibleRelocation(newSec.content, oldDoc.sections);
+      
       changes.push({
         sectionId: newSec.id,
         sectionNumber: newSec.number || '',
@@ -666,7 +707,10 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
         category: detectCategory('', newSec.content),
         oldContent: '',
         newContent: newSec.content,
-        keyChanges: ['New section added']
+        keyChanges: ['New section added'],
+        matchConfidence: 1,
+        possibleRelocation,
+        structureUnclear: newSec.level === 0 || !newSec.number
       });
     }
   }
