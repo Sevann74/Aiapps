@@ -676,9 +676,7 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
             diffParts,
             keyChanges
           });
-        }
       }
-      // else: unchanged
     } else {
       // Removed section
       if (oldSec.content.trim().length > 10) {
