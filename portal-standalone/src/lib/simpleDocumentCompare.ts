@@ -405,12 +405,25 @@ function chunkIntoParagraphs(text: string, targetWords: number = 300): DocumentS
 // ============================================
 
 function normalizeContent(text: string): string {
-  // More aggressive normalization to avoid false positives
+  // Very aggressive normalization to avoid false positives from table extraction
+  // Remove ALL whitespace and non-alphanumeric characters
   return text
     .toLowerCase()
-    .replace(/\s+/g, ' ')  // Collapse whitespace
-    .replace(/[^a-z0-9\s]/g, '')  // Remove punctuation
-    .trim();
+    .replace(/[^a-z0-9]/g, '');  // Keep only letters and numbers
+}
+
+// Check if content looks like table data (many short lines, IDs, dates)
+function isTableContent(text: string): boolean {
+  const lines = text.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length < 5) return false;
+  
+  const datePattern = /\d{1,2}\/\d{1,2}\/\d{2,4}/;
+  const idPattern = /[A-Z]{2,}-\d{4}-\d{3}/;
+  const shortLineCount = lines.filter(l => l.trim().length < 40).length;
+  const dateCount = lines.filter(l => datePattern.test(l)).length;
+  const idCount = lines.filter(l => idPattern.test(l)).length;
+  
+  return (shortLineCount / lines.length > 0.6) && (dateCount > 0 || idCount > 0);
 }
 
 function normalizeHeading(heading: string): string {
@@ -626,15 +639,27 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
     const newSec = result.newSection;
     
     if (newSec) {
-      // Check if content differs
+      // Check if content differs using aggressive normalization
       const oldNorm = normalizeContent(oldSec.content);
       const newNorm = normalizeContent(newSec.content);
       
-      if (oldNorm !== newNorm) {
-        const diffParts = Diff.diffWords(oldSec.content, newSec.content);
-        const hasRealChange = diffParts.some(p => (p.added || p.removed) && p.value.trim().length > 2);
-        
-        if (hasRealChange) {
+      // If normalized content is identical, skip - no real change
+      if (oldNorm === newNorm) {
+        // Content is identical after normalization - skip
+        continue;
+      }
+      
+      // There's a real difference - compute diff for display
+      const diffParts = Diff.diffWords(oldSec.content, newSec.content);
+      
+      // Extra filter: only count changes with actual alphanumeric content
+      const significantChanges = diffParts.filter((p: any) => {
+        if (!p.added && !p.removed) return false;
+        const cleaned = p.value.replace(/[^a-z0-9]/gi, '');
+        return cleaned.length > 2;
+      });
+      
+      if (significantChanges.length > 0) {
           const significance = detectSignificance(oldSec.content, newSec.content, diffParts);
           const category = detectCategory(oldSec.content, newSec.content);
           const keyChanges = extractKeyChanges(diffParts);
