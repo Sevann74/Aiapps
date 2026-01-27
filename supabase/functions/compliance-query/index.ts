@@ -208,43 +208,62 @@ Respond in this JSON format:
           throw new Error("changes[] is required");
         }
 
-        prompt = `You are a meticulous SOP change summarizer.
+        prompt = `You are an expert SOP change analyst. You will receive a list of section-level changes that were detected deterministically. Your job is to:
 
-You will be given a list of section-level changes (already detected deterministically). Your job is ONLY to summarize each change accurately based on the provided old/new excerpts.
+1. SUMMARIZE each change in 1-2 clear sentences describing exactly what changed
+2. CLASSIFY the significance: "substantive" (affects compliance/safety/process/obligations) or "editorial" (formatting/wording/grammar only)
+3. CATEGORIZE the change type: "obligation" | "timing" | "threshold" | "role" | "records" | "procedure" | "definition" | "other"
+4. PROVIDE exact evidence quotes from the old/new content (max 50 chars each)
+5. ASSIGN confidence 70-100 (never below 70 if content is provided; use 70 if ambiguous, 90+ if clear)
 
 CRITICAL RULES:
-1. Do NOT invent changes. Use only the provided oldContent/newContent.
-2. Do NOT provide impact, recommendations, or actions.
-3. Return STRICT JSON only. No markdown.
-4. Provide evidenceOld/evidenceNew as exact short quotes copied from the provided content (or null if not available).
-5. Confidence must be 0-100 and should be lower if the excerpt is short/ambiguous.
+- Do NOT invent changes. Use ONLY the provided oldContent/newContent.
+- Do NOT provide impact assessments, recommendations, risk language, or actions.
+- Return STRICT JSON only. No markdown, no explanation, no preamble.
+- If oldContent or newContent is empty, note that in the summary (e.g., "New section added" or "Section removed").
+- Focus on WHAT changed, not WHY or what to do about it.
 
-SOP 1:
+SOP 1 (Previous Version):
 Title: ${sop1.title}
 Version: ${sop1.version || 'Unknown'}
 
-SOP 2:
+SOP 2 (New Version):
 Title: ${sop2.title}
 Version: ${sop2.version || 'Unknown'}
 
-CHANGES (JSON):
-${JSON.stringify(changes)}
+CHANGES TO SUMMARIZE:
+${JSON.stringify(changes, null, 2)}
 
-Respond in this JSON format:
+EXAMPLE OUTPUT FORMAT:
 {
   "summaries": [
     {
-      "sectionId": "1.0",
-      "sectionTitle": "1.0 Purpose",
+      "sectionId": "3.2",
+      "sectionTitle": "3.2 Temperature Control",
       "changeType": "modified",
-      "summary": "One to two sentences describing exactly what changed.",
-      "confidence": 90,
-      "evidenceOld": "Exact short quote from oldContent or null",
-      "evidenceNew": "Exact short quote from newContent or null"
+      "summary": "Temperature storage range changed from 2-8°C to 2-6°C.",
+      "significance": "substantive",
+      "category": "threshold",
+      "confidence": 95,
+      "evidenceOld": "Store at 2-8°C",
+      "evidenceNew": "Store at 2-6°C"
+    },
+    {
+      "sectionId": "5.1",
+      "sectionTitle": "5.1 Documentation",
+      "changeType": "modified",
+      "summary": "Minor wording change from 'shall document' to 'must document'.",
+      "significance": "editorial",
+      "category": "records",
+      "confidence": 85,
+      "evidenceOld": "shall document",
+      "evidenceNew": "must document"
     }
   ]
-}`;
-        maxTokens = 4096;
+}
+
+Now analyze the provided changes and return JSON only:`;
+        maxTokens = 8192;
         temperature = 0.1;
         break;
 
