@@ -645,9 +645,24 @@ export function compareDocuments(oldDoc: ExtractedDocument, newDoc: ExtractedDoc
       
       // DEBUG: Log comparison details
       console.log(`[COMPARE] Section: "${oldSec.fullTitle}"`);
-      console.log(`[COMPARE] Old normalized (first 100): "${oldNorm.substring(0, 100)}"`);
-      console.log(`[COMPARE] New normalized (first 100): "${newNorm.substring(0, 100)}"`);
+      console.log(`[COMPARE] Old length: ${oldNorm.length}, New length: ${newNorm.length}`);
       console.log(`[COMPARE] Are equal: ${oldNorm === newNorm}`);
+      if (oldNorm !== newNorm) {
+        // Find where they differ
+        let diffIndex = 0;
+        for (let i = 0; i < Math.min(oldNorm.length, newNorm.length); i++) {
+          if (oldNorm[i] !== newNorm[i]) {
+            diffIndex = i;
+            break;
+          }
+        }
+        if (diffIndex === 0 && oldNorm.length !== newNorm.length) {
+          diffIndex = Math.min(oldNorm.length, newNorm.length);
+        }
+        console.log(`[COMPARE] DIFF at index ${diffIndex}:`);
+        console.log(`[COMPARE] Old around diff: "...${oldNorm.substring(Math.max(0, diffIndex - 20), diffIndex + 50)}..."`);
+        console.log(`[COMPARE] New around diff: "...${newNorm.substring(Math.max(0, diffIndex - 20), diffIndex + 50)}..."`);
+      }
       
       // If normalized content is identical, skip - no real change
       if (oldNorm === newNorm) {
