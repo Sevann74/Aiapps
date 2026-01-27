@@ -277,31 +277,51 @@ const SimpleDocumentReview: React.FC<SimpleDocumentReviewProps> = ({ onBack, use
             )}
             
             {change.changeType === 'modified' && change.diffParts && (
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Previous version:</p>
-                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {change.diffParts.map((part, i) => (
-                      <span 
-                        key={i} 
-                        className={part.removed ? 'bg-red-200 text-red-900' : part.added ? 'hidden' : ''}
-                      >
-                        {part.value}
-                      </span>
+              <div className="space-y-4">
+                {/* Summary of what changed */}
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
+                  <p className="text-sm font-bold text-amber-800 mb-2">📋 Changes Summary:</p>
+                  <div className="space-y-1">
+                    {change.diffParts.filter(p => p.removed && p.value.trim().length > 3).slice(0, 5).map((p, i) => (
+                      <div key={`r${i}`} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                        <span className="font-bold">− Removed:</span> "{p.value.trim().substring(0, 80)}{p.value.trim().length > 80 ? '...' : ''}"
+                      </div>
+                    ))}
+                    {change.diffParts.filter(p => p.added && p.value.trim().length > 3).slice(0, 5).map((p, i) => (
+                      <div key={`a${i}`} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                        <span className="font-bold">+ Added:</span> "{p.value.trim().substring(0, 80)}{p.value.trim().length > 80 ? '...' : ''}"
+                      </div>
                     ))}
                   </div>
                 </div>
-                <div className="bg-white border-2 border-emerald-300 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-emerald-700 mb-2">Current version:</p>
-                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {change.diffParts.map((part, i) => (
-                      <span 
-                        key={i} 
-                        className={part.added ? 'bg-green-200 text-green-900 font-semibold' : part.removed ? 'hidden' : ''}
-                      >
-                        {part.value}
-                      </span>
-                    ))}
+                
+                {/* Side by side comparison */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                    <p className="text-xs font-bold text-red-700 mb-2">Previous version:</p>
+                    <div className="text-sm text-gray-800 whitespace-pre-wrap max-h-80 overflow-y-auto">
+                      {change.diffParts.map((part, i) => (
+                        <span 
+                          key={i} 
+                          className={part.removed ? 'bg-red-400 text-white font-bold px-1 rounded' : part.added ? 'hidden' : ''}
+                        >
+                          {part.value}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                    <p className="text-xs font-bold text-green-700 mb-2">Current version:</p>
+                    <div className="text-sm text-gray-800 whitespace-pre-wrap max-h-80 overflow-y-auto">
+                      {change.diffParts.map((part, i) => (
+                        <span 
+                          key={i} 
+                          className={part.added ? 'bg-green-400 text-white font-bold px-1 rounded' : part.removed ? 'hidden' : ''}
+                        >
+                          {part.value}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
