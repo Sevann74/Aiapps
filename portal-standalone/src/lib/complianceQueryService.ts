@@ -38,6 +38,8 @@ export interface SOPChangeSummary {
   sectionTitle: string;
   changeType: 'added' | 'removed' | 'modified';
   summary: string;
+  significance: 'substantive' | 'editorial';
+  category: 'obligation' | 'timing' | 'threshold' | 'role' | 'records' | 'procedure' | 'definition' | 'other';
   confidence: number;
   evidenceOld: string | null;
   evidenceNew: string | null;

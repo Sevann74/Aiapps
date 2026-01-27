@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye, Sparkles, Cpu } from 'lucide-react';
-import { extractDocument, compareDocuments, type ComparisonResult, type SectionChange } from '../../lib/documentExtractor';
+import { extractDocument, compareDocuments, type ComparisonResult, type SectionChange as LegacySectionChange } from '../../lib/documentExtractor';
 import { complianceQueryService, type SOPChangeForSummary, type SOPChangeSummary } from '../../lib/complianceQueryService';
-import { extractDocument as extractSectionedDocument, compareDocuments as compareSectionedDocuments, type SimpleComparisonResult as SectionedComparisonResult } from '../../lib/simpleDocumentCompare';
+import { extractDocument as extractSectionedDocument, compareDocumentsCombined, type SimpleComparisonResult, type SectionChange, type ChangeSignificance, type ChangeCategory, type FullTextComparisonResult, type ChangeRegion } from '../../lib/simpleDocumentCompare';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -40,7 +40,9 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [sop2, setSop2] = useState('');
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
-  const [hybridResult, setHybridResult] = useState<SectionedComparisonResult | null>(null);
+  const [hybridResult, setHybridResult] = useState<SimpleComparisonResult | null>(null);
+  const [showSubstantiveOnly, setShowSubstantiveOnly] = useState(false);
+  const [showEditorialOnly, setShowEditorialOnly] = useState(false);
   const [aiSummaries, setAiSummaries] = useState<SOPChangeSummary[] | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
@@ -218,14 +220,12 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
 
     try {
       if (comparisonMode === 'ai') {
-        // Never-miss approach: section-based deterministic comparison is the source of truth.
-        // AI is used only to summarize already-detected changes.
-        const oldDoc = await extractSectionedDocument(file1.file);
-        const newDoc = await extractSectionedDocument(file2.file);
-        const result = compareSectionedDocuments(oldDoc, newDoc);
+        // Never-miss approach: full-text diff with section markers
+        // Guarantees no changes are missed while providing section context
+        const result = await compareDocumentsCombined(file1.file, file2.file);
         setHybridResult(result);
 
-        const changesForAI: SOPChangeForSummary[] = result.changes.map(c => ({
+        const changesForAI: SOPChangeForSummary[] = result.changes.map((c: SectionChange) => ({
           sectionId: c.sectionId,
           sectionTitle: c.sectionTitle,
           changeType: c.changeType,
@@ -275,9 +275,170 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     setExpandedDiffs(newExpanded);
   };
 
-  const renderHybridChange = (change: any, idx: number) => {
+  const exportToWord = async () => {
+    if (!hybridResult) return;
+    
+    const file1 = files.find(f => f.id === sop1);
+    const file2 = files.find(f => f.id === sop2);
+    
+    // Build HTML content for the Word document
+    let html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>SOP Comparison Report</title>
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.4; }
+          h1 { color: #6B21A8; font-size: 18pt; margin-bottom: 10pt; }
+          h2 { color: #1F2937; font-size: 14pt; margin-top: 16pt; margin-bottom: 8pt; border-bottom: 1px solid #E5E7EB; padding-bottom: 4pt; }
+          h3 { color: #374151; font-size: 12pt; margin-top: 12pt; margin-bottom: 6pt; }
+          .summary-table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+          .summary-table td, .summary-table th { border: 1px solid #D1D5DB; padding: 6pt 10pt; text-align: center; }
+          .summary-table th { background-color: #F3F4F6; font-weight: bold; }
+          .change-section { margin: 12pt 0; padding: 10pt; border: 1px solid #E5E7EB; border-radius: 4pt; page-break-inside: avoid; }
+          .substantive { border-left: 4pt solid #F97316; background-color: #FFF7ED; }
+          .editorial { border-left: 4pt solid #3B82F6; background-color: #EFF6FF; }
+          .badge { display: inline-block; padding: 2pt 6pt; border-radius: 3pt; font-size: 9pt; font-weight: bold; margin-right: 4pt; }
+          .badge-added { background-color: #D1FAE5; color: #065F46; }
+          .badge-removed { background-color: #FEE2E2; color: #991B1B; }
+          .badge-modified { background-color: #FEF3C7; color: #92400E; }
+          .badge-substantive { background-color: #FFEDD5; color: #C2410C; }
+          .badge-editorial { background-color: #DBEAFE; color: #1E40AF; }
+          .key-changes { background-color: #FEF9C3; padding: 8pt; margin: 8pt 0; border-radius: 4pt; }
+          .content-box { background-color: #F9FAFB; padding: 8pt; margin: 6pt 0; border: 1px solid #E5E7EB; }
+          .highlight-added { background-color: #BBF7D0; font-weight: bold; }
+          .highlight-removed { background-color: #FECACA; text-decoration: line-through; }
+          .two-column { display: table; width: 100%; }
+          .column { display: table-cell; width: 48%; vertical-align: top; padding: 6pt; }
+          .old-version { border: 1px solid #D1D5DB; }
+          .new-version { border: 1px solid #A855F7; }
+        </style>
+      </head>
+      <body>
+        <h1>SOP Comparison Report</h1>
+        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>Previous Version:</strong> ${file1?.title || 'Unknown'} (v${file1?.version || '?'})</p>
+        <p><strong>New Version:</strong> ${file2?.title || 'Unknown'} (v${file2?.version || '?'})</p>
+        
+        <h2>Summary</h2>
+        <table class="summary-table">
+          <tr>
+            <th>Total Sections</th>
+            <th>Unchanged</th>
+            <th>Modified</th>
+            <th>Added</th>
+            <th>Removed</th>
+            <th>Substantive</th>
+            <th>Editorial</th>
+          </tr>
+          <tr>
+            <td>${hybridResult.summary.totalSections}</td>
+            <td>${hybridResult.summary.unchanged}</td>
+            <td>${hybridResult.summary.modified}</td>
+            <td>${hybridResult.summary.added}</td>
+            <td>${hybridResult.summary.removed}</td>
+            <td style="background-color: #FFEDD5; font-weight: bold;">${hybridResult.summary.substantive}</td>
+            <td>${hybridResult.summary.editorial}</td>
+          </tr>
+        </table>
+        
+        <h2>Detailed Changes</h2>
+    `;
+    
+    // Add each change
+    for (const change of hybridResult.changes) {
+      const significanceClass = change.significance === 'substantive' ? 'substantive' : 'editorial';
+      const typeBadgeClass = change.changeType === 'added' ? 'badge-added' : change.changeType === 'removed' ? 'badge-removed' : 'badge-modified';
+      const significanceBadgeClass = change.significance === 'substantive' ? 'badge-substantive' : 'badge-editorial';
+      
+      html += `
+        <div class="change-section ${significanceClass}">
+          <h3>${change.sectionNumber || change.sectionId} – ${change.sectionTitle}</h3>
+          <p>
+            <span class="badge ${typeBadgeClass}">${change.changeType.toUpperCase()}</span>
+            <span class="badge ${significanceBadgeClass}">${change.significance.toUpperCase()}</span>
+            <span class="badge" style="background-color: #F3F4F6; color: #374151;">${change.category.charAt(0).toUpperCase() + change.category.slice(1)}</span>
+          </p>
+      `;
+      
+      // Key changes
+      if (change.keyChanges && change.keyChanges.length > 0) {
+        html += `<div class="key-changes"><strong>Key Changes:</strong><ul>`;
+        for (const kc of change.keyChanges) {
+          html += `<li>${kc}</li>`;
+        }
+        html += `</ul></div>`;
+      }
+      
+      // Word-level diff
+      if (change.diffParts && change.diffParts.length > 0) {
+        html += `<div class="content-box"><strong>Changes Highlighted:</strong><p>`;
+        for (const part of change.diffParts) {
+          if (part.added) {
+            html += `<span class="highlight-added">${escapeHtml(part.value)}</span>`;
+          } else if (part.removed) {
+            html += `<span class="highlight-removed">${escapeHtml(part.value)}</span>`;
+          } else {
+            html += escapeHtml(part.value);
+          }
+        }
+        html += `</p></div>`;
+      }
+      
+      // Side by side
+      html += `
+        <div class="two-column">
+          <div class="column old-version">
+            <p><strong>Previous Version:</strong></p>
+            <p>${change.oldContent ? escapeHtml(change.oldContent) : '<em>Section not present</em>'}</p>
+          </div>
+          <div class="column new-version">
+            <p><strong>New Version:</strong></p>
+            <p>${change.newContent ? escapeHtml(change.newContent) : '<em>Section removed</em>'}</p>
+          </div>
+        </div>
+      `;
+      
+      html += `</div>`;
+    }
+    
+    html += `
+        <hr style="margin-top: 24pt;">
+        <p style="font-size: 9pt; color: #6B7280;">
+          This report was generated by the SOP Comparison Tool. 
+          Changes marked as <strong>SUBSTANTIVE</strong> may require training review.
+          Changes marked as <strong>EDITORIAL</strong> are typically formatting or wording updates.
+        </p>
+      </body>
+      </html>
+    `;
+    
+    // Create blob and download
+    const blob = new Blob([html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SOP_Comparison_${file1?.title || 'doc1'}_vs_${file2?.title || 'doc2'}_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const escapeHtml = (text: string): string => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      .replace(/\n/g, '<br>');
+  };
+
+  const renderHybridChange = (change: SectionChange, idx: number) => {
     const isExpanded = expandedDiffs.has(idx);
     const summary = aiSummaries?.find(s => s.sectionId === change.sectionId && s.changeType === change.changeType);
+    
     const typeBadge =
       change.changeType === 'added'
         ? 'bg-green-100 text-green-700'
@@ -285,26 +446,52 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
           ? 'bg-red-100 text-red-700'
           : 'bg-amber-100 text-amber-700';
 
+    const significanceBadge = change.significance === 'substantive'
+      ? 'bg-orange-100 text-orange-700 border border-orange-300'
+      : 'bg-blue-100 text-blue-600';
+
+    const categoryLabel = change.category.charAt(0).toUpperCase() + change.category.slice(1);
+
     return (
-      <div key={idx} className="border-2 rounded-xl overflow-hidden border-gray-200">
+      <div key={idx} className={`border-2 rounded-xl overflow-hidden ${
+        change.significance === 'substantive' ? 'border-orange-300' : 'border-gray-200'
+      }`}>
         <button
           onClick={() => toggleDiff(idx)}
           className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
         >
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-gray-900">{change.sectionId}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-gray-900">{change.sectionNumber || change.sectionId}</span>
             <span className="text-gray-600">–</span>
-            <span className="text-gray-700">{change.sectionTitle}</span>
+            <span className="text-gray-700 truncate max-w-xs">{change.sectionTitle}</span>
             <span className={`px-2 py-0.5 rounded text-xs font-bold ${typeBadge}`}>{String(change.changeType).toUpperCase()}</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-bold ${significanceBadge}`}>{change.significance.toUpperCase()}</span>
+            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">{categoryLabel}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
-            {summary && <span>AI: {Math.round(summary.confidence)}%</span>}
+            {summary && <span className="text-purple-600 font-medium">AI: {Math.round(summary.confidence)}%</span>}
             <Eye className="w-4 h-4" />
           </div>
         </button>
 
         {isExpanded && (
           <div className="border-t p-4 bg-gray-50">
+            {/* Key Changes Summary */}
+            {change.keyChanges && change.keyChanges.length > 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-xs font-semibold text-yellow-800 mb-1">Key Changes</p>
+                <ul className="text-sm text-yellow-900 space-y-1">
+                  {change.keyChanges.map((kc, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-yellow-600">•</span>
+                      <span>{kc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* AI Summary */}
             {summary && (
               <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
                 <div className="flex items-center justify-between mb-1">
@@ -312,9 +499,39 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                   <span className="text-xs font-bold text-purple-700">Confidence: {Math.round(summary.confidence)}%</span>
                 </div>
                 <p className="text-sm text-purple-900">{summary.summary}</p>
+                {(summary.evidenceOld || summary.evidenceNew) && (
+                  <div className="mt-2 text-xs text-purple-700 flex gap-4">
+                    {summary.evidenceOld && <span>Old: "{summary.evidenceOld}"</span>}
+                    {summary.evidenceNew && <span>New: "{summary.evidenceNew}"</span>}
+                  </div>
+                )}
               </div>
             )}
 
+            {/* Word-level diff with highlighting */}
+            {change.diffParts && change.diffParts.length > 0 && (
+              <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg">
+                <p className="text-xs font-semibold text-gray-700 mb-2">Word-Level Changes</p>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                  {change.diffParts.map((part: any, i: number) => (
+                    <span 
+                      key={i} 
+                      className={
+                        part.added 
+                          ? 'bg-green-200 text-green-900 font-semibold px-0.5 rounded' 
+                          : part.removed 
+                            ? 'bg-red-200 text-red-900 line-through px-0.5 rounded' 
+                            : ''
+                      }
+                    >
+                      {part.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Side-by-side comparison */}
             <div className="grid md:grid-cols-2 gap-4">
               <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
                 <p className="text-xs font-bold text-gray-600 mb-2">Previous Version</p>
@@ -329,31 +546,6 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                 </p>
               </div>
             </div>
-
-            {change.diffParts && (
-              <div className="mt-4 grid md:grid-cols-2 gap-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-xs font-bold text-red-700 mb-2">Removed</p>
-                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {change.diffParts.map((part: any, i: number) => (
-                      <span key={i} className={part.removed ? 'bg-red-200 text-red-900' : part.added ? 'hidden' : ''}>
-                        {part.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs font-bold text-green-700 mb-2">Added</p>
-                  <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {change.diffParts.map((part: any, i: number) => (
-                      <span key={i} className={part.added ? 'bg-green-200 text-green-900 font-semibold' : part.removed ? 'hidden' : ''}>
-                        {part.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -676,38 +868,274 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
           </div>
         </div>
 
-        {/* Never Miss Results (section-based) */}
+        {/* Never Miss Results - Full Text Diff with Section Context */}
         {comparisonMode === 'ai' && hybridResult && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-600" />
-                Never Miss Results
-              </h3>
-              <p className="text-sm text-gray-600">Changes are detected deterministically by section; AI summaries are optional.</p>
+            {/* Summary Card */}
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Never Miss Comparison</h3>
+                    <p className="text-purple-200 text-sm">Every change detected • Full document coverage</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => exportToWord()}
+                  className="px-4 py-2 bg-white text-purple-700 rounded-lg font-semibold hover:bg-purple-50 transition-all flex items-center gap-2 shadow-md"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Report
+                </button>
+              </div>
 
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-bold text-gray-900">{hybridResult.summary.totalChanges}</p>
-                  <p className="text-xs text-gray-600">Total</p>
+              {/* Stats Grid */}
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
+                  <p className="text-3xl font-bold">{hybridResult.fullTextResult?.summary.totalChanges || hybridResult.changes.length}</p>
+                  <p className="text-xs text-purple-200">Changes</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-700">{hybridResult.summary.added}</p>
-                  <p className="text-xs text-gray-600">Added</p>
+                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
+                  <p className="text-3xl font-bold text-green-300">{hybridResult.fullTextResult?.summary.wordsAdded || hybridResult.summary.added}</p>
+                  <p className="text-xs text-purple-200">Words Added</p>
                 </div>
-                <div className="text-center p-3 bg-amber-50 rounded-lg">
-                  <p className="text-2xl font-bold text-amber-700">{hybridResult.summary.modified}</p>
-                  <p className="text-xs text-gray-600">Modified</p>
+                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
+                  <p className="text-3xl font-bold text-red-300">{hybridResult.fullTextResult?.summary.wordsRemoved || hybridResult.summary.removed}</p>
+                  <p className="text-xs text-purple-200">Words Removed</p>
                 </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-700">{hybridResult.summary.removed}</p>
-                  <p className="text-xs text-gray-600">Removed</p>
+                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
+                  <p className="text-3xl font-bold text-orange-300">{hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive}</p>
+                  <p className="text-xs text-purple-200">Substantive</p>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <p className="text-2xl font-bold text-purple-700">{hybridResult.summary.sectionsAnalyzed}</p>
-                  <p className="text-xs text-gray-600">Sections</p>
+                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
+                  <p className="text-3xl font-bold text-blue-300">{hybridResult.fullTextResult?.summary.editorial || hybridResult.summary.editorial}</p>
+                  <p className="text-xs text-purple-200">Editorial</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
+                  <p className="text-3xl font-bold">{hybridResult.fullTextResult?.summary.sectionsAffected || hybridResult.summary.modified + hybridResult.summary.added + hybridResult.summary.removed}</p>
+                  <p className="text-xs text-purple-200">Sections</p>
                 </div>
               </div>
+            </div>
+
+            {/* Full-Text Diff View */}
+            {hybridResult.fullTextResult && (
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Eye className="w-5 h-5" />
+                    Full Document Diff
+                  </h3>
+                  <p className="text-slate-300 text-sm">Inline view showing all changes with highlighting</p>
+                </div>
+                <div className="p-6 max-h-[500px] overflow-y-auto bg-slate-50">
+                  <div className="font-mono text-sm leading-relaxed whitespace-pre-wrap">
+                    {hybridResult.fullTextResult.fullDiff.map((part, idx) => (
+                      <span
+                        key={idx}
+                        className={
+                          part.added
+                            ? 'bg-green-200 text-green-900 px-0.5 rounded border-b-2 border-green-400'
+                            : part.removed
+                              ? 'bg-red-200 text-red-900 line-through px-0.5 rounded'
+                              : 'text-slate-700'
+                        }
+                      >
+                        {part.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Section Navigation */}
+            {hybridResult.fullTextResult && hybridResult.fullTextResult.sections.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-purple-600" />
+                  Sections with Changes
+                </h3>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {hybridResult.fullTextResult.sections.filter(s => s.hasChanges).map((section, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:border-purple-400 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-purple-900 truncate">{section.title}</span>
+                        <span className="px-2 py-1 bg-purple-600 text-white text-xs font-bold rounded-full">
+                          {section.changeCount}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Change Regions - Grouped by Section */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Change Details by Section</h3>
+                {/* Filter Toggles */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setShowSubstantiveOnly(!showSubstantiveOnly); setShowEditorialOnly(false); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                      showSubstantiveOnly 
+                        ? 'bg-orange-600 text-white' 
+                        : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                    }`}
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    Substantive
+                  </button>
+                  <button
+                    onClick={() => { setShowEditorialOnly(!showEditorialOnly); setShowSubstantiveOnly(false); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
+                      showEditorialOnly 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
+                  >
+                    <Info className="w-3 h-3" />
+                    Editorial
+                  </button>
+                  {(showSubstantiveOnly || showEditorialOnly) && (
+                    <button
+                      onClick={() => { setShowSubstantiveOnly(false); setShowEditorialOnly(false); }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    >
+                      All
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Change Regions List */}
+              {hybridResult.fullTextResult && (
+                <div className="space-y-3 mt-4">
+                  {(() => {
+                    let regions = hybridResult.fullTextResult.changeRegions;
+                    if (showSubstantiveOnly) {
+                      regions = regions.filter(r => r.significance === 'substantive');
+                    } else if (showEditorialOnly) {
+                      regions = regions.filter(r => r.significance === 'editorial');
+                    }
+                    
+                    // Group by parent section
+                    const grouped = regions.reduce((acc, region) => {
+                      if (!acc[region.parentSection]) acc[region.parentSection] = [];
+                      acc[region.parentSection].push(region);
+                      return acc;
+                    }, {} as Record<string, ChangeRegion[]>);
+                    
+                    if (Object.keys(grouped).length === 0) {
+                      return (
+                        <div className="text-center py-8 text-gray-500">
+                          <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500" />
+                          <p className="font-semibold">No differences found</p>
+                          <p className="text-sm">The two documents appear to be identical.</p>
+                        </div>
+                      );
+                    }
+                    
+                    return Object.entries(grouped).map(([section, sectionRegions]) => (
+                      <div key={section} className="border border-gray-200 rounded-xl overflow-hidden">
+                        {/* Section Header */}
+                        <div className="bg-gradient-to-r from-slate-100 to-slate-50 px-4 py-3 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-slate-600" />
+                              <span className="font-semibold text-slate-800">{section}</span>
+                            </div>
+                            <span className="px-2 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-full">
+                              {sectionRegions.length} change{sectionRegions.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Changes in this section */}
+                        <div className="divide-y divide-gray-100">
+                          {sectionRegions.map((region, idx) => (
+                            <div key={region.id} className="p-4 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-start gap-3">
+                                {/* Change type indicator */}
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                  region.changeType === 'added' ? 'bg-green-100' :
+                                  region.changeType === 'removed' ? 'bg-red-100' : 'bg-amber-100'
+                                }`}>
+                                  {region.changeType === 'added' ? (
+                                    <span className="text-green-600 font-bold text-sm">+</span>
+                                  ) : region.changeType === 'removed' ? (
+                                    <span className="text-red-600 font-bold text-sm">−</span>
+                                  ) : (
+                                    <span className="text-amber-600 font-bold text-sm">~</span>
+                                  )}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                  {/* Badges row */}
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                      region.changeType === 'added' ? 'bg-green-100 text-green-700' :
+                                      region.changeType === 'removed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                    }`}>
+                                      {region.changeType.toUpperCase()}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                      region.significance === 'substantive' 
+                                        ? 'bg-orange-100 text-orange-700 border border-orange-300' 
+                                        : 'bg-blue-100 text-blue-600'
+                                    }`}>
+                                      {region.significance.toUpperCase()}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                                      {region.category}
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Descriptor */}
+                                  <p className="text-sm font-medium text-gray-800 mb-2">{region.descriptor}</p>
+                                  
+                                  {/* Diff preview */}
+                                  <div className="bg-slate-50 rounded-lg p-3 font-mono text-xs">
+                                    {region.oldText && (
+                                      <div className="mb-2">
+                                        <span className="text-red-600 bg-red-100 px-1 rounded line-through">
+                                          {region.oldText.length > 150 ? region.oldText.substring(0, 150) + '...' : region.oldText}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {region.newText && (
+                                      <div>
+                                        <span className="text-green-600 bg-green-100 px-1 rounded">
+                                          {region.newText.length > 150 ? region.newText.substring(0, 150) + '...' : region.newText}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+
+              {/* Fallback to section-based changes if no full-text result */}
+              {!hybridResult.fullTextResult && (
+                <div className="space-y-3 mt-4">
+                  {hybridResult.changes.map((change, idx) => renderHybridChange(change, idx))}
+                </div>
+              )}
 
               {aiSummaryLoading && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
@@ -715,26 +1143,6 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                   Generating AI summaries…
                 </div>
               )}
-              {aiSummaryError && (
-                <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                  <p className="text-sm text-purple-900 font-semibold">AI summaries unavailable</p>
-                  <p className="text-sm text-purple-800">{aiSummaryError}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Detailed Differences</h3>
-              <div className="space-y-3">
-                {hybridResult.changes.map((change: any, idx: number) => renderHybridChange(change, idx))}
-                {hybridResult.changes.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500" />
-                    <p className="font-semibold">No differences found</p>
-                    <p className="text-sm">The two documents appear to be identical.</p>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
