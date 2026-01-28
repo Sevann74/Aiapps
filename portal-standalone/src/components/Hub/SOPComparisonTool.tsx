@@ -435,6 +435,95 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       .replace(/\n/g, '<br>');
   };
 
+  // Detect if text looks like a table (definition list pattern: Term followed by Definition)
+  const isTableLikeContent = (text: string): boolean => {
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length < 4) return false;
+    // Check for alternating short/long pattern or Term: Definition pattern
+    const hasDefinitionPattern = lines.some(l => /^[A-Z][A-Za-z\s]+$/.test(l.trim()) && l.trim().length < 50);
+    return hasDefinitionPattern && lines.length >= 4;
+  };
+
+  // Render diff parts with table detection
+  const renderDiffContent = (fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>) => {
+    // Check if content looks like a definition table
+    const fullText = fullDiff.map(p => p.value).join('');
+    
+    if (isTableLikeContent(fullText)) {
+      // Parse as definition table
+      const lines = fullText.split('\n').filter(l => l.trim());
+      const rows: Array<{ term: string; definition: string; termClass: string; defClass: string }> = [];
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        // Check if this is a term (short, capitalized, no punctuation at end)
+        if (/^[A-Z][A-Za-z\s\-]+$/.test(line) && line.length < 50) {
+          // Next line is likely the definition
+          const definition = lines[i + 1]?.trim() || '';
+          
+          // Determine highlighting by checking if term/def appear in added/removed parts
+          let termClass = '';
+          let defClass = '';
+          
+          for (const part of fullDiff) {
+            if (part.value.includes(line)) {
+              if (part.added) termClass = 'bg-green-200 text-green-900';
+              else if (part.removed) termClass = 'bg-red-200 text-red-900 line-through';
+            }
+            if (definition && part.value.includes(definition)) {
+              if (part.added) defClass = 'bg-green-200 text-green-900';
+              else if (part.removed) defClass = 'bg-red-200 text-red-900 line-through';
+            }
+          }
+          
+          rows.push({ term: line, definition, termClass, defClass });
+          i++; // Skip the definition line
+        }
+      }
+      
+      if (rows.length >= 2) {
+        return (
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-200">
+                <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-700">Term</th>
+                <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-700">Definition</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                  <td className={`border border-slate-300 px-3 py-2 font-medium ${row.termClass}`}>{row.term}</td>
+                  <td className={`border border-slate-300 px-3 py-2 ${row.defClass}`}>{row.definition}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+    }
+    
+    // Default: render as inline diff
+    return (
+      <div className="text-sm leading-relaxed whitespace-pre-wrap">
+        {fullDiff.map((part, idx) => (
+          <span
+            key={idx}
+            className={
+              part.added
+                ? 'bg-green-200 text-green-900 px-0.5 rounded border-b-2 border-green-400'
+                : part.removed
+                  ? 'bg-red-200 text-red-900 line-through px-0.5 rounded'
+                  : 'text-slate-700'
+            }
+          >
+            {part.value}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const renderHybridChange = (change: SectionChange, idx: number) => {
     const isExpanded = expandedDiffs.has(idx);
     const summary = aiSummaries?.find(s => s.sectionId === change.sectionId && s.changeType === change.changeType);
@@ -921,38 +1010,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               </div>
             </div>
 
-            {/* Full-Text Diff View */}
-            {hybridResult.fullTextResult && (
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Eye className="w-5 h-5" />
-                    Full Document Diff
-                  </h3>
-                  <p className="text-slate-300 text-sm">Inline view showing all changes with highlighting</p>
-                </div>
-                <div className="p-6 max-h-[500px] overflow-y-auto bg-slate-50">
-                  <div className="font-mono text-sm leading-relaxed whitespace-pre-wrap">
-                    {hybridResult.fullTextResult.fullDiff.map((part, idx) => (
-                      <span
-                        key={idx}
-                        className={
-                          part.added
-                            ? 'bg-green-200 text-green-900 px-0.5 rounded border-b-2 border-green-400'
-                            : part.removed
-                              ? 'bg-red-200 text-red-900 line-through px-0.5 rounded'
-                              : 'text-slate-700'
-                        }
-                      >
-                        {part.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Section Navigation */}
+            {/* Section Navigation - MOVED ABOVE Full Document Diff */}
             {hybridResult.fullTextResult && hybridResult.fullTextResult.sections.length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -977,173 +1035,50 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               </div>
             )}
 
-            {/* Change Regions - Grouped by Section */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">Change Details by Section</h3>
-                {/* Filter Toggles */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setShowSubstantiveOnly(!showSubstantiveOnly); setShowEditorialOnly(false); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                      showSubstantiveOnly 
-                        ? 'bg-orange-600 text-white' 
-                        : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                    }`}
-                  >
-                    <AlertTriangle className="w-3 h-3" />
-                    Substantive
-                  </button>
-                  <button
-                    onClick={() => { setShowEditorialOnly(!showEditorialOnly); setShowSubstantiveOnly(false); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
-                      showEditorialOnly 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                    }`}
-                  >
-                    <Info className="w-3 h-3" />
-                    Editorial
-                  </button>
-                  {(showSubstantiveOnly || showEditorialOnly) && (
-                    <button
-                      onClick={() => { setShowSubstantiveOnly(false); setShowEditorialOnly(false); }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    >
-                      All
-                    </button>
-                  )}
+            {/* Full-Text Diff View */}
+            {hybridResult.fullTextResult && (
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Eye className="w-5 h-5" />
+                    Full Document Diff
+                  </h3>
+                  <p className="text-slate-300 text-sm">Inline view showing all changes with highlighting</p>
+                </div>
+                {/* Legend */}
+                <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex items-center gap-6">
+                  <span className="text-sm font-semibold text-slate-600">Legend:</span>
+                  <span className="flex items-center gap-2">
+                    <span className="bg-green-200 text-green-900 px-2 py-0.5 rounded text-sm font-medium border-b-2 border-green-400">Added content</span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="bg-red-200 text-red-900 line-through px-2 py-0.5 rounded text-sm font-medium">Removed content</span>
+                  </span>
+                </div>
+                <div className="p-6 max-h-[600px] overflow-y-auto bg-slate-50">
+                  {renderDiffContent(hybridResult.fullTextResult.fullDiff)}
                 </div>
               </div>
+            )}
 
-              {/* Change Regions List */}
-              {hybridResult.fullTextResult && (
-                <div className="space-y-3 mt-4">
-                  {(() => {
-                    let regions = hybridResult.fullTextResult.changeRegions;
-                    if (showSubstantiveOnly) {
-                      regions = regions.filter(r => r.significance === 'substantive');
-                    } else if (showEditorialOnly) {
-                      regions = regions.filter(r => r.significance === 'editorial');
-                    }
-                    
-                    // Group by parent section
-                    const grouped = regions.reduce((acc, region) => {
-                      if (!acc[region.parentSection]) acc[region.parentSection] = [];
-                      acc[region.parentSection].push(region);
-                      return acc;
-                    }, {} as Record<string, ChangeRegion[]>);
-                    
-                    if (Object.keys(grouped).length === 0) {
-                      return (
-                        <div className="text-center py-8 text-gray-500">
-                          <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500" />
-                          <p className="font-semibold">No differences found</p>
-                          <p className="text-sm">The two documents appear to be identical.</p>
-                        </div>
-                      );
-                    }
-                    
-                    return Object.entries(grouped).map(([section, sectionRegions]) => (
-                      <div key={section} className="border border-gray-200 rounded-xl overflow-hidden">
-                        {/* Section Header */}
-                        <div className="bg-gradient-to-r from-slate-100 to-slate-50 px-4 py-3 border-b border-gray-200">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-slate-600" />
-                              <span className="font-semibold text-slate-800">{section}</span>
-                            </div>
-                            <span className="px-2 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-full">
-                              {sectionRegions.length} change{sectionRegions.length > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {/* Changes in this section */}
-                        <div className="divide-y divide-gray-100">
-                          {sectionRegions.map((region, idx) => (
-                            <div key={region.id} className="p-4 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-start gap-3">
-                                {/* Change type indicator */}
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                  region.changeType === 'added' ? 'bg-green-100' :
-                                  region.changeType === 'removed' ? 'bg-red-100' : 'bg-amber-100'
-                                }`}>
-                                  {region.changeType === 'added' ? (
-                                    <span className="text-green-600 font-bold text-sm">+</span>
-                                  ) : region.changeType === 'removed' ? (
-                                    <span className="text-red-600 font-bold text-sm">−</span>
-                                  ) : (
-                                    <span className="text-amber-600 font-bold text-sm">~</span>
-                                  )}
-                                </div>
-                                
-                                <div className="flex-1 min-w-0">
-                                  {/* Badges row */}
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                      region.changeType === 'added' ? 'bg-green-100 text-green-700' :
-                                      region.changeType === 'removed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {region.changeType.toUpperCase()}
-                                    </span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                      region.significance === 'substantive' 
-                                        ? 'bg-orange-100 text-orange-700 border border-orange-300' 
-                                        : 'bg-blue-100 text-blue-600'
-                                    }`}>
-                                      {region.significance.toUpperCase()}
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-                                      {region.category}
-                                    </span>
-                                  </div>
-                                  
-                                  {/* Descriptor */}
-                                  <p className="text-sm font-medium text-gray-800 mb-2">{region.descriptor}</p>
-                                  
-                                  {/* Diff preview */}
-                                  <div className="bg-slate-50 rounded-lg p-3 font-mono text-xs">
-                                    {region.oldText && (
-                                      <div className="mb-2">
-                                        <span className="text-red-600 bg-red-100 px-1 rounded line-through">
-                                          {region.oldText.length > 150 ? region.oldText.substring(0, 150) + '...' : region.oldText}
-                                        </span>
-                                      </div>
-                                    )}
-                                    {region.newText && (
-                                      <div>
-                                        <span className="text-green-600 bg-green-100 px-1 rounded">
-                                          {region.newText.length > 150 ? region.newText.substring(0, 150) + '...' : region.newText}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              )}
-
-              {/* Fallback to section-based changes if no full-text result */}
-              {!hybridResult.fullTextResult && (
-                <div className="space-y-3 mt-4">
+            {/* Fallback to section-based changes if no full-text result */}
+            {!hybridResult.fullTextResult && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Section Changes</h3>
+                <div className="space-y-3">
                   {hybridResult.changes.map((change, idx) => renderHybridChange(change, idx))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {aiSummaryLoading && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
+            {aiSummaryLoading && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
                   <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
                   Generating AI summaries…
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
