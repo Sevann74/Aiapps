@@ -440,7 +440,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>,
     newHtml?: string
   ) => {
-    // If we have HTML with tables, show both: formatted HTML + inline diff for changes
+    // If we have HTML with tables, show formatted HTML only (no duplicate text diff)
     if (newHtml && newHtml.includes('<table')) {
       const styledContent = `
         <style>
@@ -456,43 +456,15 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
         ${newHtml}
       `;
       
-      const hasChanges = fullDiff.some(p => p.added || p.removed);
-      
       return (
-        <div className="space-y-6">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-600 mb-2">Document View (with tables)</h4>
-            <div 
-              className="text-sm leading-relaxed prose prose-sm max-w-none bg-white p-4 rounded-lg border border-slate-200"
-              dangerouslySetInnerHTML={{ __html: styledContent }}
-            />
-          </div>
-          
-          {hasChanges && (
-            <div>
-              <h4 className="text-sm font-semibold text-slate-600 mb-2">Changes (inline diff)</h4>
-              <div className="text-sm leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-lg border border-slate-200">
-                {fullDiff.map((part, idx) => (
-                  <span
-                    key={idx}
-                    className={
-                      part.added
-                        ? 'bg-green-200 text-green-900 px-0.5 rounded border-b-2 border-green-400'
-                        : part.removed
-                          ? 'bg-red-200 text-red-900 line-through px-0.5 rounded'
-                          : 'text-slate-700'
-                    }
-                  >
-                    {part.value}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <div 
+          className="text-sm leading-relaxed prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: styledContent }}
+        />
       );
     }
     
+    // Default: inline diff for docs without tables
     return (
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
         {fullDiff.map((part, idx) => (
