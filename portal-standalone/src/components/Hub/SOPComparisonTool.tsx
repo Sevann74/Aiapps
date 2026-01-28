@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye, Sparkles, Cpu } from 'lucide-react';
+import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye } from 'lucide-react';
 import { extractDocument, compareDocuments, type ComparisonResult, type SectionChange as LegacySectionChange } from '../../lib/documentExtractor';
-import { complianceQueryService, type SOPChangeForSummary, type SOPChangeSummary } from '../../lib/complianceQueryService';
 import { extractDocument as extractSectionedDocument, compareDocumentsCombined, type SimpleComparisonResult, type SectionChange, type ChangeSignificance, type ChangeCategory, type FullTextComparisonResult, type ChangeRegion } from '../../lib/simpleDocumentCompare';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -43,37 +42,9 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [hybridResult, setHybridResult] = useState<SimpleComparisonResult | null>(null);
   const [showSubstantiveOnly, setShowSubstantiveOnly] = useState(false);
   const [showEditorialOnly, setShowEditorialOnly] = useState(false);
-  const [aiSummaries, setAiSummaries] = useState<SOPChangeSummary[] | null>(null);
-  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
-  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [expandedDiffs, setExpandedDiffs] = useState<Set<number>>(new Set());
-  const [comparisonMode, setComparisonMode] = useState<'ai' | 'deterministic'>('ai');
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const summarizeChangesInBatches = async (params: {
-    sop1Meta: { id: string; title: string; version?: string };
-    sop2Meta: { id: string; title: string; version?: string };
-    changes: SOPChangeForSummary[];
-  }): Promise<SOPChangeSummary[]> => {
-    const batchSize = 12;
-    const all: SOPChangeSummary[] = [];
-
-    for (let i = 0; i < params.changes.length; i += batchSize) {
-      const batch = params.changes.slice(i, i + batchSize);
-      const resp = await complianceQueryService.summarizeSOPChanges({
-        sop1: params.sop1Meta,
-        sop2: params.sop2Meta,
-        changes: batch,
-      });
-
-      if (resp?.summaries?.length) {
-        all.push(...resp.summaries);
-      }
-    }
-
-    return all;
-  };
 
   const formatFileSize = (bytes: number) => {
     if (!bytes) return '0 B';
@@ -214,48 +185,12 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     setComparisonLoading(true);
     setComparisonResult(null);
     setHybridResult(null);
-    setAiSummaries(null);
-    setAiSummaryError(null);
     setError(null);
 
     try {
-      if (comparisonMode === 'ai') {
-        // Never-miss approach: full-text diff with section markers
-        // Guarantees no changes are missed while providing section context
-        const result = await compareDocumentsCombined(file1.file, file2.file);
-        setHybridResult(result);
-
-        const changesForAI: SOPChangeForSummary[] = result.changes.map((c: SectionChange) => ({
-          sectionId: c.sectionId,
-          sectionTitle: c.sectionTitle,
-          changeType: c.changeType,
-          oldContent: c.oldContent || '',
-          newContent: c.newContent || '',
-        }));
-
-        if (changesForAI.length > 0) {
-          setAiSummaryLoading(true);
-          try {
-            const summaries = await summarizeChangesInBatches({
-              sop1Meta: { id: file1.id, title: file1.title, version: file1.version },
-              sop2Meta: { id: file2.id, title: file2.title, version: file2.version },
-              changes: changesForAI,
-            });
-            setAiSummaries(summaries);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : 'AI summary failed';
-            setAiSummaryError(msg);
-          } finally {
-            setAiSummaryLoading(false);
-          }
-        }
-      } else {
-        // Deterministic comparison using local engine
-        const doc1 = await extractDocument(file1.file);
-        const doc2 = await extractDocument(file2.file);
-        const result = compareDocuments(doc1, doc2);
-        setComparisonResult(result);
-      }
+      // Full-text diff with section markers
+      const result = await compareDocumentsCombined(file1.file, file2.file);
+      setHybridResult(result);
     } catch (err) {
       console.error('Comparison error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Comparison failed';
@@ -657,46 +592,6 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-        {/* Feature Cards */}
-        <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-6 border border-pink-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <GitCompare className="w-6 h-6 text-pink-600" />
-            SOP Comparison Mode Features 🔄 <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">NEW!</span>
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mb-4">
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">🔄 Side-by-side Comparison</h4>
-              <p className="text-gray-600">Upload two SOP versions and see them compared section by section. AI identifies every change, addition, and deletion.</p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">🎨 Visual Difference Highlighting</h4>
-              <p className="text-gray-600">Changes are color-coded and clearly marked. See exactly what text was modified, added, or removed between versions.</p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">⚠️ Severity Indicators</h4>
-              <p className="text-gray-600">Each change is classified as High, Medium, or Low priority based on compliance impact and operational significance.</p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">🚨 Critical Changes Alert</h4>
-              <p className="text-gray-600">High-priority changes are highlighted at the top with clear warnings about compliance implications and required actions.</p>
-            </div>
-          </div>
-          <div className="grid md:grid-cols-3 gap-4 text-sm">
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">📊 Impact Assessment</h4>
-              <p className="text-gray-600">AI analyzes the business and compliance impact of each change, helping prioritize review and implementation efforts.</p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">✅ Recommended Actions</h4>
-              <p className="text-gray-600">Get specific, actionable recommendations for each change including training needs, validation requirements, and timeline suggestions.</p>
-            </div>
-            <div className="bg-white p-3 rounded-lg">
-              <h4 className="font-semibold text-pink-900 mb-1">📄 Export Report</h4>
-              <p className="text-gray-600">Generate comprehensive comparison reports for change control documentation, regulatory submissions, and team reviews.</p>
-            </div>
-          </div>
-        </div>
-
         {/* Header Banner */}
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white">
           <div className="flex items-center gap-3 mb-2">
@@ -848,41 +743,6 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               </div>
             </div>
 
-            {/* Comparison Mode Toggle */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Comparison Mode</label>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setComparisonMode('ai')}
-                  className={`flex-1 p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
-                    comparisonMode === 'ai' 
-                      ? 'border-purple-500 bg-purple-50' 
-                      : 'border-gray-200 hover:border-purple-300'
-                  }`}
-                >
-                  <Sparkles className={`w-6 h-6 ${comparisonMode === 'ai' ? 'text-purple-600' : 'text-gray-400'}`} />
-                  <div className="text-left">
-                    <p className={`font-bold ${comparisonMode === 'ai' ? 'text-purple-900' : 'text-gray-700'}`}>Never Miss (Deterministic + AI Summary)</p>
-                    <p className="text-xs text-gray-500">Deterministic finds every change; AI summarizes only</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setComparisonMode('deterministic')}
-                  className={`flex-1 p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
-                    comparisonMode === 'deterministic' 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 hover:border-blue-300'
-                  }`}
-                >
-                  <Cpu className={`w-6 h-6 ${comparisonMode === 'deterministic' ? 'text-blue-600' : 'text-gray-400'}`} />
-                  <div className="text-left">
-                    <p className={`font-bold ${comparisonMode === 'deterministic' ? 'text-blue-900' : 'text-gray-700'}`}>Deterministic</p>
-                    <p className="text-xs text-gray-500">Audit-safe with full trail</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-
             {/* Error Display */}
             {error && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
@@ -897,40 +757,36 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
             <button
               onClick={compareSOPs}
               disabled={!sop1 || !sop2 || comparisonLoading}
-              className={`w-full px-6 py-3 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center gap-2 ${
-                comparisonMode === 'ai' 
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
-                  : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700'
-              }`}
+              className="w-full px-6 py-3 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
             >
               {comparisonLoading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  {comparisonMode === 'ai' ? 'AI Analyzing...' : 'Comparing...'}
+                  Comparing...
                 </>
               ) : (
                 <>
-                  {comparisonMode === 'ai' ? <Sparkles className="w-5 h-5" /> : <GitCompare className="w-5 h-5" />}
-                  {comparisonMode === 'ai' ? 'Compare (Never Miss)' : 'Compare (Deterministic)'}
+                  <GitCompare className="w-5 h-5" />
+                  Compare SOPs
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* Never Miss Results - Full Text Diff with Section Context */}
-        {comparisonMode === 'ai' && hybridResult && (
+        {/* Comparison Results */}
+        {hybridResult && (
           <div className="space-y-6">
             {/* Summary Card */}
             <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                    <Sparkles className="w-6 h-6" />
+                    <GitCompare className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold">Never Miss Comparison</h3>
-                    <p className="text-purple-200 text-sm">Every change detected • Full document coverage</p>
+                    <h3 className="text-xl font-bold">Comparison Results</h3>
+                    <p className="text-purple-200 text-sm">Full document coverage with change detection</p>
                   </div>
                 </div>
                 <button
