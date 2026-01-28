@@ -1065,8 +1065,8 @@ const EnhancedCourseBuilder = () => {
     .card-important .card-content p { color: #742a2a; font-weight: 500; }
     .card-procedure { background: linear-gradient(135deg, #f0fff4, #c6f6d5); }
     .card-procedure .card-content p, .card-procedure .card-content li { color: #276749; }
-    .card-definition { background: linear-gradient(135deg, #fffff0, #fefcbf); }
-    .card-definition .card-content p { color: #744210; }
+    .card-definition { background: linear-gradient(135deg, #ffffff, #f0fdf4); }
+    .card-definition .card-content p { color: #166534; }
     .card-note { background: linear-gradient(135deg, #faf5ff, #e9d8fd); }
     .card-note .card-content p { color: #553c9a; }
     
