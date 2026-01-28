@@ -925,7 +925,7 @@ export function generateSingleSCOHTML(
       font-size: 2.5rem;
       margin-bottom: 0.5rem;
       font-weight: 800;
-      background: linear-gradient(135deg, var(--brand-navy), var(--brand-cyan));
+      background: linear-gradient(135deg, #2E3192, #00C5B8);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
