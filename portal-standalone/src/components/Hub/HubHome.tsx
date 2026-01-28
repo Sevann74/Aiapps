@@ -43,8 +43,8 @@ const HubHome: React.FC<HubHomeProps> = ({
     },
     {
       key: 'sop-compare',
-      title: 'SOP Comparison Tool',
-      description: 'Compare two SOPs side-by-side to identify differences, track changes, and ensure compliance. Full audit trail with tiered matching.',
+      title: 'Document Change Review',
+      description: 'Side-by-side comparison of controlled document versions with full traceability.',
       icon: '🔄',
       enabled: hasAccess('sop-compare'),
       locked: !hasAccess('sop-compare'),
