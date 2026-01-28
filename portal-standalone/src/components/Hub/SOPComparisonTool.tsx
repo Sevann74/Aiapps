@@ -435,12 +435,64 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       .replace(/\n/g, '<br>');
   };
 
-  // Render diff content - accurate inline diff only
+  // Render diff content - with HTML table support
   const renderDiffContent = (
     fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>,
     newHtml?: string
   ) => {
-    // Always use inline diff for accuracy - no regex-based HTML highlighting
+    // If we have HTML with tables, show both: formatted HTML + inline diff for changes
+    if (newHtml && newHtml.includes('<table')) {
+      const styledContent = `
+        <style>
+          table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+          th, td { border: 1px solid #cbd5e1; padding: 0.5rem 0.75rem; text-align: left; }
+          th { background-color: #f1f5f9; font-weight: 600; color: #334155; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          tr:hover { background-color: #f1f5f9; }
+          p { margin: 0.5rem 0; }
+          ul, ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+          h1, h2, h3, h4 { margin: 1rem 0 0.5rem 0; font-weight: 600; }
+        </style>
+        ${newHtml}
+      `;
+      
+      const hasChanges = fullDiff.some(p => p.added || p.removed);
+      
+      return (
+        <div className="space-y-6">
+          <div>
+            <h4 className="text-sm font-semibold text-slate-600 mb-2">Document View (with tables)</h4>
+            <div 
+              className="text-sm leading-relaxed prose prose-sm max-w-none bg-white p-4 rounded-lg border border-slate-200"
+              dangerouslySetInnerHTML={{ __html: styledContent }}
+            />
+          </div>
+          
+          {hasChanges && (
+            <div>
+              <h4 className="text-sm font-semibold text-slate-600 mb-2">Changes (inline diff)</h4>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-lg border border-slate-200">
+                {fullDiff.map((part, idx) => (
+                  <span
+                    key={idx}
+                    className={
+                      part.added
+                        ? 'bg-green-200 text-green-900 px-0.5 rounded border-b-2 border-green-400'
+                        : part.removed
+                          ? 'bg-red-200 text-red-900 line-through px-0.5 rounded'
+                          : 'text-slate-700'
+                    }
+                  >
+                    {part.value}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    
     return (
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
         {fullDiff.map((part, idx) => (
