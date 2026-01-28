@@ -83,6 +83,9 @@ export interface FullTextComparisonResult {
   // Raw text for reference
   oldText: string;
   newText: string;
+  // HTML with table structure preserved
+  oldHtml?: string;
+  newHtml?: string;
 }
 
 export interface SimpleComparisonResult {
@@ -106,6 +109,7 @@ export interface ExtractedDocument {
   sections: DocumentSection[];
   metadata: { title: string; version: string };
   rawText: string;
+  rawHtml?: string; // HTML with table structure preserved
 }
 
 // ============================================
@@ -296,11 +300,15 @@ function detectSections(text: string): DetectedSection[] {
 export async function extractDocument(file: File): Promise<ExtractedDocument> {
   const extension = file.name.split('.').pop()?.toLowerCase();
   let rawText = '';
+  let rawHtml = '';
   
   if (extension === 'docx' || extension === 'doc') {
     const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    rawText = result.value;
+    // Get both text and HTML - HTML preserves table structure
+    const textResult = await mammoth.extractRawText({ arrayBuffer });
+    const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
+    rawText = textResult.value;
+    rawHtml = htmlResult.value;
   } else if (extension === 'pdf') {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -310,6 +318,8 @@ export async function extractDocument(file: File): Promise<ExtractedDocument> {
       const pageText = textContent.items.map((item: any) => item.str).join(' ');
       rawText += pageText + '\n\n';
     }
+    // PDF doesn't have HTML structure
+    rawHtml = '';
   } else {
     throw new Error('Unsupported file format. Please upload Word (.docx) or PDF files.');
   }
@@ -323,7 +333,8 @@ export async function extractDocument(file: File): Promise<ExtractedDocument> {
       title: file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
       version: versionMatch ? versionMatch[1] : '1.0'
     },
-    rawText
+    rawText,
+    rawHtml
   };
 }
 
@@ -946,6 +957,12 @@ export async function compareDocumentsCombined(oldFile: File, newFile: File): Pr
   
   const sectionResult = compareDocuments(oldDoc, newDoc);
   const fullTextResult = performFullTextComparison(oldDoc.rawText, newDoc.rawText);
+  
+  // Add HTML to fullTextResult for table rendering
+  if (fullTextResult) {
+    fullTextResult.oldHtml = oldDoc.rawHtml;
+    fullTextResult.newHtml = newDoc.rawHtml;
+  }
   
   return {
     ...sectionResult,
