@@ -768,15 +768,50 @@ const EnhancedCourseBuilder = () => {
       return stepCount;
     };
 
-    // Get section icon - unique per content type, empty for plain text
-    const getSectionIcon = (type: string): string => {
+    // Get section icon based on heading keywords first, then type (matching SCORM)
+    const getSectionIcon = (type: string, heading: string): string => {
+      const headingLower = (heading || '').toLowerCase();
+      
+      // Check heading keywords first for more specific icons
+      if (headingLower.includes('related') || headingLower.includes('document') || headingLower.includes('reference') || headingLower.includes('record')) {
+        return '📄';
+      }
+      if (headingLower.includes('definition') || headingLower.includes('glossary') || headingLower.includes('term')) {
+        return '📚';
+      }
+      if (headingLower.includes('procedure') || headingLower.includes('step') || headingLower.includes('process')) {
+        return '📋';
+      }
+      if (headingLower.includes('scope') || headingLower.includes('objective') || headingLower.includes('purpose')) {
+        return '🎯';
+      }
+      if (headingLower.includes('note') || headingLower.includes('tip') || headingLower.includes('hint')) {
+        return '💡';
+      }
+      if (headingLower.includes('warning') || headingLower.includes('caution') || headingLower.includes('alert')) {
+        return '⚠️';
+      }
+      if (headingLower.includes('important') || headingLower.includes('critical') || headingLower.includes('key')) {
+        return '❗';
+      }
+      if (headingLower.includes('summary') || headingLower.includes('overview') || headingLower.includes('conclusion')) {
+        return '📝';
+      }
+      if (headingLower.includes('responsibility') || headingLower.includes('role') || headingLower.includes('accountab')) {
+        return '👥';
+      }
+      
+      // Fall back to type-based icons
       switch (type) {
         case 'procedure': return '📋';
-        case 'callout-important': return '⚠️';
-        case 'table': return '📊';
+        case 'callout-important': return '❗';
+        case 'callout-key': return '💡';
         case 'definition': return '📚';
         case 'note': return '💡';
-        default: return '';  // No icon for plain text
+        case 'warning': return '⚠️';
+        case 'table': return '📊';
+        case 'image': return '🖼️';
+        default: return '📄';  // Default icon for all sections
       }
     };
 
@@ -786,7 +821,7 @@ const EnhancedCourseBuilder = () => {
         const sectionType = section.type || 'text';
         const isTable = sectionType === 'table';
         const isInteractive = sectionType === 'callout-important' || sectionType === 'callout-key';
-        const icon = getSectionIcon(sectionType);
+        const icon = getSectionIcon(sectionType, section.heading || '');
         const headingLower = (section.heading || '').toLowerCase();
         
         // Determine card style based on heading keywords (matching SCORM logic)
@@ -1034,6 +1069,11 @@ const EnhancedCourseBuilder = () => {
     .card-definition .card-content p { color: #744210; }
     .card-note { background: linear-gradient(135deg, #faf5ff, #e9d8fd); }
     .card-note .card-content p { color: #553c9a; }
+    
+    /* Embedded Images */
+    .card-image { background: linear-gradient(135deg, #ffffff, #f8fafc); }
+    .image-content { padding: 1.5rem; text-align: center; }
+    .embedded-image { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
     
     /* Table Wrapper */
     .table-wrapper { padding: 16px 24px 24px 24px; overflow-x: auto; }
