@@ -808,9 +808,55 @@ function findParentSection(index: number, markers: SectionMarker[]): string {
   return parent;
 }
 
+// Strip table-like content that appears as plain text (table headers/cells extracted from docx)
+function stripTableContent(text: string): string {
+  // Remove sections that look like table data (short lines that are likely table cells)
+  const lines = text.split('\n');
+  const filteredLines: string[] = [];
+  let inTableSection = false;
+  let consecutiveShortLines = 0;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Detect table headers pattern (very short lines in sequence)
+    const isShortLine = line.length > 0 && line.length < 40 && !line.includes('.') && !line.match(/^[\d]+\./);
+    const isTableHeader = /^(ID|Date|Status|Description|Name|Type|Number|Version|Revision|Action|Person|Responsible|Comments?|Notes?|Results?|Findings?|Priority|Category|Due|Completed?|Assigned|Owner|Reference|Section|Page|Title|Log|Table|Tracking)$/i.test(line);
+    
+    if (isTableHeader || (isShortLine && consecutiveShortLines >= 2)) {
+      inTableSection = true;
+      consecutiveShortLines++;
+      continue; // Skip this line
+    }
+    
+    if (isShortLine) {
+      consecutiveShortLines++;
+    } else {
+      consecutiveShortLines = 0;
+      inTableSection = false;
+    }
+    
+    // Skip lines that look like table cell content
+    if (inTableSection && line.length < 50) {
+      continue;
+    }
+    
+    // Keep lines that look like actual content
+    if (line.length > 0) {
+      filteredLines.push(lines[i]);
+    }
+  }
+  
+  return filteredLines.join('\n');
+}
+
 export function performFullTextComparison(oldText: string, newText: string): FullTextComparisonResult {
+  // Strip table content to avoid duplicate display
+  const cleanOldText = stripTableContent(oldText);
+  const cleanNewText = stripTableContent(newText);
+  
   // Perform word-level diff on entire document
-  const fullDiff = Diff.diffWords(oldText, newText);
+  const fullDiff = Diff.diffWords(cleanOldText, cleanNewText);
   
   // Find section markers in both documents
   const oldMarkers = findSectionMarkers(oldText);
