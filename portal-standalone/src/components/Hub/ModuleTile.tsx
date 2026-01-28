@@ -68,7 +68,7 @@ const ModuleTile: React.FC<ModuleTileProps> = ({
       <div className="pt-4 border-t border-gray-100">
         {isAccessible ? (
           <div className="flex items-center justify-between">
-            <span className="text-blue-600 font-semibold">Open Module</span>
+            <span className="text-blue-600 font-semibold">Launch</span>
             <span className="text-blue-600">→</span>
           </div>
         ) : (
