@@ -42,15 +42,6 @@ const HubHome: React.FC<HubHomeProps> = ({
       stats: activeJobsCount > 0 ? `${activeJobsCount} Active Job${activeJobsCount > 1 ? 's' : ''}` : undefined
     },
     {
-      key: 'document-review',
-      title: 'Document Revision Impact Review',
-      description: 'Identify and document the training impact of document revisions through deterministic, audit-safe comparison. Generate Training Impact Assessment reports to support Quality, L&D, and Process Owner decisions.',
-      icon: '📋',
-      enabled: hasAccess('sop-compare'),
-      locked: !hasAccess('sop-compare'),
-      lockedMessage: !hasAccess('sop-compare') ? 'Contact Admin' : undefined
-    },
-    {
       key: 'sop-compare',
       title: 'SOP Comparison Tool',
       description: 'Compare two SOPs side-by-side to identify differences, track changes, and ensure compliance. Full audit trail with tiered matching.',
