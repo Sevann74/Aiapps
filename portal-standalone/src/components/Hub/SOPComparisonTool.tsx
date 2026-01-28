@@ -435,75 +435,8 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       .replace(/\n/g, '<br>');
   };
 
-  // Detect if text looks like a table (definition list pattern: Term followed by Definition)
-  const isTableLikeContent = (text: string): boolean => {
-    const lines = text.split('\n').filter(l => l.trim());
-    if (lines.length < 4) return false;
-    // Check for alternating short/long pattern or Term: Definition pattern
-    const hasDefinitionPattern = lines.some(l => /^[A-Z][A-Za-z\s]+$/.test(l.trim()) && l.trim().length < 50);
-    return hasDefinitionPattern && lines.length >= 4;
-  };
-
-  // Render diff parts with table detection
+  // Render diff content as inline diff with highlighting
   const renderDiffContent = (fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>) => {
-    // Check if content looks like a definition table
-    const fullText = fullDiff.map(p => p.value).join('');
-    
-    if (isTableLikeContent(fullText)) {
-      // Parse as definition table
-      const lines = fullText.split('\n').filter(l => l.trim());
-      const rows: Array<{ term: string; definition: string; termClass: string; defClass: string }> = [];
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        // Check if this is a term (short, capitalized, no punctuation at end)
-        if (/^[A-Z][A-Za-z\s\-]+$/.test(line) && line.length < 50) {
-          // Next line is likely the definition
-          const definition = lines[i + 1]?.trim() || '';
-          
-          // Determine highlighting by checking if term/def appear in added/removed parts
-          let termClass = '';
-          let defClass = '';
-          
-          for (const part of fullDiff) {
-            if (part.value.includes(line)) {
-              if (part.added) termClass = 'bg-green-200 text-green-900';
-              else if (part.removed) termClass = 'bg-red-200 text-red-900 line-through';
-            }
-            if (definition && part.value.includes(definition)) {
-              if (part.added) defClass = 'bg-green-200 text-green-900';
-              else if (part.removed) defClass = 'bg-red-200 text-red-900 line-through';
-            }
-          }
-          
-          rows.push({ term: line, definition, termClass, defClass });
-          i++; // Skip the definition line
-        }
-      }
-      
-      if (rows.length >= 2) {
-        return (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-200">
-                <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-700">Term</th>
-                <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-700">Definition</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => (
-                <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                  <td className={`border border-slate-300 px-3 py-2 font-medium ${row.termClass}`}>{row.term}</td>
-                  <td className={`border border-slate-300 px-3 py-2 ${row.defClass}`}>{row.definition}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        );
-      }
-    }
-    
-    // Default: render as inline diff
     return (
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
         {fullDiff.map((part, idx) => (
