@@ -435,50 +435,12 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       .replace(/\n/g, '<br>');
   };
 
-  // Render diff content - with HTML table support
+  // Render diff content - accurate inline diff only
   const renderDiffContent = (
     fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>,
     newHtml?: string
   ) => {
-    // If we have HTML with tables, render it with styling
-    if (newHtml && newHtml.includes('<table')) {
-      // Apply diff highlighting to the HTML
-      let styledHtml = newHtml;
-      
-      // Find added content and highlight it in the HTML
-      fullDiff.forEach(part => {
-        if (part.added && part.value.trim()) {
-          const escapedValue = part.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regex = new RegExp(escapedValue.substring(0, 50).replace(/\s+/g, '\\s*'), 'gi');
-          styledHtml = styledHtml.replace(regex, `<span class="diff-added">${part.value}</span>`);
-        }
-      });
-      
-      // Add CSS for diff highlighting and table styling
-      const styledContent = `
-        <style>
-          .diff-added { background-color: #bbf7d0; color: #166534; font-weight: 500; }
-          .diff-removed { background-color: #fecaca; color: #991b1b; text-decoration: line-through; }
-          table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-          th, td { border: 1px solid #cbd5e1; padding: 0.5rem 0.75rem; text-align: left; }
-          th { background-color: #f1f5f9; font-weight: 600; color: #334155; }
-          tr:nth-child(even) { background-color: #f8fafc; }
-          tr:hover { background-color: #f1f5f9; }
-          p { margin: 0.5rem 0; }
-          ul, ol { margin: 0.5rem 0; padding-left: 1.5rem; }
-        </style>
-        ${styledHtml}
-      `;
-      
-      return (
-        <div 
-          className="text-sm leading-relaxed prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: styledContent }}
-        />
-      );
-    }
-    
-    // Default: render as inline diff (for PDFs or docs without tables)
+    // Always use inline diff for accuracy - no regex-based HTML highlighting
     return (
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
         {fullDiff.map((part, idx) => (
