@@ -780,28 +780,59 @@ const EnhancedCourseBuilder = () => {
       }
     };
 
-    // Build modules HTML with professional card design
-    let procedureCounter = 0;
+    // Build modules HTML with professional card design - ALIGNED WITH SCORM OUTPUT
     const modulesHTML = courseData.modules.map((module, idx) => {
-      const sectionsHTML = module.content.map((section, sectionIdx) => {
+      const sectionsHTML = module.content.map((section) => {
         const sectionType = section.type || 'text';
-        const isProcedure = sectionType === 'procedure';
         const isTable = sectionType === 'table';
-        const isImportant = sectionType === 'callout-important';
-        const isDefinition = sectionType === 'definition';
-        const isNote = sectionType === 'note';
-        const isPlainText = sectionType === 'text';
-        const stepCount = isProcedure ? countProcedureSteps(section.body) : 0;
-        const shouldExpand = isProcedure && stepCount >= 5;
-        const procedureId = shouldExpand ? `procedure-${idx}-${procedureCounter++}` : null;
+        const isInteractive = sectionType === 'callout-important' || sectionType === 'callout-key';
         const icon = getSectionIcon(sectionType);
+        const headingLower = (section.heading || '').toLowerCase();
+        
+        // Determine card style based on heading keywords (matching SCORM logic)
+        let cardClass = 'card-text';
+        let titleClass = 'card-title-gray';
+        let iconClass = 'icon-gray';
+        
+        if (headingLower.includes('purpose') || headingLower.includes('scope') || headingLower.includes('objective')) {
+          cardClass = 'card-objectives';
+          titleClass = 'card-title-blue';
+          iconClass = 'icon-blue';
+        } else if (headingLower.includes('definition') || headingLower.includes('glossary') || headingLower.includes('term')) {
+          cardClass = 'card-definition';
+          titleClass = 'card-title-green';
+          iconClass = 'icon-green';
+        } else if (headingLower.includes('procedure') || headingLower.includes('step') || headingLower.includes('process')) {
+          cardClass = 'card-procedure';
+          titleClass = 'card-title-emerald';
+          iconClass = 'icon-emerald';
+        } else if (headingLower.includes('responsibility') || headingLower.includes('role') || headingLower.includes('applicable') || headingLower.includes('group')) {
+          cardClass = 'card-roles';
+          titleClass = 'card-title-purple';
+          iconClass = 'icon-purple';
+        } else if (headingLower.includes('reference') || headingLower.includes('document') || headingLower.includes('related')) {
+          cardClass = 'card-documents';
+          titleClass = 'card-title-slate';
+          iconClass = 'icon-slate';
+        }
 
-        // Tables - keep the good existing style (blue header with icon)
+        // Images - display embedded image (no header if heading is blank)
+        if (sectionType === 'image') {
+          return `
+      <div class="content-card card-image">
+        ${section.heading ? `<div class="card-header card-title-blue"><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
+        <div class="card-content image-content">
+          <img src="${section.body}" alt="${section.heading || 'Document image'}" class="embedded-image" />
+        </div>
+      </div>`;
+        }
+
+        // Tables - blue header with icon
         if (isTable) {
           return `
       <div class="content-card card-table">
         <div class="card-header card-title-blue">
-          <span class="title-icon icon-blue">${icon}</span>
+          <span class="title-icon icon-blue">📊</span>
           <h3>${section.heading ? escapeHtml(section.heading) : 'Reference Table'}</h3>
         </div>
         <div class="table-wrapper">
@@ -810,8 +841,8 @@ const EnhancedCourseBuilder = () => {
       </div>`;
         }
 
-        // Important callout - keep the good existing style (red/orange with warning icon)
-        if (isImportant) {
+        // Important callouts - red with icon
+        if (isInteractive) {
           return `
       <div class="content-card card-important">
         <div class="card-header card-title-red">
@@ -823,82 +854,14 @@ const EnhancedCourseBuilder = () => {
         </div>
       </div>`;
         }
-
-        // Procedures - expandable with green theme
-        if (shouldExpand) {
-          return `
-      <div class="content-card card-procedure">
-        <div class="card-header card-title-green">
-          <span class="title-icon icon-green">${icon}</span>
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure Steps'}</h3>
-        </div>
-        <div class="procedure-expand" onclick="toggleProcedure('${procedureId}')">
-          <span class="expand-text">Click to view ${stepCount} steps</span>
-          <span class="expand-arrow" id="${procedureId}-toggle">▼</span>
-        </div>
-        <div class="procedure-steps" id="${procedureId}" style="display: none;">
-          ${formatContent(section.body)}
-        </div>
-      </div>`;
-        }
-
-        // Short procedures
-        if (isProcedure) {
-          return `
-      <div class="content-card card-procedure">
-        <div class="card-header card-title-green">
-          <span class="title-icon icon-green">${icon}</span>
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Procedure'}</h3>
-        </div>
-        <div class="card-content">
-          ${formatContent(section.body)}
-        </div>
-      </div>`;
-        }
-
-        // Definitions - amber/yellow theme
-        if (isDefinition) {
-          return `
-      <div class="content-card card-definition">
-        <div class="card-header card-title-amber">
-          <span class="title-icon icon-amber">${icon}</span>
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Definition'}</h3>
-        </div>
-        <div class="card-content">
-          ${formatContent(section.body)}
-        </div>
-      </div>`;
-        }
-
-        // Notes - purple theme
-        if (isNote) {
-          return `
-      <div class="content-card card-note">
-        <div class="card-header card-title-purple">
-          <span class="title-icon icon-purple">${icon}</span>
-          <h3>${section.heading ? escapeHtml(section.heading) : 'Note'}</h3>
-        </div>
-        <div class="card-content">
-          ${formatContent(section.body)}
-        </div>
-      </div>`;
-        }
-
-        // Images - display embedded image (no header if heading is blank)
-        if (sectionType === 'image') {
-          return `
-      <div class="content-card card-image">
-        ${section.heading ? `<div class="card-header card-title-blue"><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
-        <div class="card-content" style="text-align: center; padding: 1rem;">
-          <img src="${section.body}" alt="${section.heading || 'Document image'}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);" />
-        </div>
-      </div>`;
-        }
-
-        // Plain text - clean white card, NO icon
+        
+        // Regular sections with card design (matching SCORM)
         return `
-      <div class="content-card card-text">
-        ${section.heading ? `<div class="card-header card-title-gray"><span class="title-icon icon-gray">📄</span><h3>${escapeHtml(section.heading)}</h3></div>` : ''}
+      <div class="content-card ${cardClass}">
+        <div class="card-header ${titleClass}">
+          <span class="title-icon ${iconClass}">${icon}</span>
+          <h3>${section.heading ? escapeHtml(section.heading) : ''}</h3>
+        </div>
         <div class="card-content">
           ${formatContent(section.body)}
         </div>
@@ -1146,19 +1109,6 @@ const EnhancedCourseBuilder = () => {
     const NUM_MODULES = ${courseData.modules.length};
     let currentSlide = 0;
     
-    // Toggle expandable procedure sections
-    function toggleProcedure(procedureId) {
-      const content = document.getElementById(procedureId);
-      const toggle = document.getElementById(procedureId + '-toggle');
-      if (content.style.display === 'none') {
-        content.style.display = 'block';
-        toggle.textContent = '▲ Click to hide steps';
-      } else {
-        content.style.display = 'none';
-        toggle.textContent = '▼ Click to view steps';
-      }
-    }
-
     function goToSlide(slideIndex) {
       if (slideIndex < 0 || slideIndex >= TOTAL_SLIDES) return;
       document.getElementById('slide-' + currentSlide).style.display = 'none';
