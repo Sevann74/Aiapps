@@ -370,36 +370,12 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       .replace(/\n/g, '<br>');
   };
 
-  // Render diff content - with HTML table support
+  // Render diff content - always show inline diff with highlighting
   const renderDiffContent = (
     fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>,
     newHtml?: string
   ) => {
-    // If we have HTML with tables, show formatted HTML only (no duplicate text diff)
-    if (newHtml && newHtml.includes('<table')) {
-      const styledContent = `
-        <style>
-          table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-          th, td { border: 1px solid #cbd5e1; padding: 0.5rem 0.75rem; text-align: left; }
-          th { background-color: #f1f5f9; font-weight: 600; color: #334155; }
-          tr:nth-child(even) { background-color: #f8fafc; }
-          tr:hover { background-color: #f1f5f9; }
-          p { margin: 0.5rem 0; }
-          ul, ol { margin: 0.5rem 0; padding-left: 1.5rem; }
-          h1, h2, h3, h4 { margin: 1rem 0 0.5rem 0; font-weight: 600; }
-        </style>
-        ${newHtml}
-      `;
-      
-      return (
-        <div 
-          className="text-sm leading-relaxed prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: styledContent }}
-        />
-      );
-    }
-    
-    // Default: inline diff for docs without tables
+    // Always use inline diff for accurate change highlighting
     return (
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
         {fullDiff.map((part, idx) => (
@@ -407,7 +383,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
             key={idx}
             className={
               part.added
-                ? 'bg-green-200 text-green-900 px-0.5 rounded border-b-2 border-green-400'
+                ? 'bg-green-200 text-green-900 px-0.5 rounded font-medium'
                 : part.removed
                   ? 'bg-red-200 text-red-900 line-through px-0.5 rounded'
                   : 'text-slate-700'
