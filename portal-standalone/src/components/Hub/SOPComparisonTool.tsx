@@ -44,7 +44,10 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [showEditorialOnly, setShowEditorialOnly] = useState(false);
   const [expandedDiffs, setExpandedDiffs] = useState<Set<number>>(new Set());
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [expandedEditorial, setExpandedEditorial] = useState<Set<string>>(new Set());
+  const [expandedDiffDetails, setExpandedDiffDetails] = useState<Set<string>>(new Set());
   const [showFullDiff, setShowFullDiff] = useState(false);
+  const [showSections, setShowSections] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -56,6 +59,32 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
         next.delete(sectionId);
       } else {
         next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
+  // Toggle editorial section within a section
+  const toggleEditorial = (sectionId: string) => {
+    setExpandedEditorial(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
+  // Toggle diff detail view
+  const toggleDiffDetail = (regionId: string) => {
+    setExpandedDiffDetails(prev => {
+      const next = new Set(prev);
+      if (next.has(regionId)) {
+        next.delete(regionId);
+      } else {
+        next.add(regionId);
       }
       return next;
     });
@@ -73,6 +102,39 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     };
   };
 
+  // Get sorted sections - procedural first, then editorial-only
+  const getSortedSections = () => {
+    if (!hybridResult?.fullTextResult?.sections) return [];
+    const sectionsWithChanges = hybridResult.fullTextResult.sections.filter(s => s.hasChanges);
+    
+    return sectionsWithChanges.sort((a, b) => {
+      const aBreakdown = getSectionChangeBreakdown(a.title);
+      const bBreakdown = getSectionChangeBreakdown(b.title);
+      // Sort by procedural count descending, then by total changes
+      if (bBreakdown.procedural !== aBreakdown.procedural) {
+        return bBreakdown.procedural - aBreakdown.procedural;
+      }
+      return b.changeCount - a.changeCount;
+    });
+  };
+
+  // Get the section with most procedural changes
+  const getMostImpactedSection = () => {
+    if (!hybridResult?.fullTextResult?.sections) return null;
+    const sectionsWithChanges = hybridResult.fullTextResult.sections.filter(s => s.hasChanges);
+    let maxProcedural = 0;
+    let mostImpacted = null;
+    
+    for (const section of sectionsWithChanges) {
+      const breakdown = getSectionChangeBreakdown(section.title);
+      if (breakdown.procedural > maxProcedural) {
+        maxProcedural = breakdown.procedural;
+        mostImpacted = section;
+      }
+    }
+    return mostImpacted;
+  };
+
   // Get review recommendation
   const getReviewRecommendation = () => {
     if (!hybridResult) return { needsReview: false, message: '' };
@@ -82,12 +144,12 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     if (substantive > 0 || removed > 0) {
       return { 
         needsReview: true, 
-        message: `Review likely required - ${substantive} procedural change${substantive !== 1 ? 's' : ''} detected`
+        message: 'Review required'
       };
     }
     return { 
       needsReview: false, 
-      message: 'Mostly editorial changes - low risk'
+      message: 'Low risk - editorial only'
     };
   };
 
@@ -825,209 +887,258 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
         {/* Comparison Results */}
         {hybridResult && (
           <div className="space-y-6">
-            {/* Summary Card */}
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                    <GitCompare className="w-6 h-6" />
-                  </div>
+            {/* Decision Panel - Primary Focus */}
+            <div className="bg-white rounded-2xl shadow-xl border-l-4 border-orange-500 overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-6">
                   <div>
-                    <h3 className="text-xl font-bold">Comparison Results</h3>
-                    <p className="text-purple-200 text-sm">Full document coverage with change detection</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => exportToWord()}
-                  className="px-4 py-2 bg-white text-purple-700 rounded-lg font-semibold hover:bg-purple-50 transition-all flex items-center gap-2 shadow-md"
-                >
-                  <Download className="w-4 h-4" />
-                  Export Report
-                </button>
-              </div>
-
-              {/* Stats Grid */}
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
-                  <p className="text-3xl font-bold">{hybridResult.fullTextResult?.summary.totalChanges || hybridResult.changes.length}</p>
-                  <p className="text-xs text-purple-200">Changes</p>
-                </div>
-                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
-                  <p className="text-3xl font-bold text-green-300">{hybridResult.fullTextResult?.summary.wordsAdded || hybridResult.summary.added}</p>
-                  <p className="text-xs text-purple-200">Words Added</p>
-                </div>
-                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
-                  <p className="text-3xl font-bold text-red-300">{hybridResult.fullTextResult?.summary.wordsRemoved || hybridResult.summary.removed}</p>
-                  <p className="text-xs text-purple-200">Words Removed</p>
-                </div>
-                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
-                  <p className="text-3xl font-bold text-orange-300">{hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive}</p>
-                  <p className="text-xs text-purple-200">Substantive</p>
-                </div>
-                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
-                  <p className="text-3xl font-bold text-blue-300">{hybridResult.fullTextResult?.summary.editorial || hybridResult.summary.editorial}</p>
-                  <p className="text-xs text-purple-200">Editorial</p>
-                </div>
-                <div className="bg-white/10 backdrop-blur rounded-xl p-3 text-center">
-                  <p className="text-3xl font-bold">{hybridResult.fullTextResult?.summary.sectionsAffected || hybridResult.summary.modified + hybridResult.summary.added + hybridResult.summary.removed}</p>
-                  <p className="text-xs text-purple-200">Sections</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Change Significance Summary - Decision Support Panel */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 border-l-4 border-orange-500">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-orange-500" />
-                Change Summary
-              </h3>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  {(hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive || 0) > 0 && (
-                    <div className="flex items-center gap-3">
-                      <span className="w-3 h-3 bg-orange-500 rounded-full flex-shrink-0"></span>
-                      <span className="text-gray-800">
-                        <strong className="text-orange-700">{hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive}</strong> Procedural change{(hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive || 0) !== 1 ? 's' : ''} detected
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3">
-                    <span className="w-3 h-3 bg-blue-400 rounded-full flex-shrink-0"></span>
-                    <span className="text-gray-800">
-                      <strong className="text-blue-600">{hybridResult.fullTextResult?.summary.editorial || hybridResult.summary.editorial || 0}</strong> Editorial change{(hybridResult.fullTextResult?.summary.editorial || hybridResult.summary.editorial || 0) !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  {hybridResult.summary.removed > 0 && (
-                    <div className="flex items-center gap-3">
-                      <span className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0"></span>
-                      <span className="text-gray-800">
-                        <strong className="text-red-600">{hybridResult.summary.removed}</strong> Section{hybridResult.summary.removed !== 1 ? 's' : ''} removed
-                      </span>
-                    </div>
-                  )}
-                  {hybridResult.summary.added > 0 && (
-                    <div className="flex items-center gap-3">
-                      <span className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0"></span>
-                      <span className="text-gray-800">
-                        <strong className="text-green-600">{hybridResult.summary.added}</strong> New section{hybridResult.summary.added !== 1 ? 's' : ''} added
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  {(() => {
-                    const recommendation = getReviewRecommendation();
-                    return (
-                      <div className={`w-full p-4 rounded-xl ${recommendation.needsReview ? 'bg-orange-50 border-2 border-orange-200' : 'bg-green-50 border-2 border-green-200'}`}>
-                        <div className="flex items-center gap-3">
-                          {recommendation.needsReview ? (
-                            <AlertTriangle className="w-6 h-6 text-orange-600 flex-shrink-0" />
-                          ) : (
-                            <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
-                          )}
-                          <span className={`font-semibold ${recommendation.needsReview ? 'text-orange-800' : 'text-green-800'}`}>
-                            {recommendation.message}
-                          </span>
+                    <h3 className="text-lg font-bold text-gray-500 uppercase tracking-wide mb-2">Change Significance</h3>
+                    {(() => {
+                      const recommendation = getReviewRecommendation();
+                      const substantive = hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive || 0;
+                      return (
+                        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-lg font-bold ${
+                          recommendation.needsReview 
+                            ? 'bg-orange-100 text-orange-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          <span className={`w-3 h-3 rounded-full ${recommendation.needsReview ? 'bg-orange-500' : 'bg-green-500'}`}></span>
+                          {recommendation.message}
                         </div>
-                      </div>
-                    );
+                      );
+                    })()}
+                  </div>
+                  <button
+                    onClick={() => exportToWord()}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export
+                  </button>
+                </div>
+
+                {/* Key Metrics */}
+                <div className="space-y-3 mb-6">
+                  {(hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive || 0) > 0 && (
+                    <div className="flex items-center gap-3 text-gray-800">
+                      <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                      <span><strong className="text-orange-700">{hybridResult.fullTextResult?.summary.substantive || hybridResult.summary.substantive}</strong> procedural changes detected</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-gray-800">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                    <span><strong>{hybridResult.fullTextResult?.summary.sectionsAffected || (hybridResult.summary.modified + hybridResult.summary.added + hybridResult.summary.removed)}</strong> sections affected</span>
+                  </div>
+                  {(() => {
+                    const mostImpacted = getMostImpactedSection();
+                    if (mostImpacted) {
+                      const breakdown = getSectionChangeBreakdown(mostImpacted.title);
+                      if (breakdown.procedural > 0) {
+                        return (
+                          <div className="flex items-center gap-3 text-gray-800">
+                            <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                            <span>Majority of changes in: <strong>{mostImpacted.title}</strong></span>
+                          </div>
+                        );
+                      }
+                    }
+                    return null;
                   })()}
                 </div>
+
+                {/* Primary Action Button */}
+                {!showSections && (
+                  <button
+                    onClick={() => setShowSections(true)}
+                    className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Eye className="w-5 h-5" />
+                    Review Impacted Sections
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Section Navigation with Change Breakdown */}
-            {hybridResult.fullTextResult && hybridResult.fullTextResult.sections.length > 0 && (
+            {/* Section Navigation - Only shown after clicking "Review Impacted Sections" */}
+            {showSections && hybridResult.fullTextResult && hybridResult.fullTextResult.sections.length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-purple-600" />
-                  Sections with Changes
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                    Impacted Sections
+                  </h3>
+                  <button
+                    onClick={() => setShowSections(false)}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Collapse
+                  </button>
+                </div>
                 <div className="space-y-3">
-                  {hybridResult.fullTextResult.sections.filter(s => s.hasChanges).map((section, idx) => {
+                  {getSortedSections().map((section, idx) => {
                     const breakdown = getSectionChangeBreakdown(section.title);
                     const isExpanded = expandedSections.has(section.id);
                     const hasProcedural = breakdown.procedural > 0;
+                    const isEditorialExpanded = expandedEditorial.has(section.id);
+                    
+                    // Get changes for this section
+                    const sectionChanges = hybridResult.fullTextResult?.changeRegions?.filter(
+                      r => r.parentSection === section.title
+                    ) || [];
+                    const proceduralChanges = sectionChanges.filter(c => c.significance === 'substantive');
+                    const editorialChanges = sectionChanges.filter(c => c.significance === 'editorial');
                     
                     return (
                       <div
                         key={idx}
                         className={`rounded-xl border-2 transition-all overflow-hidden ${
-                          hasProcedural ? 'border-orange-300 bg-orange-50' : 'border-purple-200 bg-purple-50'
+                          hasProcedural ? 'border-orange-200' : 'border-gray-200'
                         }`}
                       >
+                        {/* Section Header - Collapsed Row */}
                         <button
                           onClick={() => toggleSection(section.id)}
-                          className="w-full p-4 flex items-center justify-between hover:bg-white/50 transition-colors"
+                          className={`w-full p-4 flex items-center justify-between transition-colors ${
+                            hasProcedural ? 'bg-orange-50 hover:bg-orange-100' : 'bg-gray-50 hover:bg-gray-100'
+                          }`}
                         >
-                          <div className="flex-1 text-left">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-semibold text-gray-900">{section.title}</span>
-                              <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
-                                hasProcedural ? 'bg-orange-600 text-white' : 'bg-purple-600 text-white'
-                              }`}>
-                                {section.changeCount}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-3">
+                            <span className="font-semibold text-gray-900">{section.title}</span>
+                            {hasProcedural && (
+                              <span className="w-3 h-3 bg-orange-500 rounded-full"></span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-3 text-sm">
                               {breakdown.procedural > 0 && (
-                                <span className="flex items-center gap-1.5 text-orange-700">
-                                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                                <span className="text-orange-700">
                                   {breakdown.procedural} procedural
                                 </span>
                               )}
                               {breakdown.editorial > 0 && (
-                                <span className="flex items-center gap-1.5 text-blue-600">
-                                  <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                                <span className="text-gray-500">
                                   {breakdown.editorial} editorial
                                 </span>
                               )}
                             </div>
+                            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                           </div>
-                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
                         
-                        {isExpanded && hybridResult.fullTextResult?.changeRegions && (
-                          <div className="border-t bg-white p-4">
-                            <div className="space-y-3">
-                              {hybridResult.fullTextResult.changeRegions
-                                .filter(r => r.parentSection === section.title)
-                                .map((region, rIdx) => (
-                                  <div key={rIdx} className={`p-3 rounded-lg border ${
-                                    region.significance === 'substantive' ? 'border-orange-200 bg-orange-50' : 'border-blue-200 bg-blue-50'
-                                  }`}>
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                                        region.changeType === 'added' ? 'bg-green-100 text-green-700' :
-                                        region.changeType === 'removed' ? 'bg-red-100 text-red-700' :
-                                        'bg-amber-100 text-amber-700'
-                                      }`}>
-                                        {region.changeType.toUpperCase()}
-                                      </span>
-                                      <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                                        region.significance === 'substantive' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-600'
-                                      }`}>
-                                        {region.significance.toUpperCase()}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm text-gray-700">{region.descriptor}</p>
-                                    {region.oldText && (
-                                      <div className="mt-2 text-xs">
-                                        <span className="bg-red-100 text-red-800 px-1 rounded line-through">
-                                          {region.oldText.length > 100 ? region.oldText.substring(0, 100) + '...' : region.oldText}
-                                        </span>
+                        {/* Expanded Section Content */}
+                        {isExpanded && (
+                          <div className="border-t bg-white">
+                            {/* Procedural Changes - Always shown first */}
+                            {proceduralChanges.length > 0 && (
+                              <div className="p-4 border-b border-gray-100">
+                                <h4 className="text-sm font-bold text-orange-700 mb-3 flex items-center gap-2">
+                                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                                  Procedural Changes ({proceduralChanges.length})
+                                </h4>
+                                <div className="space-y-2">
+                                  {proceduralChanges.map((region, rIdx) => {
+                                    const detailKey = `${section.id}-proc-${rIdx}`;
+                                    const showDetail = expandedDiffDetails.has(detailKey);
+                                    return (
+                                      <div key={rIdx} className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                                        <div className="flex items-start justify-between">
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                                region.changeType === 'added' ? 'bg-green-100 text-green-700' :
+                                                region.changeType === 'removed' ? 'bg-red-100 text-red-700' :
+                                                'bg-amber-100 text-amber-700'
+                                              }`}>
+                                                {region.changeType}
+                                              </span>
+                                            </div>
+                                            <p className="text-sm text-gray-800">{region.descriptor}</p>
+                                          </div>
+                                          <button
+                                            onClick={() => toggleDiffDetail(detailKey)}
+                                            className="text-xs text-orange-600 hover:text-orange-800 font-medium ml-2 whitespace-nowrap"
+                                          >
+                                            {showDetail ? 'Hide diff' : 'View diff'}
+                                          </button>
+                                        </div>
+                                        {showDetail && (
+                                          <div className="mt-3 pt-3 border-t border-orange-200 text-xs space-y-1">
+                                            {region.oldText && (
+                                              <div className="bg-red-50 p-2 rounded border border-red-100">
+                                                <span className="text-red-600 font-medium">Removed: </span>
+                                                <span className="text-red-800">{region.oldText}</span>
+                                              </div>
+                                            )}
+                                            {region.newText && (
+                                              <div className="bg-green-50 p-2 rounded border border-green-100">
+                                                <span className="text-green-600 font-medium">Added: </span>
+                                                <span className="text-green-800">{region.newText}</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                    {region.newText && (
-                                      <div className="mt-1 text-xs">
-                                        <span className="bg-green-100 text-green-800 px-1 rounded">
-                                          {region.newText.length > 100 ? region.newText.substring(0, 100) + '...' : region.newText}
-                                        </span>
-                                      </div>
-                                    )}
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Editorial Changes - Collapsed by default */}
+                            {editorialChanges.length > 0 && (
+                              <div className="p-4">
+                                <button
+                                  onClick={() => toggleEditorial(section.id)}
+                                  className="w-full flex items-center justify-between text-sm text-gray-500 hover:text-gray-700"
+                                >
+                                  <span className="font-medium flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                                    Editorial Changes ({editorialChanges.length})
+                                  </span>
+                                  <ChevronRight className={`w-4 h-4 transition-transform ${isEditorialExpanded ? 'rotate-90' : ''}`} />
+                                </button>
+                                
+                                {isEditorialExpanded && (
+                                  <div className="mt-3 space-y-2">
+                                    {editorialChanges.map((region, rIdx) => {
+                                      const detailKey = `${section.id}-edit-${rIdx}`;
+                                      const showDetail = expandedDiffDetails.has(detailKey);
+                                      return (
+                                        <div key={rIdx} className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                                          <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                              <p className="text-sm text-gray-600">{region.descriptor}</p>
+                                            </div>
+                                            <button
+                                              onClick={() => toggleDiffDetail(detailKey)}
+                                              className="text-xs text-gray-500 hover:text-gray-700 font-medium ml-2 whitespace-nowrap"
+                                            >
+                                              {showDetail ? 'Hide diff' : 'View diff'}
+                                            </button>
+                                          </div>
+                                          {showDetail && (
+                                            <div className="mt-3 pt-3 border-t border-gray-200 text-xs space-y-1">
+                                              {region.oldText && (
+                                                <div className="bg-red-50 p-2 rounded border border-red-100">
+                                                  <span className="text-red-600 font-medium">Removed: </span>
+                                                  <span className="text-red-800">{region.oldText}</span>
+                                                </div>
+                                              )}
+                                              {region.newText && (
+                                                <div className="bg-green-50 p-2 rounded border border-green-100">
+                                                  <span className="text-green-600 font-medium">Added: </span>
+                                                  <span className="text-green-800">{region.newText}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                ))}
-                            </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1037,42 +1148,35 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               </div>
             )}
 
-            {/* Full-Text Diff View - Collapsed by Default */}
-            {hybridResult.fullTextResult && (
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <button
-                  onClick={() => setShowFullDiff(!showFullDiff)}
-                  className="w-full bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center justify-between hover:from-slate-700 hover:to-slate-600 transition-all"
-                >
-                  <div className="text-left">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <Eye className="w-5 h-5" />
-                      Full Document Diff
-                    </h3>
-                    <p className="text-slate-300 text-sm">
-                      {showFullDiff ? 'Click to collapse' : 'Click to expand inline view with all changes'}
-                    </p>
-                  </div>
-                  <ChevronDown className={`w-6 h-6 text-white transition-transform ${showFullDiff ? 'rotate-180' : ''}`} />
-                </button>
-                
-                {showFullDiff && (
-                  <>
-                    {/* Legend */}
-                    <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex items-center gap-6">
-                      <span className="text-sm font-semibold text-slate-600">Legend:</span>
-                      <span className="flex items-center gap-2">
-                        <span className="bg-green-200 text-green-900 px-2 py-0.5 rounded text-sm font-medium border-b-2 border-green-400">Added content</span>
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <span className="bg-red-200 text-red-900 line-through px-2 py-0.5 rounded text-sm font-medium">Removed content</span>
-                      </span>
+            {/* Full-Text Diff View - Last Resort Tool, De-emphasized */}
+            {showSections && hybridResult.fullTextResult && (
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="bg-gray-50 rounded-xl overflow-hidden border border-gray-200">
+                  <button
+                    onClick={() => setShowFullDiff(!showFullDiff)}
+                    className="w-full px-5 py-3 flex items-center justify-between text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <Eye className="w-4 h-4" />
+                      <span className="font-medium">Full Document Diff</span>
+                      <span className="text-gray-400">— raw inline view for detailed inspection</span>
                     </div>
-                    <div className="p-6 max-h-[600px] overflow-y-auto bg-slate-50">
-                      {renderDiffContent(hybridResult.fullTextResult.fullDiff, hybridResult.fullTextResult.newHtml)}
-                    </div>
-                  </>
-                )}
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showFullDiff ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {showFullDiff && (
+                    <>
+                      <div className="px-5 py-2 bg-gray-100 border-t border-gray-200 flex items-center gap-4 text-xs text-gray-500">
+                        <span className="font-medium">Legend:</span>
+                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">Added</span>
+                        <span className="bg-red-100 text-red-700 line-through px-2 py-0.5 rounded">Removed</span>
+                      </div>
+                      <div className="p-5 max-h-[500px] overflow-y-auto bg-white border-t border-gray-200">
+                        {renderDiffContent(hybridResult.fullTextResult.fullDiff, hybridResult.fullTextResult.newHtml)}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
