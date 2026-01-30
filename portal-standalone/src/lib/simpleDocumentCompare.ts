@@ -53,6 +53,11 @@ export interface ChangeRegion {
   newText: string;
   diffParts: Diff.Change[];
   descriptor: string; // Human-readable description
+  // Enhanced metadata for Change Cards
+  changeSummary: string; // e.g., "Reporting timing requirement modified"
+  affectedArea: string; // e.g., "Deviation reporting notification"
+  changeNature: string; // e.g., "Requirement modified", "New step added"
+  suggestedAction: string; // e.g., "Review training & SOP owner sign-off"
 }
 
 export interface FullTextComparisonResult {
@@ -116,52 +121,202 @@ export interface ExtractedDocument {
 // CHANGE DESCRIPTOR - Rule-based summaries
 // ============================================
 
-function generateChangeDescriptor(oldText: string, newText: string, changeType: string): string {
-  if (changeType === 'added') return 'New content added';
-  if (changeType === 'removed') return 'Content removed';
-  
+interface ChangeMetadata {
+  descriptor: string;
+  changeSummary: string;
+  affectedArea: string;
+  changeNature: string;
+  suggestedAction: string;
+}
+
+function generateChangeMetadata(oldText: string, newText: string, changeType: string, parentSection: string, category: ChangeCategory): ChangeMetadata {
   const oldLower = oldText.toLowerCase();
   const newLower = newText.toLowerCase();
+  const combinedText = `${oldLower} ${newLower}`;
   
-  // Frequency change
-  const freqTerms = ['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'hourly'];
-  for (const term of freqTerms) {
-    const oldFreq = freqTerms.find(t => oldLower.includes(t));
-    const newFreq = freqTerms.find(t => newLower.includes(t));
-    if (oldFreq && newFreq && oldFreq !== newFreq) {
-      return `Frequency changed: ${oldFreq} → ${newFreq}`;
-    }
+  // Default values
+  let descriptor = 'Content revised';
+  let changeSummary = 'Content updated';
+  let affectedArea = parentSection || 'General';
+  let changeNature = 'Modified';
+  let suggestedAction = 'Review change';
+  
+  // Determine change nature based on changeType
+  if (changeType === 'added') {
+    changeNature = 'New content added';
+    descriptor = 'New content added';
+    suggestedAction = 'Review new requirement';
+  } else if (changeType === 'removed') {
+    changeNature = 'Content removed';
+    descriptor = 'Content removed';
+    suggestedAction = 'Confirm removal is intentional';
   }
   
-  // Number/threshold change
+  // Detect specific change patterns and generate rich summaries
+  
+  // Timing/frequency changes
+  const freqTerms = ['daily', 'weekly', 'monthly', 'quarterly', 'annually', 'hourly', 'immediately', 'without delay'];
+  const oldFreq = freqTerms.find(t => oldLower.includes(t));
+  const newFreq = freqTerms.find(t => newLower.includes(t));
+  if (oldFreq && newFreq && oldFreq !== newFreq) {
+    changeSummary = 'Timing requirement modified';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = `Frequency: ${oldFreq} → ${newFreq}`;
+    descriptor = `Frequency changed: ${oldFreq} → ${newFreq}`;
+    suggestedAction = 'Update schedules & notify affected staff';
+  } else if (combinedText.includes('immediately') || combinedText.includes('without delay') || combinedText.includes('within')) {
+    changeSummary = 'Timing requirement modified';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = 'Timing updated';
+    descriptor = 'Timing requirement updated';
+    suggestedAction = 'Review training & update procedures';
+  }
+  
+  // Threshold/value changes
   const oldNums = oldText.match(/\d+\.?\d*/g) || [];
   const newNums = newText.match(/\d+\.?\d*/g) || [];
   if (oldNums.length > 0 && newNums.length > 0 && JSON.stringify(oldNums) !== JSON.stringify(newNums)) {
-    return `Values changed: ${oldNums.slice(0,2).join(', ')} → ${newNums.slice(0,2).join(', ')}`;
+    changeSummary = 'Threshold or limit modified';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = `Value: ${oldNums[0]} → ${newNums[0]}`;
+    descriptor = `Values changed: ${oldNums.slice(0,2).join(', ')} → ${newNums.slice(0,2).join(', ')}`;
+    suggestedAction = 'Verify limits & update monitoring';
   }
   
-  // Role change
-  const roleTerms = ['operator', 'supervisor', 'manager', 'technician', 'analyst', 'qa', 'qc'];
-  for (const term of roleTerms) {
-    if ((oldLower.includes(term) && !newLower.includes(term)) || 
-        (!oldLower.includes(term) && newLower.includes(term))) {
-      return 'Role or responsibility updated';
+  // Role/responsibility changes
+  const roleTerms = ['operator', 'supervisor', 'manager', 'technician', 'analyst', 'qa', 'qc', 'responsible', 'accountable'];
+  const oldRole = roleTerms.find(t => oldLower.includes(t));
+  const newRole = roleTerms.find(t => newLower.includes(t));
+  if ((oldRole && !newRole) || (!oldRole && newRole) || (oldRole && newRole && oldRole !== newRole)) {
+    changeSummary = 'Responsibility assignment modified';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = 'Role/responsibility updated';
+    descriptor = 'Role or responsibility updated';
+    suggestedAction = 'Update RACI & notify affected personnel';
+  }
+  
+  // Documentation requirements
+  const docTerms = ['document', 'record', 'log', 'form', 'signature', 'sign-off'];
+  if (docTerms.some(t => newLower.includes(t) && !oldLower.includes(t))) {
+    changeSummary = 'Documentation requirement added';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = 'New documentation required';
+    descriptor = 'Documentation requirement added';
+    suggestedAction = 'Create/update forms & train staff';
+  } else if (docTerms.some(t => oldLower.includes(t) && !newLower.includes(t))) {
+    changeSummary = 'Documentation requirement removed';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = 'Documentation no longer required';
+    descriptor = 'Documentation requirement removed';
+    suggestedAction = 'Confirm removal & update forms';
+  }
+  
+  // Safety changes
+  const safetyTerms = ['warning', 'caution', 'danger', 'safety', 'ppe', 'hazard', 'risk'];
+  if (safetyTerms.some(t => combinedText.includes(t))) {
+    changeSummary = 'Safety requirement modified';
+    affectedArea = extractAffectedArea(combinedText, parentSection);
+    changeNature = 'Safety-related update';
+    descriptor = 'Safety-related content updated';
+    suggestedAction = 'Review with EHS & update training';
+  }
+  
+  // Obligation changes (must, shall, required)
+  const obligationTerms = ['must', 'shall', 'required', 'mandatory', 'prohibited'];
+  const oldObligation = obligationTerms.some(t => oldLower.includes(t));
+  const newObligation = obligationTerms.some(t => newLower.includes(t));
+  if (!oldObligation && newObligation) {
+    changeSummary = 'New mandatory requirement added';
+    changeNature = 'Obligation added';
+    suggestedAction = 'Review compliance & update training';
+  } else if (oldObligation && !newObligation) {
+    changeSummary = 'Mandatory requirement relaxed';
+    changeNature = 'Obligation removed';
+    suggestedAction = 'Confirm change is intentional';
+  }
+  
+  // Step/procedure changes
+  if (combinedText.includes('step') || combinedText.includes('procedure') || combinedText.includes('process')) {
+    if (changeType === 'added') {
+      changeSummary = 'New procedural step added';
+      changeNature = 'New step added';
+      suggestedAction = 'Update training & work instructions';
+    } else if (changeType === 'removed') {
+      changeSummary = 'Procedural step removed';
+      changeNature = 'Step removed';
+      suggestedAction = 'Confirm removal & update training';
+    } else {
+      changeSummary = 'Procedural step modified';
+      changeNature = 'Step modified';
+      suggestedAction = 'Review & update training materials';
     }
   }
   
-  // Documentation change
-  const docTerms = ['document', 'record', 'log', 'form', 'signature'];
-  if (docTerms.some(t => newLower.includes(t) && !oldLower.includes(t))) {
-    return 'Documentation requirement added';
+  // Category-based fallbacks
+  if (changeSummary === 'Content updated') {
+    switch (category) {
+      case 'obligation':
+        changeSummary = 'Requirement modified';
+        suggestedAction = 'Review compliance impact';
+        break;
+      case 'timing':
+        changeSummary = 'Timing requirement modified';
+        suggestedAction = 'Update schedules';
+        break;
+      case 'threshold':
+        changeSummary = 'Limit or threshold modified';
+        suggestedAction = 'Verify monitoring parameters';
+        break;
+      case 'role':
+        changeSummary = 'Responsibility modified';
+        suggestedAction = 'Update RACI matrix';
+        break;
+      case 'records':
+        changeSummary = 'Documentation requirement modified';
+        suggestedAction = 'Update forms & records';
+        break;
+      case 'procedure':
+        changeSummary = 'Procedure step modified';
+        suggestedAction = 'Update training materials';
+        break;
+      case 'definition':
+        changeSummary = 'Definition or terminology modified';
+        suggestedAction = 'Update glossary & training';
+        break;
+    }
   }
   
-  // Safety change
-  const safetyTerms = ['warning', 'caution', 'danger', 'safety', 'ppe', 'hazard'];
-  if (safetyTerms.some(t => oldLower.includes(t) || newLower.includes(t))) {
-    return 'Safety-related content updated';
+  return {
+    descriptor,
+    changeSummary,
+    affectedArea,
+    changeNature,
+    suggestedAction
+  };
+}
+
+// Extract affected area from text context
+function extractAffectedArea(text: string, parentSection: string): string {
+  const areaPatterns = [
+    /(?:deviation|capa|change control|batch|release|stability|validation|calibration|training|audit)/i,
+    /(?:reporting|notification|documentation|review|approval|investigation)/i,
+    /(?:sampling|testing|inspection|monitoring|verification)/i
+  ];
+  
+  for (const pattern of areaPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[0].charAt(0).toUpperCase() + match[0].slice(1).toLowerCase();
+    }
   }
   
-  return 'Content revised';
+  return parentSection || 'General procedure';
+}
+
+// Legacy function for backward compatibility
+function generateChangeDescriptor(oldText: string, newText: string, changeType: string): string {
+  const metadata = generateChangeMetadata(oldText, newText, changeType, '', 'other');
+  return metadata.descriptor;
 }
 
 // ============================================
@@ -915,7 +1070,7 @@ export function performFullTextComparison(oldText: string, newText: string): Ful
       // Classify significance
       const significance = detectSignificance(oldText, newText);
       const category = detectCategory(oldText, newText);
-      const descriptor = generateChangeDescriptor(oldText, newText, changeType);
+      const metadata = generateChangeMetadata(oldText, newText, changeType, parentSection, category);
       
       // Only add if there's meaningful content
       if (oldText.trim().length > 2 || newText.trim().length > 2) {
@@ -930,7 +1085,11 @@ export function performFullTextComparison(oldText: string, newText: string): Ful
           oldText: oldText.trim(),
           newText: newText.trim(),
           diffParts: [part, ...(endIndex > i ? [fullDiff[endIndex]] : [])].filter(Boolean),
-          descriptor
+          descriptor: metadata.descriptor,
+          changeSummary: metadata.changeSummary,
+          affectedArea: metadata.affectedArea,
+          changeNature: metadata.changeNature,
+          suggestedAction: metadata.suggestedAction
         });
       }
     }

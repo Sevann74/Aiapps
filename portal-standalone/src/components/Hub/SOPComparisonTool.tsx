@@ -48,8 +48,36 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [expandedDiffDetails, setExpandedDiffDetails] = useState<Set<string>>(new Set());
   const [showFullDiff, setShowFullDiff] = useState(false);
   const [showSections, setShowSections] = useState(false);
+  const [hideExactWording, setHideExactWording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Batch related changes within the same section (group by changeSummary)
+  const getBatchedChanges = (changes: ChangeRegion[] | undefined, significance: 'substantive' | 'editorial') => {
+    if (!changes) return [];
+    const filtered = changes.filter(c => c.significance === significance);
+    
+    // Group by changeSummary to batch related changes
+    const grouped = new Map<string, ChangeRegion[]>();
+    for (const change of filtered) {
+      const key = change.changeSummary || change.descriptor;
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key)!.push(change);
+    }
+    
+    // Convert to array of batched changes
+    return Array.from(grouped.entries()).map(([summary, items]) => ({
+      summary,
+      items,
+      count: items.length,
+      changeNature: items[0].changeNature,
+      affectedArea: items[0].affectedArea,
+      suggestedAction: items[0].suggestedAction,
+      category: items[0].category
+    }));
+  };
 
   // Toggle section expansion
   const toggleSection = (sectionId: string) => {
@@ -967,12 +995,24 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                     <FileText className="w-5 h-5 text-purple-600" />
                     Impacted Sections
                   </h3>
-                  <button
-                    onClick={() => setShowSections(false)}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Collapse
-                  </button>
+                  <div className="flex items-center gap-4">
+                    {/* Hide exact wording toggle for senior users */}
+                    <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hideExactWording}
+                        onChange={(e) => setHideExactWording(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <span>Hide exact wording</span>
+                    </label>
+                    <button
+                      onClick={() => setShowSections(false)}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Collapse
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-3">
                   {getSortedSections().map((section, idx) => {
@@ -1025,66 +1065,89 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                           </div>
                         </button>
                         
-                        {/* Expanded Section Content */}
+                        {/* Expanded Section Content - Change Cards */}
                         {isExpanded && (
                           <div className="border-t bg-white">
-                            {/* Procedural Changes - Always shown first */}
-                            {proceduralChanges.length > 0 && (
-                              <div className="p-4 border-b border-gray-100">
-                                <h4 className="text-sm font-bold text-orange-700 mb-3 flex items-center gap-2">
-                                  <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                                  Procedural Changes ({proceduralChanges.length})
-                                </h4>
-                                <div className="space-y-2">
-                                  {proceduralChanges.map((region, rIdx) => {
-                                    const detailKey = `${section.id}-proc-${rIdx}`;
-                                    const showDetail = expandedDiffDetails.has(detailKey);
-                                    return (
-                                      <div key={rIdx} className="p-3 rounded-lg bg-orange-50 border border-orange-100">
-                                        <div className="flex items-start justify-between">
-                                          <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                                                region.changeType === 'added' ? 'bg-green-100 text-green-700' :
-                                                region.changeType === 'removed' ? 'bg-red-100 text-red-700' :
-                                                'bg-amber-100 text-amber-700'
-                                              }`}>
-                                                {region.changeType}
-                                              </span>
+                            {/* Procedural Changes - Batched Change Cards */}
+                            {proceduralChanges.length > 0 && (() => {
+                              const batchedProcedural = getBatchedChanges(sectionChanges, 'substantive');
+                              return (
+                                <div className="p-4 border-b border-gray-100">
+                                  <h4 className="text-sm font-bold text-orange-700 mb-3 flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                                    Procedural Changes ({proceduralChanges.length})
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {batchedProcedural.map((batch, bIdx) => {
+                                      const detailKey = `${section.id}-proc-batch-${bIdx}`;
+                                      const showDetail = expandedDiffDetails.has(detailKey);
+                                      return (
+                                        <div key={bIdx} className="bg-white rounded-lg border-2 border-orange-200 overflow-hidden">
+                                          {/* Change Card Header */}
+                                          <div className="p-4 bg-orange-50">
+                                            <div className="flex items-start justify-between">
+                                              <div className="flex-1">
+                                                <div className="text-xs text-orange-600 font-medium uppercase tracking-wide mb-1">
+                                                  Procedural Change {batch.count > 1 ? `(${batch.count} related)` : ''}
+                                                </div>
+                                                <h5 className="font-semibold text-gray-900 mb-2">{batch.summary}</h5>
+                                                <div className="space-y-1 text-sm text-gray-600">
+                                                  <div className="flex items-start gap-2">
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>Affected area: <strong>{batch.affectedArea}</strong></span>
+                                                  </div>
+                                                  <div className="flex items-start gap-2">
+                                                    <span className="text-gray-400">•</span>
+                                                    <span>Nature: {batch.changeNature}</span>
+                                                  </div>
+                                                  <div className="flex items-start gap-2">
+                                                    <span className="text-gray-400">•</span>
+                                                    <span className="text-orange-700 font-medium">Action: {batch.suggestedAction}</span>
+                                                  </div>
+                                                </div>
+                                              </div>
                                             </div>
-                                            <p className="text-sm text-gray-800">{region.descriptor}</p>
+                                            {/* View exact wording link */}
+                                            {!hideExactWording && (
+                                              <button
+                                                onClick={() => toggleDiffDetail(detailKey)}
+                                                className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium flex items-center gap-1"
+                                              >
+                                                <Eye className="w-3 h-3" />
+                                                {showDetail ? 'Hide exact wording' : 'View exact wording'}
+                                              </button>
+                                            )}
                                           </div>
-                                          <button
-                                            onClick={() => toggleDiffDetail(detailKey)}
-                                            className="text-xs text-orange-600 hover:text-orange-800 font-medium ml-2 whitespace-nowrap"
-                                          >
-                                            {showDetail ? 'Hide diff' : 'View diff'}
-                                          </button>
+                                          {/* Diff Details - Only shown on click */}
+                                          {showDetail && !hideExactWording && (
+                                            <div className="p-4 bg-gray-50 border-t border-orange-200 space-y-2">
+                                              {batch.items.map((item, iIdx) => (
+                                                <div key={iIdx} className="text-xs space-y-1">
+                                                  {item.oldText && (
+                                                    <div className="bg-red-50 p-2 rounded border border-red-100">
+                                                      <span className="text-red-600 font-medium">Removed: </span>
+                                                      <span className="text-red-800">{item.oldText}</span>
+                                                    </div>
+                                                  )}
+                                                  {item.newText && (
+                                                    <div className="bg-green-50 p-2 rounded border border-green-100">
+                                                      <span className="text-green-600 font-medium">Added: </span>
+                                                      <span className="text-green-800">{item.newText}</span>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
-                                        {showDetail && (
-                                          <div className="mt-3 pt-3 border-t border-orange-200 text-xs space-y-1">
-                                            {region.oldText && (
-                                              <div className="bg-red-50 p-2 rounded border border-red-100">
-                                                <span className="text-red-600 font-medium">Removed: </span>
-                                                <span className="text-red-800">{region.oldText}</span>
-                                              </div>
-                                            )}
-                                            {region.newText && (
-                                              <div className="bg-green-50 p-2 rounded border border-green-100">
-                                                <span className="text-green-600 font-medium">Added: </span>
-                                                <span className="text-green-800">{region.newText}</span>
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
                             
-                            {/* Editorial Changes - Collapsed by default */}
+                            {/* Editorial Changes - Collapsed by default, simpler list */}
                             {editorialChanges.length > 0 && (
                               <div className="p-4">
                                 <button
@@ -1098,45 +1161,57 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                                   <ChevronRight className={`w-4 h-4 transition-transform ${isEditorialExpanded ? 'rotate-90' : ''}`} />
                                 </button>
                                 
-                                {isEditorialExpanded && (
-                                  <div className="mt-3 space-y-2">
-                                    {editorialChanges.map((region, rIdx) => {
-                                      const detailKey = `${section.id}-edit-${rIdx}`;
-                                      const showDetail = expandedDiffDetails.has(detailKey);
-                                      return (
-                                        <div key={rIdx} className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                                          <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                              <p className="text-sm text-gray-600">{region.descriptor}</p>
+                                {isEditorialExpanded && (() => {
+                                  const batchedEditorial = getBatchedChanges(sectionChanges, 'editorial');
+                                  return (
+                                    <div className="mt-3 space-y-2">
+                                      {batchedEditorial.map((batch, bIdx) => {
+                                        const detailKey = `${section.id}-edit-batch-${bIdx}`;
+                                        const showDetail = expandedDiffDetails.has(detailKey);
+                                        return (
+                                          <div key={bIdx} className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                                            <div className="flex items-start justify-between">
+                                              <div className="flex-1">
+                                                <p className="text-sm text-gray-700">
+                                                  {batch.summary}
+                                                  {batch.count > 1 && <span className="text-gray-400 ml-1">({batch.count})</span>}
+                                                </p>
+                                              </div>
+                                              {!hideExactWording && (
+                                                <button
+                                                  onClick={() => toggleDiffDetail(detailKey)}
+                                                  className="text-xs text-gray-500 hover:text-gray-700 font-medium ml-2 whitespace-nowrap"
+                                                >
+                                                  {showDetail ? 'Hide' : 'View wording'}
+                                                </button>
+                                              )}
                                             </div>
-                                            <button
-                                              onClick={() => toggleDiffDetail(detailKey)}
-                                              className="text-xs text-gray-500 hover:text-gray-700 font-medium ml-2 whitespace-nowrap"
-                                            >
-                                              {showDetail ? 'Hide diff' : 'View diff'}
-                                            </button>
+                                            {showDetail && !hideExactWording && (
+                                              <div className="mt-2 pt-2 border-t border-gray-200 text-xs space-y-1">
+                                                {batch.items.map((item, iIdx) => (
+                                                  <div key={iIdx} className="space-y-1">
+                                                    {item.oldText && (
+                                                      <div className="bg-red-50 p-2 rounded border border-red-100">
+                                                        <span className="text-red-600 font-medium">Was: </span>
+                                                        <span className="text-red-800">{item.oldText}</span>
+                                                      </div>
+                                                    )}
+                                                    {item.newText && (
+                                                      <div className="bg-green-50 p-2 rounded border border-green-100">
+                                                        <span className="text-green-600 font-medium">Now: </span>
+                                                        <span className="text-green-800">{item.newText}</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                           </div>
-                                          {showDetail && (
-                                            <div className="mt-3 pt-3 border-t border-gray-200 text-xs space-y-1">
-                                              {region.oldText && (
-                                                <div className="bg-red-50 p-2 rounded border border-red-100">
-                                                  <span className="text-red-600 font-medium">Removed: </span>
-                                                  <span className="text-red-800">{region.oldText}</span>
-                                                </div>
-                                              )}
-                                              {region.newText && (
-                                                <div className="bg-green-50 p-2 rounded border border-green-100">
-                                                  <span className="text-green-600 font-medium">Added: </span>
-                                                  <span className="text-green-800">{region.newText}</span>
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>
