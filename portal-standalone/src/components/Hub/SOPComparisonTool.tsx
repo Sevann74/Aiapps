@@ -49,6 +49,8 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [showFullDiff, setShowFullDiff] = useState(false);
   const [showSections, setShowSections] = useState(false);
   const [hideExactWording, setHideExactWording] = useState(false);
+  const [includeAppendix, setIncludeAppendix] = useState(false);
+  const [showExportOptions, setShowExportOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -345,140 +347,229 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     setExpandedDiffs(newExpanded);
   };
 
-  const exportToWord = async () => {
+  // Export Delta Training Pack
+  const exportDeltaTrainingPack = async (includeFullComparison: boolean = false) => {
     if (!hybridResult) return;
     
     const file1 = files.find(f => f.id === sop1);
     const file2 = files.find(f => f.id === sop2);
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     
-    // Build HTML content for the Word document
+    // Get procedural and editorial changes
+    const proceduralChanges = hybridResult.fullTextResult?.changeRegions?.filter(c => c.significance === 'substantive') || [];
+    const editorialChanges = hybridResult.fullTextResult?.changeRegions?.filter(c => c.significance === 'editorial') || [];
+    const sectionsAffected = hybridResult.fullTextResult?.summary.sectionsAffected || 
+      (hybridResult.summary.modified + hybridResult.summary.added + hybridResult.summary.removed);
+    
+    // Determine training status
+    const trainingRequired = proceduralChanges.length > 0;
+    const trainingStatus = proceduralChanges.length === 0 ? 'NOT REQUIRED' : 
+      proceduralChanges.length <= 3 ? 'REQUIRED (partial)' : 'REQUIRED (comprehensive)';
+    
+    // Get most impacted section
+    const sectionCounts = new Map<string, number>();
+    proceduralChanges.forEach(c => {
+      sectionCounts.set(c.parentSection, (sectionCounts.get(c.parentSection) || 0) + 1);
+    });
+    const mostImpactedSection = Array.from(sectionCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    
+    // Batch changes by summary for the impact table
+    const batchedProcedural = getBatchedChanges(hybridResult.fullTextResult?.changeRegions, 'substantive');
+    const batchedEditorial = getBatchedChanges(hybridResult.fullTextResult?.changeRegions, 'editorial');
+    
+    // Build HTML content for the Delta Training Pack
     let html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta charset="utf-8">
-        <title>SOP Comparison Report</title>
+        <title>Delta Training Pack</title>
         <style>
-          body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.4; }
-          h1 { color: #6B21A8; font-size: 18pt; margin-bottom: 10pt; }
-          h2 { color: #1F2937; font-size: 14pt; margin-top: 16pt; margin-bottom: 8pt; border-bottom: 1px solid #E5E7EB; padding-bottom: 4pt; }
-          h3 { color: #374151; font-size: 12pt; margin-top: 12pt; margin-bottom: 6pt; }
-          .summary-table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
-          .summary-table td, .summary-table th { border: 1px solid #D1D5DB; padding: 6pt 10pt; text-align: center; }
-          .summary-table th { background-color: #F3F4F6; font-weight: bold; }
-          .change-section { margin: 12pt 0; padding: 10pt; border: 1px solid #E5E7EB; border-radius: 4pt; page-break-inside: avoid; }
-          .substantive { border-left: 4pt solid #F97316; background-color: #FFF7ED; }
-          .editorial { border-left: 4pt solid #3B82F6; background-color: #EFF6FF; }
-          .badge { display: inline-block; padding: 2pt 6pt; border-radius: 3pt; font-size: 9pt; font-weight: bold; margin-right: 4pt; }
-          .badge-added { background-color: #D1FAE5; color: #065F46; }
-          .badge-removed { background-color: #FEE2E2; color: #991B1B; }
-          .badge-modified { background-color: #FEF3C7; color: #92400E; }
-          .badge-substantive { background-color: #FFEDD5; color: #C2410C; }
-          .badge-editorial { background-color: #DBEAFE; color: #1E40AF; }
-          .key-changes { background-color: #FEF9C3; padding: 8pt; margin: 8pt 0; border-radius: 4pt; }
-          .content-box { background-color: #F9FAFB; padding: 8pt; margin: 6pt 0; border: 1px solid #E5E7EB; }
-          .highlight-added { background-color: #BBF7D0; font-weight: bold; }
+          body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1F2937; }
+          h1 { color: #6B21A8; font-size: 20pt; margin-bottom: 6pt; border-bottom: 3px solid #6B21A8; padding-bottom: 8pt; }
+          h2 { color: #1F2937; font-size: 14pt; margin-top: 20pt; margin-bottom: 10pt; background-color: #F3F4F6; padding: 8pt 12pt; }
+          h3 { color: #374151; font-size: 12pt; margin-top: 14pt; margin-bottom: 6pt; }
+          .executive-box { background-color: #FEF3C7; border: 2px solid #F59E0B; padding: 16pt; margin: 16pt 0; }
+          .status-required { background-color: #FEE2E2; color: #991B1B; font-weight: bold; padding: 4pt 8pt; display: inline-block; }
+          .status-not-required { background-color: #D1FAE5; color: #065F46; font-weight: bold; padding: 4pt 8pt; display: inline-block; }
+          .impact-table { border-collapse: collapse; width: 100%; margin: 12pt 0; font-size: 10pt; }
+          .impact-table td, .impact-table th { border: 1px solid #D1D5DB; padding: 8pt; text-align: left; vertical-align: top; }
+          .impact-table th { background-color: #6B21A8; color: white; font-weight: bold; }
+          .impact-table tr:nth-child(even) { background-color: #F9FAFB; }
+          .procedural-row { border-left: 4px solid #F97316; }
+          .editorial-row { border-left: 4px solid #3B82F6; }
+          .training-scope { background-color: #EFF6FF; border: 1px solid #3B82F6; padding: 12pt; margin: 12pt 0; }
+          .scope-include { color: #065F46; }
+          .scope-exclude { color: #6B7280; }
+          .checklist { background-color: #F9FAFB; padding: 12pt; margin: 12pt 0; border: 1px solid #E5E7EB; }
+          .checklist-item { margin: 8pt 0; font-size: 11pt; }
+          .checkbox { display: inline-block; width: 14pt; height: 14pt; border: 2px solid #6B7280; margin-right: 8pt; vertical-align: middle; }
+          .evidence-section { background-color: #FFF7ED; border: 1px solid #FDBA74; padding: 12pt; margin: 12pt 0; page-break-inside: avoid; }
+          .highlight-added { background-color: #BBF7D0; }
           .highlight-removed { background-color: #FECACA; text-decoration: line-through; }
-          .two-column { display: table; width: 100%; }
-          .column { display: table-cell; width: 48%; vertical-align: top; padding: 6pt; }
-          .old-version { border: 1px solid #D1D5DB; }
-          .new-version { border: 1px solid #A855F7; }
+          .page-break { page-break-before: always; }
+          .footer { font-size: 9pt; color: #6B7280; margin-top: 24pt; border-top: 1px solid #E5E7EB; padding-top: 8pt; }
+          .bullet { margin-left: 16pt; }
         </style>
       </head>
       <body>
-        <h1>SOP Comparison Report</h1>
-        <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-        <p><strong>Previous Version:</strong> ${file1?.title || 'Unknown'} (v${file1?.version || '?'})</p>
-        <p><strong>New Version:</strong> ${file2?.title || 'Unknown'} (v${file2?.version || '?'})</p>
+        <!-- PAGE 1: EXECUTIVE CHANGE SUMMARY -->
+        <h1>Delta Training Pack</h1>
+        <p style="font-size: 10pt; color: #6B7280;">Generated: ${today}</p>
         
-        <h2>Summary</h2>
-        <table class="summary-table">
-          <tr>
-            <th>Total Sections</th>
-            <th>Unchanged</th>
-            <th>Modified</th>
-            <th>Added</th>
-            <th>Removed</th>
-            <th>Substantive</th>
-            <th>Editorial</th>
-          </tr>
-          <tr>
-            <td>${hybridResult.summary.totalSections}</td>
-            <td>${hybridResult.summary.unchanged}</td>
-            <td>${hybridResult.summary.modified}</td>
-            <td>${hybridResult.summary.added}</td>
-            <td>${hybridResult.summary.removed}</td>
-            <td style="background-color: #FFEDD5; font-weight: bold;">${hybridResult.summary.substantive}</td>
-            <td>${hybridResult.summary.editorial}</td>
-          </tr>
-        </table>
+        <div class="executive-box">
+          <h2 style="margin-top: 0; background: none; padding: 0;">Executive Change Summary</h2>
+          <table style="width: 100%; border: none; margin: 12pt 0;">
+            <tr>
+              <td style="border: none; width: 30%;"><strong>Document:</strong></td>
+              <td style="border: none;">${file1?.title || 'SOP Document'}</td>
+            </tr>
+            <tr>
+              <td style="border: none;"><strong>Version Comparison:</strong></td>
+              <td style="border: none;">v${file1?.version || '1.0'} → v${file2?.version || '2.0'}</td>
+            </tr>
+            <tr>
+              <td style="border: none;"><strong>Effective Date:</strong></td>
+              <td style="border: none;">${today}</td>
+            </tr>
+          </table>
+          
+          <h3>Change Classification Summary</h3>
+          <ul style="margin: 8pt 0;">
+            <li><strong>${proceduralChanges.length}</strong> procedural changes detected</li>
+            <li><strong>${editorialChanges.length}</strong> editorial changes</li>
+            <li><strong>${sectionsAffected}</strong> sections affected</li>
+            <li>Primary impact area: <strong>${mostImpactedSection}</strong></li>
+          </ul>
+          
+          <h3>Training Status</h3>
+          <p>
+            <span class="${trainingRequired ? 'status-required' : 'status-not-required'}">
+              Training Update: ${trainingStatus}
+            </span>
+          </p>
+        </div>
         
-        <h2>Detailed Changes</h2>
+        <!-- PAGE 2: CHANGE-BY-CHANGE IMPACT TABLE -->
+        <div class="page-break"></div>
+        <h2>Change-by-Change Impact Table</h2>
+        <p style="font-size: 10pt; color: #6B7280;">Each row represents one meaningful change. This replaces word-by-word review.</p>
+        
+        <table class="impact-table">
+          <tr>
+            <th style="width: 20%;">Section</th>
+            <th style="width: 35%;">Change Statement</th>
+            <th style="width: 15%;">Type</th>
+            <th style="width: 15%;">Training Impact</th>
+            <th style="width: 15%;">Action</th>
+          </tr>
     `;
     
-    // Add each change
-    for (const change of hybridResult.changes) {
-      const significanceClass = change.significance === 'substantive' ? 'substantive' : 'editorial';
-      const typeBadgeClass = change.changeType === 'added' ? 'badge-added' : change.changeType === 'removed' ? 'badge-removed' : 'badge-modified';
-      const significanceBadgeClass = change.significance === 'substantive' ? 'badge-substantive' : 'badge-editorial';
-      
+    // Add procedural changes to impact table
+    for (const batch of batchedProcedural) {
+      const trainingImpact = 'Required';
       html += `
-        <div class="change-section ${significanceClass}">
-          <h3>${change.sectionNumber || change.sectionId} – ${change.sectionTitle}</h3>
-          <p>
-            <span class="badge ${typeBadgeClass}">${change.changeType.toUpperCase()}</span>
-            <span class="badge ${significanceBadgeClass}">${change.significance.toUpperCase()}</span>
-            <span class="badge" style="background-color: #F3F4F6; color: #374151;">${change.category.charAt(0).toUpperCase() + change.category.slice(1)}</span>
-          </p>
+          <tr class="procedural-row">
+            <td>${batch.affectedArea}</td>
+            <td>${batch.summary}${batch.count > 1 ? ` <em>(${batch.count} related changes)</em>` : ''}</td>
+            <td><strong style="color: #C2410C;">Procedural</strong></td>
+            <td><strong style="color: #991B1B;">${trainingImpact}</strong></td>
+            <td>${batch.suggestedAction}</td>
+          </tr>
       `;
-      
-      // Key changes
-      if (change.keyChanges && change.keyChanges.length > 0) {
-        html += `<div class="key-changes"><strong>Key Changes:</strong><ul>`;
-        for (const kc of change.keyChanges) {
-          html += `<li>${kc}</li>`;
-        }
-        html += `</ul></div>`;
-      }
-      
-      // Word-level diff
-      if (change.diffParts && change.diffParts.length > 0) {
-        html += `<div class="content-box"><strong>Changes Highlighted:</strong><p>`;
-        for (const part of change.diffParts) {
-          if (part.added) {
-            html += `<span class="highlight-added">${escapeHtml(part.value)}</span>`;
-          } else if (part.removed) {
-            html += `<span class="highlight-removed">${escapeHtml(part.value)}</span>`;
-          } else {
-            html += escapeHtml(part.value);
-          }
-        }
-        html += `</p></div>`;
-      }
-      
-      // Side by side
+    }
+    
+    // Add editorial changes (summarized)
+    if (batchedEditorial.length > 0) {
       html += `
-        <div class="two-column">
-          <div class="column old-version">
-            <p><strong>Previous Version:</strong></p>
-            <p>${change.oldContent ? escapeHtml(change.oldContent) : '<em>Section not present</em>'}</p>
-          </div>
-          <div class="column new-version">
-            <p><strong>New Version:</strong></p>
-            <p>${change.newContent ? escapeHtml(change.newContent) : '<em>Section removed</em>'}</p>
-          </div>
-        </div>
+          <tr class="editorial-row">
+            <td>Various</td>
+            <td>${editorialChanges.length} editorial/formatting changes</td>
+            <td>Editorial</td>
+            <td>None</td>
+            <td>No action required</td>
+          </tr>
       `;
-      
-      html += `</div>`;
     }
     
     html += `
-        <hr style="margin-top: 24pt;">
-        <p style="font-size: 9pt; color: #6B7280;">
-          This report was generated by the Document Change Review tool. 
-          Changes marked as <strong>SUBSTANTIVE</strong> may require training review.
-          Changes marked as <strong>EDITORIAL</strong> are typically formatting or wording updates.
-        </p>
+        </table>
+        
+        <!-- DELTA TRAINING SCOPE -->
+        <h2>Delta Training Scope</h2>
+        <div class="training-scope">
+          <h3 class="scope-include" style="margin-top: 0;">Training update SHOULD address:</h3>
+          <ul>
+    `;
+    
+    // List what training should address
+    const uniqueSummaries = new Set<string>();
+    for (const batch of batchedProcedural) {
+      if (!uniqueSummaries.has(batch.summary)) {
+        uniqueSummaries.add(batch.summary);
+        html += `<li>${batch.summary}</li>`;
+      }
+    }
+    if (uniqueSummaries.size === 0) {
+      html += `<li><em>No procedural changes requiring training updates</em></li>`;
+    }
+    
+    html += `
+          </ul>
+          
+          <h3 class="scope-exclude">Training does NOT need to address:</h3>
+          <ul>
+            <li>Editorial wording changes (${editorialChanges.length} identified)</li>
+            <li>Formatting changes</li>
+            <li>Reordered sections without content change</li>
+            <li>Typographical corrections</li>
+          </ul>
+        </div>
+        
+        <!-- TRAINING UPDATE CHECKLIST -->
+        <h2>Training Update Checklist</h2>
+        <div class="checklist">
+          <div class="checklist-item"><span class="checkbox"></span> Training content updated to reflect delta</div>
+          <div class="checklist-item"><span class="checkbox"></span> Assessment updated (if applicable)</div>
+          <div class="checklist-item"><span class="checkbox"></span> SME review completed</div>
+          <div class="checklist-item"><span class="checkbox"></span> QA approval recorded</div>
+          <div class="checklist-item"><span class="checkbox"></span> LMS deployment completed</div>
+          <div class="checklist-item"><span class="checkbox"></span> Training effectiveness verified</div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Document Control:</strong> This Delta Training Pack is for decision-making; the full comparison is for evidence.</p>
+          <p>Generated by Document Change Review Tool | ${today}</p>
+        </div>
+    `;
+    
+    // APPENDIX: Reference Evidence (only if includeFullComparison is true)
+    if (includeFullComparison && proceduralChanges.length > 0) {
+      html += `
+        <div class="page-break"></div>
+        <h2>Appendix: Reference Evidence</h2>
+        <p style="font-size: 10pt; color: #6B7280;">Exact before/after excerpts for procedural changes only. This section is for audit evidence.</p>
+      `;
+      
+      for (const change of proceduralChanges) {
+        html += `
+          <div class="evidence-section">
+            <h3>${change.parentSection}</h3>
+            <p><strong>Change:</strong> ${change.changeSummary || change.descriptor}</p>
+            ${change.oldText ? `
+              <p><strong>Previous wording:</strong></p>
+              <p class="highlight-removed" style="padding: 8pt; margin: 4pt 0;">${escapeHtml(change.oldText)}</p>
+            ` : ''}
+            ${change.newText ? `
+              <p><strong>New wording:</strong></p>
+              <p class="highlight-added" style="padding: 8pt; margin: 4pt 0;">${escapeHtml(change.newText)}</p>
+            ` : ''}
+          </div>
+        `;
+      }
+    }
+    
+    html += `
       </body>
       </html>
     `;
@@ -488,11 +579,16 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `SOP_Comparison_${file1?.title || 'doc1'}_vs_${file2?.title || 'doc2'}_${new Date().toISOString().split('T')[0]}.doc`;
+    a.download = `Delta_Training_Pack_${file1?.title || 'SOP'}_${new Date().toISOString().split('T')[0]}.doc`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  // Legacy export function (kept for backward compatibility)
+  const exportToWord = async () => {
+    exportDeltaTrainingPack(false);
   };
 
   const escapeHtml = (text: string): string => {
@@ -936,13 +1032,47 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                       );
                     })()}
                   </div>
-                  <button
-                    onClick={() => exportToWord()}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Export
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowExportOptions(!showExportOptions)}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-all flex items-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export Delta Pack
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showExportOptions ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showExportOptions && (
+                      <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-10">
+                        <h4 className="font-semibold text-gray-900 mb-3">Export Options</h4>
+                        <label className="flex items-start gap-3 mb-4 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={includeAppendix}
+                            onChange={(e) => setIncludeAppendix(e.target.checked)}
+                            className="w-4 h-4 mt-0.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                          />
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">Include full comparison as appendix</span>
+                            <p className="text-xs text-gray-500 mt-0.5">Adds detailed before/after evidence for auditors</p>
+                          </div>
+                        </label>
+                        <button
+                          onClick={() => {
+                            exportDeltaTrainingPack(includeAppendix);
+                            setShowExportOptions(false);
+                          }}
+                          className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download Delta Training Pack
+                        </button>
+                        <p className="text-xs text-gray-400 mt-3 text-center">
+                          The Delta Training Pack is for decision-making;<br/>the full comparison is for evidence.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Key Metrics */}
@@ -1223,18 +1353,19 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               </div>
             )}
 
-            {/* Full-Text Diff View - Last Resort Tool, De-emphasized */}
+            {/* Supporting Evidence - Full Document Diff (Last Resort) */}
             {showSections && hybridResult.fullTextResult && (
-              <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="mt-10 pt-6 border-t-2 border-dashed border-gray-200">
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Supporting Evidence</p>
                 <div className="bg-gray-50 rounded-xl overflow-hidden border border-gray-200">
                   <button
                     onClick={() => setShowFullDiff(!showFullDiff)}
-                    className="w-full px-5 py-3 flex items-center justify-between text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                    className="w-full px-5 py-3 flex items-center justify-between text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
                   >
                     <div className="flex items-center gap-2 text-sm">
                       <Eye className="w-4 h-4" />
-                      <span className="font-medium">Full Document Diff</span>
-                      <span className="text-gray-400">— raw inline view for detailed inspection</span>
+                      <span className="font-medium">View Detailed Comparison</span>
+                      <span className="text-gray-300">— for audit evidence only</span>
                     </div>
                     <ChevronDown className={`w-4 h-4 transition-transform ${showFullDiff ? 'rotate-180' : ''}`} />
                   </button>
@@ -1252,6 +1383,9 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                     </>
                   )}
                 </div>
+                <p className="text-xs text-gray-400 mt-2 text-center italic">
+                  The Delta Training Pack is for decision-making; this comparison is for evidence.
+                </p>
               </div>
             )}
 
