@@ -2,9 +2,8 @@ import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as Diff from 'diff';
 
-// Configure PDF.js worker - use unpkg for better compatibility
-const PDFJS_VERSION = '4.4.168'; // Use a stable version known to work
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+// Configure PDF.js worker - use cdnjs with legacy js format
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
 // ============================================
 // TYPES

@@ -5,9 +5,8 @@ import { extractDocument as extractSectionedDocument, compareDocumentsCombined, 
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker - use unpkg as fallback for better compatibility
-const PDFJS_VERSION = '4.4.168'; // Use a stable version known to work
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+// Configure PDF.js worker - use cdnjs with legacy js format
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
 interface SOPComparisonToolProps {
   user: {
