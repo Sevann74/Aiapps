@@ -59,6 +59,9 @@ export interface ChangeRegion {
   affectedArea: string; // e.g., "Deviation reporting notification"
   changeNature: string; // e.g., "Requirement modified", "New step added"
   suggestedAction: string; // e.g., "Review training & SOP owner sign-off"
+  // Layer 2: Sentence-level context (deterministic extraction)
+  oldSentence: string; // Full sentence from old version containing the change
+  newSentence: string; // Full sentence from new version containing the change
 }
 
 export interface FullTextComparisonResult {
@@ -318,6 +321,88 @@ function extractAffectedArea(text: string, parentSection: string): string {
 function generateChangeDescriptor(oldText: string, newText: string, changeType: string): string {
   const metadata = generateChangeMetadata(oldText, newText, changeType, '', 'other');
   return metadata.descriptor;
+}
+
+// ============================================
+// SENTENCE EXTRACTION - Layer 2 Context
+// ============================================
+
+// Extract the full sentence containing a text fragment from the source document
+function extractSentenceContext(fullText: string, fragment: string, position: number): string {
+  if (!fragment.trim() || !fullText) return fragment.trim();
+  
+  // Find the approximate position of the fragment in the full text
+  let searchStart = Math.max(0, position - 500);
+  let searchEnd = Math.min(fullText.length, position + fragment.length + 500);
+  let searchArea = fullText.substring(searchStart, searchEnd);
+  
+  // Try to find the fragment in the search area
+  let fragmentIndex = searchArea.toLowerCase().indexOf(fragment.toLowerCase().substring(0, Math.min(50, fragment.length)));
+  if (fragmentIndex === -1) {
+    // Fallback: search the whole document
+    fragmentIndex = fullText.toLowerCase().indexOf(fragment.toLowerCase().substring(0, Math.min(50, fragment.length)));
+    if (fragmentIndex === -1) return fragment.trim();
+    searchStart = 0;
+    searchArea = fullText;
+  }
+  
+  const absolutePosition = searchStart + fragmentIndex;
+  
+  // Find sentence boundaries (. ! ? or newline followed by capital letter or number)
+  const sentenceEndPattern = /[.!?](?:\s|$)|[\n\r](?=\s*[A-Z0-9])/g;
+  
+  // Find the start of the sentence (look backwards for sentence end)
+  let sentenceStart = 0;
+  const textBefore = fullText.substring(0, absolutePosition);
+  const beforeMatches = [...textBefore.matchAll(sentenceEndPattern)];
+  if (beforeMatches.length > 0) {
+    const lastMatch = beforeMatches[beforeMatches.length - 1];
+    sentenceStart = (lastMatch.index || 0) + lastMatch[0].length;
+  }
+  
+  // Find the end of the sentence (look forward for sentence end)
+  let sentenceEnd = fullText.length;
+  const textAfter = fullText.substring(absolutePosition);
+  const afterMatch = textAfter.match(sentenceEndPattern);
+  if (afterMatch && afterMatch.index !== undefined) {
+    sentenceEnd = absolutePosition + afterMatch.index + 1; // Include the period
+  }
+  
+  // Extract and clean the sentence
+  let sentence = fullText.substring(sentenceStart, sentenceEnd).trim();
+  
+  // Limit length to avoid overly long sentences (max ~300 chars)
+  if (sentence.length > 300) {
+    // Try to find a natural break point
+    const fragmentPos = sentence.toLowerCase().indexOf(fragment.toLowerCase().substring(0, 30));
+    if (fragmentPos > 150) {
+      sentence = '...' + sentence.substring(fragmentPos - 50);
+    }
+    if (sentence.length > 300) {
+      sentence = sentence.substring(0, 297) + '...';
+    }
+  }
+  
+  return sentence;
+}
+
+// Reconstruct sentence with the change applied
+function reconstructSentence(oldSentence: string, oldFragment: string, newFragment: string): string {
+  if (!oldSentence || !oldFragment) return newFragment.trim();
+  
+  // Try to replace the old fragment with the new one in the sentence
+  const lowerSentence = oldSentence.toLowerCase();
+  const lowerFragment = oldFragment.toLowerCase().trim();
+  
+  const fragmentIndex = lowerSentence.indexOf(lowerFragment);
+  if (fragmentIndex !== -1) {
+    return oldSentence.substring(0, fragmentIndex) + 
+           newFragment.trim() + 
+           oldSentence.substring(fragmentIndex + oldFragment.trim().length);
+  }
+  
+  // Fallback: just return the new fragment
+  return newFragment.trim();
 }
 
 // ============================================
@@ -1006,17 +1091,17 @@ function stripTableContent(text: string): string {
   return filteredLines.join('\n');
 }
 
-export function performFullTextComparison(oldText: string, newText: string): FullTextComparisonResult {
+export function performFullTextComparison(oldDocText: string, newDocText: string): FullTextComparisonResult {
   // Strip table content to avoid duplicate display
-  const cleanOldText = stripTableContent(oldText);
-  const cleanNewText = stripTableContent(newText);
+  const cleanOldText = stripTableContent(oldDocText);
+  const cleanNewText = stripTableContent(newDocText);
   
   // Perform word-level diff on entire document
   const fullDiff = Diff.diffWords(cleanOldText, cleanNewText);
   
   // Find section markers in both documents
-  const oldMarkers = findSectionMarkers(oldText);
-  const newMarkers = findSectionMarkers(newText);
+  const oldMarkers = findSectionMarkers(oldDocText);
+  const newMarkers = findSectionMarkers(newDocText);
   
   // Group consecutive changes into regions
   const changeRegions: ChangeRegion[] = [];
@@ -1073,6 +1158,19 @@ export function performFullTextComparison(oldText: string, newText: string): Ful
       const category = detectCategory(oldText, newText);
       const metadata = generateChangeMetadata(oldText, newText, changeType, parentSection, category);
       
+      // Extract sentence-level context (Layer 2)
+      const oldSentence = oldText.trim() ? extractSentenceContext(oldDocText, oldText, currentIndex) : '';
+      let newSentence = '';
+      if (newText.trim()) {
+        if (oldSentence && oldText.trim()) {
+          // Reconstruct the new sentence by replacing the changed fragment
+          newSentence = reconstructSentence(oldSentence, oldText, newText);
+        } else {
+          // For additions, extract from new text
+          newSentence = extractSentenceContext(newDocText, newText, currentIndex);
+        }
+      }
+      
       // Only add if there's meaningful content
       if (oldText.trim().length > 2 || newText.trim().length > 2) {
         changeRegions.push({
@@ -1090,7 +1188,9 @@ export function performFullTextComparison(oldText: string, newText: string): Ful
           changeSummary: metadata.changeSummary,
           affectedArea: metadata.affectedArea,
           changeNature: metadata.changeNature,
-          suggestedAction: metadata.suggestedAction
+          suggestedAction: metadata.suggestedAction,
+          oldSentence: oldSentence || oldText.trim(),
+          newSentence: newSentence || newText.trim()
         });
       }
     }
@@ -1128,8 +1228,8 @@ export function performFullTextComparison(oldText: string, newText: string): Ful
       editorial: changeRegions.filter(r => r.significance === 'editorial').length,
       sectionsAffected: sectionsWithChanges.size
     },
-    oldText,
-    newText
+    oldText: oldDocText,
+    newText: newDocText
   };
 }
 

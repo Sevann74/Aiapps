@@ -1214,7 +1214,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                                       const showDetail = expandedDiffDetails.has(detailKey);
                                       return (
                                         <div key={bIdx} className="bg-white rounded-lg border-2 border-orange-200 overflow-hidden">
-                                          {/* Change Card Header */}
+                                          {/* LAYER 1: Change Statement (Decision Layer) */}
                                           <div className="p-4 bg-orange-50">
                                             <div className="flex items-start justify-between">
                                               <div className="flex-1">
@@ -1222,52 +1222,69 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                                                   Procedural Change {batch.count > 1 ? `(${batch.count} related)` : ''}
                                                 </div>
                                                 <h5 className="font-semibold text-gray-900 mb-2">{batch.summary}</h5>
-                                                <div className="space-y-1 text-sm text-gray-600">
-                                                  <div className="flex items-start gap-2">
-                                                    <span className="text-gray-400">•</span>
-                                                    <span>Affected area: <strong>{batch.affectedArea}</strong></span>
-                                                  </div>
-                                                  <div className="flex items-start gap-2">
-                                                    <span className="text-gray-400">•</span>
-                                                    <span>Nature: {batch.changeNature}</span>
-                                                  </div>
-                                                  <div className="flex items-start gap-2">
-                                                    <span className="text-gray-400">•</span>
-                                                    <span className="text-orange-700 font-medium">Action: {batch.suggestedAction}</span>
-                                                  </div>
-                                                </div>
+                                                <p className="text-sm text-orange-700 font-medium">
+                                                  Action: {batch.suggestedAction}
+                                                </p>
                                               </div>
                                             </div>
-                                            {/* View exact wording link */}
+                                            
+                                            {/* LAYER 2: Sentence-Level Context (Default visible) */}
+                                            <div className="mt-4 space-y-2">
+                                              {batch.items.slice(0, 2).map((item, iIdx) => (
+                                                <div key={iIdx} className="text-sm bg-white rounded-lg border border-orange-100 overflow-hidden">
+                                                  {item.oldSentence && (
+                                                    <div className="px-3 py-2 border-b border-orange-100 bg-red-50/50">
+                                                      <span className="text-xs text-gray-500 font-medium">Before (v1.0):</span>
+                                                      <p className="text-gray-700 mt-0.5">"{item.oldSentence}"</p>
+                                                    </div>
+                                                  )}
+                                                  {item.newSentence && (
+                                                    <div className="px-3 py-2 bg-green-50/50">
+                                                      <span className="text-xs text-gray-500 font-medium">After (v2.0):</span>
+                                                      <p className="text-gray-700 mt-0.5">"{item.newSentence}"</p>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))}
+                                              {batch.items.length > 2 && (
+                                                <p className="text-xs text-gray-500 italic">+ {batch.items.length - 2} more related changes</p>
+                                              )}
+                                            </div>
+                                            
+                                            {/* LAYER 3: Word-level diff (Evidence - expandable) */}
                                             {!hideExactWording && (
                                               <button
                                                 onClick={() => toggleDiffDetail(detailKey)}
                                                 className="mt-3 text-xs text-orange-600 hover:text-orange-800 font-medium flex items-center gap-1"
                                               >
                                                 <Eye className="w-3 h-3" />
-                                                {showDetail ? 'Hide exact wording' : 'View exact wording'}
+                                                {showDetail ? 'Hide word-level diff' : 'View word-level diff (evidence)'}
                                               </button>
                                             )}
                                           </div>
-                                          {/* Diff Details - Only shown on click */}
+                                          
+                                          {/* LAYER 3 Content: Word-level diff blocks */}
                                           {showDetail && !hideExactWording && (
-                                            <div className="p-4 bg-gray-50 border-t border-orange-200 space-y-2">
-                                              {batch.items.map((item, iIdx) => (
-                                                <div key={iIdx} className="text-xs space-y-1">
-                                                  {item.oldText && (
-                                                    <div className="bg-red-50 p-2 rounded border border-red-100">
-                                                      <span className="text-red-600 font-medium">Removed: </span>
-                                                      <span className="text-red-800">{item.oldText}</span>
-                                                    </div>
-                                                  )}
-                                                  {item.newText && (
-                                                    <div className="bg-green-50 p-2 rounded border border-green-100">
-                                                      <span className="text-green-600 font-medium">Added: </span>
-                                                      <span className="text-green-800">{item.newText}</span>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              ))}
+                                            <div className="p-4 bg-gray-50 border-t border-orange-200">
+                                              <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wide">Word-Level Evidence</p>
+                                              <div className="space-y-2">
+                                                {batch.items.map((item, iIdx) => (
+                                                  <div key={iIdx} className="text-xs space-y-1">
+                                                    {item.oldText && (
+                                                      <div className="bg-red-50 p-2 rounded border border-red-100">
+                                                        <span className="text-red-600 font-medium">Removed: </span>
+                                                        <span className="text-red-800">{item.oldText}</span>
+                                                      </div>
+                                                    )}
+                                                    {item.newText && (
+                                                      <div className="bg-green-50 p-2 rounded border border-green-100">
+                                                        <span className="text-green-600 font-medium">Added: </span>
+                                                        <span className="text-green-800">{item.newText}</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
                                             </div>
                                           )}
                                         </div>
