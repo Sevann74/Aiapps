@@ -544,28 +544,105 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     `;
     
     // APPENDIX: Reference Evidence (only if includeFullComparison is true)
-    if (includeFullComparison && proceduralChanges.length > 0) {
+    if (includeFullComparison && batchedProcedural.length > 0) {
       html += `
         <div class="page-break"></div>
         <h2>Appendix: Reference Evidence</h2>
-        <p style="font-size: 10pt; color: #6B7280;">Exact before/after excerpts for procedural changes only. This section is for audit evidence.</p>
+        <p style="font-size: 10pt; color: #6B7280;">Sentence-level before/after excerpts for procedural changes. This section matches the UI format for audit evidence.</p>
+        
+        <style>
+          .change-card { border: 2px solid #FDBA74; border-radius: 8pt; margin: 16pt 0; overflow: hidden; page-break-inside: avoid; }
+          .change-header { background-color: #FFF7ED; padding: 12pt; border-bottom: 1px solid #FDBA74; }
+          .change-type { font-size: 9pt; color: #C2410C; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5pt; margin-bottom: 4pt; }
+          .change-summary { font-size: 12pt; font-weight: bold; color: #1F2937; margin-bottom: 6pt; }
+          .change-action { font-size: 10pt; color: #C2410C; font-weight: 600; }
+          .sentence-context { padding: 12pt; }
+          .sentence-box { border: 1px solid #FED7AA; border-radius: 6pt; margin: 8pt 0; overflow: hidden; }
+          .sentence-before { background-color: #FEF2F2; padding: 10pt; border-bottom: 1px solid #FED7AA; }
+          .sentence-after { background-color: #F0FDF4; padding: 10pt; }
+          .sentence-label { font-size: 9pt; color: #6B7280; font-weight: 600; margin-bottom: 4pt; }
+          .sentence-text { font-size: 10pt; color: #374151; font-style: italic; }
+          .word-evidence { background-color: #F9FAFB; padding: 12pt; border-top: 1px solid #E5E7EB; }
+          .word-label { font-size: 9pt; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5pt; margin-bottom: 8pt; }
+          .word-removed { background-color: #FEE2E2; padding: 6pt 8pt; border-radius: 4pt; margin: 4pt 0; font-size: 9pt; }
+          .word-added { background-color: #DCFCE7; padding: 6pt 8pt; border-radius: 4pt; margin: 4pt 0; font-size: 9pt; }
+        </style>
       `;
       
-      for (const change of proceduralChanges) {
-        html += `
-          <div class="evidence-section">
-            <h3>${change.parentSection}</h3>
-            <p><strong>Change:</strong> ${change.changeSummary || change.descriptor}</p>
-            ${change.oldText ? `
-              <p><strong>Previous wording:</strong></p>
-              <p class="highlight-removed" style="padding: 8pt; margin: 4pt 0;">${escapeHtml(change.oldText)}</p>
-            ` : ''}
-            ${change.newText ? `
-              <p><strong>New wording:</strong></p>
-              <p class="highlight-added" style="padding: 8pt; margin: 4pt 0;">${escapeHtml(change.newText)}</p>
-            ` : ''}
-          </div>
-        `;
+      // Group by section for better organization
+      const sectionGroups = new Map<string, typeof batchedProcedural>();
+      for (const batch of batchedProcedural) {
+        const section = batch.items[0]?.parentSection || 'General';
+        if (!sectionGroups.has(section)) {
+          sectionGroups.set(section, []);
+        }
+        sectionGroups.get(section)!.push(batch);
+      }
+      
+      for (const [sectionName, batches] of sectionGroups) {
+        html += `<h3 style="color: #C2410C; margin-top: 20pt;">${sectionName}</h3>`;
+        
+        for (const batch of batches) {
+          html += `
+            <div class="change-card">
+              <!-- LAYER 1: Change Statement -->
+              <div class="change-header">
+                <div class="change-type">Procedural Change${batch.count > 1 ? ` (${batch.count} related)` : ''}</div>
+                <div class="change-summary">${escapeHtml(batch.summary)}</div>
+                <div class="change-action">Action: ${escapeHtml(batch.suggestedAction)}</div>
+              </div>
+              
+              <!-- LAYER 2: Sentence-Level Context -->
+              <div class="sentence-context">
+          `;
+          
+          // Show up to 3 sentence pairs
+          const itemsToShow = batch.items.slice(0, 3);
+          for (const item of itemsToShow) {
+            html += `
+                <div class="sentence-box">
+                  ${item.oldSentence ? `
+                    <div class="sentence-before">
+                      <div class="sentence-label">Before (v1.0):</div>
+                      <div class="sentence-text">"${escapeHtml(item.oldSentence)}"</div>
+                    </div>
+                  ` : ''}
+                  ${item.newSentence ? `
+                    <div class="sentence-after">
+                      <div class="sentence-label">After (v2.0):</div>
+                      <div class="sentence-text">"${escapeHtml(item.newSentence)}"</div>
+                    </div>
+                  ` : ''}
+                </div>
+            `;
+          }
+          
+          if (batch.items.length > 3) {
+            html += `<p style="font-size: 9pt; color: #6B7280; font-style: italic;">+ ${batch.items.length - 3} more related changes</p>`;
+          }
+          
+          html += `
+              </div>
+              
+              <!-- LAYER 3: Word-Level Evidence -->
+              <div class="word-evidence">
+                <div class="word-label">Word-Level Evidence</div>
+          `;
+          
+          for (const item of batch.items) {
+            if (item.oldText) {
+              html += `<div class="word-removed"><strong style="color: #991B1B;">Removed:</strong> ${escapeHtml(item.oldText)}</div>`;
+            }
+            if (item.newText) {
+              html += `<div class="word-added"><strong style="color: #166534;">Added:</strong> ${escapeHtml(item.newText)}</div>`;
+            }
+          }
+          
+          html += `
+              </div>
+            </div>
+          `;
+        }
       }
     }
     
