@@ -7,10 +7,12 @@ const corsHeaders = {
 };
 
 interface AnthropicRequest {
-  operation: 'extract-facts' | 'generate-questions' | 'generate-modules';
+  operation: 'extract-facts' | 'generate-questions' | 'generate-modules' | 'compare-documents';
   text: string;
   facts?: any[];
   questionCount?: number;
+  prompt?: string;
+  maxTokens?: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -266,6 +268,12 @@ OUTPUT FORMAT - Respond with ONLY valid JSON:
 
 Create sections matching the document structure.`;
         maxTokens = 32000;
+        break;
+
+      case 'compare-documents':
+        // For document comparison, use the custom prompt provided by the client
+        prompt = requestData.prompt || '';
+        maxTokens = requestData.maxTokens || 8000;
         break;
 
       default:

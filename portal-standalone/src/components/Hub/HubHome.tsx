@@ -31,49 +31,63 @@ const HubHome: React.FC<HubHomeProps> = ({
     loading
   });
 
-  const modules = [
+  // Section 1: Learning Conversion modules
+  const learningConversionModules = [
     {
       key: 'conversion',
-      title: 'Learning Conversion',
-      description: 'Convert approved documents into interactive SCORM-compliant e-learning, with structured content extraction and assessment generation.',
+      title: 'Learning Conversion (Managed Service)',
+      description: 'Managed conversion service for approved procedural documents into SCORM-compliant training, with structured content and assessments included, delivered within 24 hours.',
       icon: '📚',
       enabled: hasAccess('conversion'),
       locked: false,
       stats: activeJobsCount > 0 ? `${activeJobsCount} Active Job${activeJobsCount > 1 ? 's' : ''}` : undefined
     },
     {
-      key: 'sop-compare',
-      title: 'Document Change Review',
-      description: 'Side-by-side comparison of controlled document versions with full traceability.',
-      icon: '🔄',
-      enabled: hasAccess('sop-compare'),
-      locked: !hasAccess('sop-compare'),
-      lockedMessage: !hasAccess('sop-compare') ? 'Contact Admin' : undefined
-    },
-    {
-      key: 'compliance',
-      title: 'Compliance Query Pro',
-      description: 'AI-powered compliance search and analysis. Query your regulatory documents with natural language.',
-      icon: '🔍',
-      enabled: hasAccess('compliance'),
-      locked: !hasAccess('compliance'),
-      lockedMessage: 'Coming Soon'
+      key: 'course-builder',
+      title: 'Learning Conversion Workspace',
+      description: 'Direct L&D access to the Learning Conversion capability. Upload approved documents and generate SCORM training within minutes, with full review and control before export.',
+      icon: '🛠️',
+      enabled: hasAccess('course-builder'),
+      locked: !hasAccess('course-builder'),
+      lockedMessage: !hasAccess('course-builder') ? 'Contact Admin' : undefined
     }
   ];
 
-  // Add Hub Admin tile for admins
-  if (user.role === 'admin') {
-    modules.push({
-      key: 'hub-admin',
-      title: 'Hub Admin',
-      description: 'Manage organizations, module entitlements, and users across the CapNorth Hub platform.',
-      icon: '⚙️',
-      enabled: true,
-      locked: false,
-      stats: undefined,
-      lockedMessage: undefined
-    });
-  }
+  // Section 2: Compliance & Document Intelligence modules
+  const complianceModules = [
+    {
+      key: 'sop-compare',
+      title: 'Document Change Impact Review',
+      description: 'Side-by-side comparison of controlled documents with full traceability and verification.',
+      icon: '🔄',
+      enabled: hasAccess('sop-compare'),
+      locked: !hasAccess('sop-compare'),
+      lockedMessage: !hasAccess('sop-compare') ? 'Contact Admin' : undefined,
+      stats: undefined
+    },
+    {
+      key: 'doc-qa',
+      title: 'Document Q&A / Insight Search',
+      description: 'AI-powered document search and analysis. Query your regulatory documents with natural language.',
+      icon: '🔍',
+      enabled: hasAccess('doc-qa'),
+      locked: !hasAccess('doc-qa'),
+      lockedMessage: !hasAccess('doc-qa') ? 'Contact Admin' : undefined,
+      stats: undefined
+    }
+  ];
+
+  // Admin module (separate)
+  const adminModule = user.role === 'admin' ? {
+    key: 'hub-admin',
+    title: 'Hub Admin',
+    description: 'Manage organizations, module entitlements, and users across the CapNorth Hub platform.',
+    icon: '⚙️',
+    enabled: true,
+    locked: false,
+    stats: undefined,
+    lockedMessage: undefined
+  } : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50">
@@ -117,7 +131,7 @@ const HubHome: React.FC<HubHomeProps> = ({
             Welcome back, {user.name.split(' ')[0]}
           </h2>
           <p className="text-gray-600">
-            Select a module below to get started
+            Select an option below to get started
           </p>
         </div>
 
@@ -130,29 +144,73 @@ const HubHome: React.FC<HubHomeProps> = ({
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {modules.map(module => (
-              <ModuleTile
-                key={module.key}
-                title={module.title}
-                description={module.description}
-                icon={module.icon}
-                enabled={module.enabled}
-                locked={module.locked}
-                lockedMessage={module.lockedMessage}
-                stats={module.stats}
-                onClick={() => onSelectModule(module.key)}
-              />
-            ))}
-            
-            {/* Placeholder for future modules - only show if not admin or less than 3 modules */}
-            {modules.length < 4 && (
-              <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center opacity-50">
-                <span className="text-4xl mb-4">➕</span>
-                <h3 className="text-lg font-semibold text-gray-500 mb-2">More Coming Soon</h3>
-                <p className="text-sm text-gray-400">
-                  Additional modules will appear here as they become available
-                </p>
+          <div className="space-y-10">
+            {/* Section 1: Learning Conversion */}
+            <div className="bg-white/50 rounded-2xl p-6 border border-blue-100">
+              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <span className="text-2xl">📖</span>
+                Learning Conversion
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {learningConversionModules.map(module => (
+                  <ModuleTile
+                    key={module.key}
+                    title={module.title}
+                    description={module.description}
+                    icon={module.icon}
+                    enabled={module.enabled}
+                    locked={module.locked}
+                    lockedMessage={module.lockedMessage}
+                    stats={module.stats}
+                    onClick={() => onSelectModule(module.key)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2: Compliance & Document Intelligence */}
+            <div className="bg-white/50 rounded-2xl p-6 border border-indigo-100">
+              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <span className="text-2xl">📋</span>
+                Compliance & Document Intelligence
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {complianceModules.map(module => (
+                  <ModuleTile
+                    key={module.key}
+                    title={module.title}
+                    description={module.description}
+                    icon={module.icon}
+                    enabled={module.enabled}
+                    locked={module.locked}
+                    lockedMessage={module.lockedMessage}
+                    stats={module.stats}
+                    onClick={() => onSelectModule(module.key)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Admin Module (separate section) */}
+            {adminModule && (
+              <div className="bg-white/50 rounded-2xl p-6 border border-purple-100">
+                <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                  <span className="text-2xl">⚙️</span>
+                  Administration
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <ModuleTile
+                    key={adminModule.key}
+                    title={adminModule.title}
+                    description={adminModule.description}
+                    icon={adminModule.icon}
+                    enabled={adminModule.enabled}
+                    locked={adminModule.locked}
+                    lockedMessage={adminModule.lockedMessage}
+                    stats={adminModule.stats}
+                    onClick={() => onSelectModule(adminModule.key)}
+                  />
+                </div>
               </div>
             )}
           </div>
