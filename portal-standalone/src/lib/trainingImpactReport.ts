@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, HeadingLevel } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, HeadingLevel, TableLayoutType } from 'docx';
 import { saveAs } from 'file-saver';
 
 // Renamed from SOPChange to DocumentChange - all SOP references removed
@@ -522,8 +522,8 @@ function createChangeTable(changes: DocumentChange[]): Table {
         width: { size: 24, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
           children: [new TextRun({ 
-            text: change.previousText ? (change.previousText.substring(0, 300) + (change.previousText.length > 300 ? '...' : '')) : '—',
-            size: 18,
+            text: change.previousText ? (change.previousText.substring(0, 200) + (change.previousText.length > 200 ? '...' : '')) : '—',
+            size: 16,
             color: '444444'
           })],
           spacing: { before: 50, after: 50 }
@@ -534,8 +534,8 @@ function createChangeTable(changes: DocumentChange[]): Table {
         width: { size: 24, type: WidthType.PERCENTAGE },
         children: [new Paragraph({ 
           children: [new TextRun({ 
-            text: change.newText ? (change.newText.substring(0, 300) + (change.newText.length > 300 ? '...' : '')) : '—',
-            size: 18,
+            text: change.newText ? (change.newText.substring(0, 200) + (change.newText.length > 200 ? '...' : '')) : '—',
+            size: 16,
             color: '444444'
           })],
           spacing: { before: 50, after: 50 }
@@ -555,6 +555,7 @@ function createChangeTable(changes: DocumentChange[]): Table {
   
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.FIXED,
     rows: [headerRow, ...dataRows]
   });
 }

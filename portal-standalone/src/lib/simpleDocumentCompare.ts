@@ -1170,6 +1170,15 @@ export function performFullTextComparison(oldDocText: string, newDocText: string
         }
       }
       
+      // Filter out whitespace-only changes (PDF/Word extraction artifacts)
+      const oldStripped = oldText.replace(/[\s\-]+/g, '').toLowerCase();
+      const newStripped = newText.replace(/[\s\-]+/g, '').toLowerCase();
+      if (oldStripped === newStripped && oldText.trim() && newText.trim()) {
+        // Only whitespace/hyphenation differs — skip this change
+        if (!part.added) currentIndex += part.value.length;
+        continue;
+      }
+
       // Only add if there's meaningful content
       if (oldText.trim().length > 2 || newText.trim().length > 2) {
         changeRegions.push({

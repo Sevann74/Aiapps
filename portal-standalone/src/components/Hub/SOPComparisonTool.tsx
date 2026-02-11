@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, GitCompare, Upload, FileText, X, CheckCircle, AlertCircle, FileUp, Download, ArrowRight, AlertTriangle, Info, Eye, ChevronDown, ChevronRight, Sparkles, Shield } from 'lucide-react';
 import { extractDocument, compareDocuments, type ComparisonResult, type SectionChange as LegacySectionChange } from '../../lib/documentExtractor';
 import { extractDocument as extractSectionedDocument, compareDocumentsCombined, type SimpleComparisonResult, type SectionChange, type ChangeSignificance, type ChangeCategory, type FullTextComparisonResult, type ChangeRegion } from '../../lib/simpleDocumentCompare';
+import { compareDocumentFilesWithAI, type AIComparisonResult, type AIDetectedChange } from '../../lib/aiDocumentCompare';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -53,6 +54,11 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  
+  // AI Comparison state
+  const [useAIComparison, setUseAIComparison] = useState(true); // Default to AI mode
+  const [aiResult, setAiResult] = useState<AIComparisonResult | null>(null);
+  const [aiComparisonLoading, setAiComparisonLoading] = useState(false);
 
   // Batch related changes within the same section (group by changeSummary)
   const getBatchedChanges = (changes: ChangeRegion[] | undefined, significance: 'substantive' | 'editorial') => {
@@ -320,20 +326,31 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
     if (!file1 || !file2) return;
 
     setComparisonLoading(true);
+    setAiComparisonLoading(useAIComparison);
     setComparisonResult(null);
     setHybridResult(null);
+    setAiResult(null);
     setError(null);
 
     try {
-      // Full-text diff with section markers
-      const result = await compareDocumentsCombined(file1.file, file2.file);
-      setHybridResult(result);
+      if (useAIComparison) {
+        // AI-powered comparison with verification
+        console.log('Starting AI-powered comparison...');
+        const aiComparisonResult = await compareDocumentFilesWithAI(file1.file, file2.file);
+        setAiResult(aiComparisonResult);
+        console.log('AI comparison complete:', aiComparisonResult.summary);
+      } else {
+        // Traditional diff-based comparison
+        const result = await compareDocumentsCombined(file1.file, file2.file);
+        setHybridResult(result);
+      }
     } catch (err) {
       console.error('Comparison error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Comparison failed';
       setError(errorMessage);
     } finally {
       setComparisonLoading(false);
+      setAiComparisonLoading(false);
     }
   };
 
@@ -678,6 +695,292 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
       .replace(/\n/g, '<br>');
   };
 
+  // Export AI Delta Training Pack
+  const exportAIDeltaTrainingPack = async () => {
+    if (!aiResult) return;
+    
+    const file1 = files.find(f => f.id === sop1);
+    const file2 = files.find(f => f.id === sop2);
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const timestamp = new Date().toISOString();
+    
+    // Separate verified and unverified changes
+    const verifiedSubstantive = aiResult.contentChanges.filter(c => c.verified && c.significance === 'substantive');
+    const unverifiedSubstantive = aiResult.contentChanges.filter(c => !c.verified && c.significance === 'substantive');
+    const verifiedEditorial = aiResult.contentChanges.filter(c => c.verified && c.significance === 'editorial');
+    const verifiedMetadata = aiResult.metadataChanges.filter(c => c.verified);
+    const unverifiedMetadata = aiResult.metadataChanges.filter(c => !c.verified);
+    
+    // Determine training status based on VERIFIED changes only
+    const trainingRequired = verifiedSubstantive.length > 0;
+    const trainingStatus = verifiedSubstantive.length === 0 ? 'NOT REQUIRED' : 
+      verifiedSubstantive.length <= 3 ? 'REQUIRED (partial)' : 'REQUIRED (comprehensive)';
+    
+    // Get most impacted section from verified changes
+    const sectionCounts = new Map<string, number>();
+    verifiedSubstantive.forEach(c => {
+      const section = c.section || 'General';
+      sectionCounts.set(section, (sectionCounts.get(section) || 0) + 1);
+    });
+    const mostImpactedSection = Array.from(sectionCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+    
+    // Build HTML content for the Change Impact Delta Pack
+    let html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>Change Impact Delta Pack</title>
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1F2937; }
+          h1 { color: #1E3A5F; font-size: 18pt; margin-bottom: 6pt; border-bottom: 2px solid #1E3A5F; padding-bottom: 6pt; }
+          h2 { color: #1F2937; font-size: 13pt; margin-top: 18pt; margin-bottom: 8pt; background-color: #F3F4F6; padding: 6pt 10pt; }
+          h3 { color: #374151; font-size: 11pt; margin-top: 12pt; margin-bottom: 6pt; }
+          .verified-badge { background-color: #10B981; color: white; padding: 2pt 6pt; font-size: 8pt; border-radius: 3pt; }
+          .unverified-badge { background-color: #F59E0B; color: white; padding: 2pt 6pt; font-size: 8pt; border-radius: 3pt; }
+          .executive-box { background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12pt; margin: 12pt 0; }
+          .warning-box { background-color: #FEF3C7; border: 1px solid #F59E0B; padding: 10pt; margin: 10pt 0; }
+          .status-required { background-color: #FEE2E2; color: #991B1B; font-weight: bold; padding: 4pt 8pt; display: inline-block; }
+          .status-not-required { background-color: #D1FAE5; color: #065F46; font-weight: bold; padding: 4pt 8pt; display: inline-block; }
+          .change-table { border-collapse: collapse; width: 100%; margin: 10pt 0; font-size: 10pt; table-layout: fixed; }
+          .change-table td, .change-table th { border: 1px solid #D1D5DB; padding: 6pt; text-align: left; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; }
+          .change-table th { background-color: #1E3A5F; color: white; font-weight: bold; }
+          .change-table tr:nth-child(even) { background-color: #F9FAFB; }
+          .substantive-row { border-left: 4px solid #F97316; }
+          .editorial-row { border-left: 4px solid #6B7280; }
+          .metadata-row { border-left: 4px solid #3B82F6; }
+          .old-value { background-color: #FEE2E2; padding: 6pt; border-radius: 3pt; margin: 4pt 0; }
+          .new-value { background-color: #D1FAE5; padding: 6pt; border-radius: 3pt; margin: 4pt 0; }
+          .impact-note { background-color: #F1F5F9; padding: 6pt; border-radius: 3pt; margin: 4pt 0; font-size: 9pt; border-left: 2px solid #64748B; }
+          .page-break { page-break-before: always; }
+          .footer { font-size: 9pt; color: #6B7280; margin-top: 24pt; border-top: 1px solid #E5E7EB; padding-top: 8pt; }
+          .verification-summary { background-color: #F0FDF4; border: 1px solid #10B981; padding: 10pt; margin: 10pt 0; }
+          .doc-comparison { display: table; width: 100%; margin: 10pt 0; }
+          .doc-box { display: table-cell; width: 48%; padding: 10pt; vertical-align: top; }
+          .doc-old { background-color: #FEF2F2; border: 1px solid #FECACA; }
+          .doc-new { background-color: #F0FDF4; border: 1px solid #BBF7D0; }
+        </style>
+      </head>
+      <body>
+        <!-- PAGE 1: EXECUTIVE CHANGE SUMMARY -->
+        <h1>Change Impact Delta Pack</h1>
+        <p style="font-size: 10pt; color: #6B7280;">Generated: ${today} | Automated change detection with source verification</p>
+        
+        <div class="executive-box">
+          <h2 style="margin-top: 0; background: none; padding: 0; color: #1E3A5F;">Executive Change Summary</h2>
+          
+          <!-- Document Version Comparison -->
+          <div class="doc-comparison">
+            <div class="doc-box doc-old">
+              <p style="font-size: 9pt; color: #991B1B; margin: 0 0 4pt 0;"><strong>ORIGINAL DOCUMENT</strong></p>
+              <p style="margin: 4pt 0;"><strong>${escapeHtml(aiResult.oldMetadata.title || file1?.title || 'Unknown')}</strong></p>
+              <p style="font-size: 10pt; margin: 2pt 0;">Version: ${escapeHtml(aiResult.oldMetadata.version || 'N/A')}</p>
+              <p style="font-size: 10pt; margin: 2pt 0;">Effective: ${escapeHtml(aiResult.oldMetadata.effectiveDate || 'N/A')}</p>
+            </div>
+            <div class="doc-box doc-new">
+              <p style="font-size: 9pt; color: #166534; margin: 0 0 4pt 0;"><strong>REVISED DOCUMENT</strong></p>
+              <p style="margin: 4pt 0;"><strong>${escapeHtml(aiResult.newMetadata.title || file2?.title || 'Unknown')}</strong></p>
+              <p style="font-size: 10pt; margin: 2pt 0;">Version: ${escapeHtml(aiResult.newMetadata.version || 'N/A')}</p>
+              <p style="font-size: 10pt; margin: 2pt 0;">Effective: ${escapeHtml(aiResult.newMetadata.effectiveDate || 'N/A')}</p>
+            </div>
+          </div>
+          
+          <h3>Change Classification Summary</h3>
+          <div class="verification-summary">
+            <p style="margin: 0 0 6pt 0;"><strong>Source-Verified Changes:</strong></p>
+            <ul style="margin: 4pt 0 10pt 20pt;">
+              <li><strong>${verifiedSubstantive.length}</strong> substantive (impacting) changes <span class="verified-badge">✓ VERIFIED</span></li>
+              <li><strong>${verifiedEditorial.length}</strong> editorial / formatting changes <span class="verified-badge">✓ VERIFIED</span></li>
+              <li><strong>${verifiedMetadata.length}</strong> document control changes <span class="verified-badge">✓ VERIFIED</span></li>
+            </ul>
+            <p style="font-size: 9pt; color: #065F46; margin: 0;">
+              <strong>${aiResult.summary.verified} of ${aiResult.summary.totalChanges}</strong> changes verified against source documents
+            </p>
+          </div>
+          
+          <p style="margin: 8pt 0;">Primary impact area: <strong>${escapeHtml(mostImpactedSection)}</strong></p>
+          
+          <h3>Training Status</h3>
+          <p>
+            <span class="${trainingRequired ? 'status-required' : 'status-not-required'}">
+              Training Update: ${trainingStatus}
+            </span>
+          </p>
+          <p style="font-size: 9pt; color: #6B7280; margin-top: 6pt;">
+            Training determination is based solely on verified substantive changes affecting procedures or access controls.
+          </p>
+        </div>
+    `;
+    
+    // Document Control Changes Section
+    if (verifiedMetadata.length > 0) {
+      html += `
+        <h2>Document Control Changes <span class="verified-badge">✓ VERIFIED</span></h2>
+        <p style="font-size: 10pt; color: #6B7280;">Changes to document headers, version info, and metadata</p>
+        
+        <table class="change-table">
+          <tr>
+            <th style="width: 25%;">Field</th>
+            <th style="width: 30%;">Previous Value</th>
+            <th style="width: 30%;">New Value</th>
+            <th style="width: 15%;">Status</th>
+          </tr>
+      `;
+      
+      for (const change of verifiedMetadata) {
+        html += `
+          <tr class="metadata-row">
+            <td><strong>${escapeHtml(change.description)}</strong><br><span style="font-size: 9pt; color: #6B7280;">${escapeHtml(change.section || '')}</span></td>
+            <td><div class="old-value">${escapeHtml(change.oldValue || '(empty)')}</div></td>
+            <td><div class="new-value">${escapeHtml(change.newValue || '(empty)')}</div></td>
+            <td><span class="verified-badge">✓ Verified</span></td>
+          </tr>
+        `;
+      }
+      
+      html += `</table>`;
+    }
+    
+    // Verified Procedural and Policy Changes Section
+    if (verifiedSubstantive.length > 0) {
+      html += `
+        <div class="page-break"></div>
+        <h2>Procedural and Policy Changes - Training Required <span class="verified-badge">✓ VERIFIED</span></h2>
+        <p style="font-size: 10pt; color: #6B7280;">Changes affecting procedures, requirements, or compliance</p>
+        
+        <table class="change-table">
+          <tr>
+            <th style="width: 20%;">Section</th>
+            <th style="width: 25%;">Change</th>
+            <th style="width: 20%;">Old Value</th>
+            <th style="width: 20%;">New Value</th>
+            <th style="width: 15%;">Category</th>
+          </tr>
+      `;
+      
+      for (const change of verifiedSubstantive) {
+        html += `
+          <tr class="substantive-row">
+            <td><strong>${escapeHtml(change.sectionNumber || '')}</strong><br><span style="font-size: 9pt;">${escapeHtml(change.section || '')}</span></td>
+            <td>
+              <strong>${escapeHtml(change.description)}</strong>
+              ${change.impact ? `<div class="impact-note"><strong>Impact:</strong> ${escapeHtml(change.impact)}</div>` : ''}
+            </td>
+            <td><div class="old-value">${escapeHtml(change.oldValue || '(none - added)')}</div></td>
+            <td><div class="new-value">${escapeHtml(change.newValue || '(none - removed)')}</div></td>
+            <td><span style="background-color: #EDE9FE; padding: 2pt 6pt; border-radius: 3pt; font-size: 9pt;">${escapeHtml(change.category || 'general')}</span></td>
+          </tr>
+        `;
+      }
+      
+      html += `</table>`;
+    }
+    
+    // Unverified Changes Section (with warning)
+    if (unverifiedSubstantive.length > 0 || unverifiedMetadata.length > 0) {
+      html += `
+        <div class="page-break"></div>
+        <h2>Changes Requiring Review <span class="unverified-badge">⚠ REQUIRES REVIEW</span></h2>
+        
+        <div class="warning-box">
+          <p style="margin: 0;"><strong>⚠ CAUTION:</strong> The following changes could not be automatically verified against the source documents. 
+          Please manually review these before including in training materials.</p>
+        </div>
+      `;
+      
+      if (unverifiedSubstantive.length > 0) {
+        html += `
+          <h3>Unverified Procedural and Policy Changes</h3>
+          <table class="change-table">
+            <tr>
+              <th style="width: 20%;">Section</th>
+              <th style="width: 30%;">Change</th>
+              <th style="width: 20%;">Old Value</th>
+              <th style="width: 20%;">New Value</th>
+              <th style="width: 10%;">Status</th>
+            </tr>
+        `;
+        
+        for (const change of unverifiedSubstantive) {
+          html += `
+            <tr style="background-color: #FFFBEB;">
+              <td>${escapeHtml(change.sectionNumber || '')} ${escapeHtml(change.section || '')}</td>
+              <td>${escapeHtml(change.description)}</td>
+              <td><div class="old-value">${escapeHtml(change.oldValue || '(none)')}</div></td>
+              <td><div class="new-value">${escapeHtml(change.newValue || '(none)')}</div></td>
+              <td><span class="unverified-badge">⚠ Unverified</span></td>
+            </tr>
+          `;
+        }
+        
+        html += `</table>`;
+      }
+      
+      if (unverifiedMetadata.length > 0) {
+        html += `
+          <h3>Unverified Metadata Changes</h3>
+          <table class="change-table">
+            <tr>
+              <th>Field</th>
+              <th>Old Value</th>
+              <th>New Value</th>
+              <th>Status</th>
+            </tr>
+        `;
+        
+        for (const change of unverifiedMetadata) {
+          html += `
+            <tr style="background-color: #FFFBEB;">
+              <td>${escapeHtml(change.description)}</td>
+              <td><div class="old-value">${escapeHtml(change.oldValue || '(empty)')}</div></td>
+              <td><div class="new-value">${escapeHtml(change.newValue || '(empty)')}</div></td>
+              <td><span class="unverified-badge">⚠ Unverified</span></td>
+            </tr>
+          `;
+        }
+        
+        html += `</table>`;
+      }
+    }
+    
+    // Analysis Summary
+    if (aiResult.aiAnalysis) {
+      html += `
+        <div class="page-break"></div>
+        <h2>Change Analysis Summary</h2>
+        <div style="background-color: #F5F3FF; border: 1px solid #C4B5FD; padding: 16pt; border-radius: 4pt;">
+          <p style="margin: 0;">${escapeHtml(aiResult.aiAnalysis)}</p>
+        </div>
+      `;
+    }
+    
+    // Footer with audit trail
+    html += `
+        <div class="footer">
+          <p><strong>Change Impact Delta Pack</strong></p>
+          <p>Part of CapNorth Hub – Controlled Document Change & Training Impact Suite</p>
+          <p>Generated: ${timestamp}</p>
+          <p>Methodology: Automated change detection with source verification</p>
+          <p>Verification Rate: ${aiResult.summary.verified} of ${aiResult.summary.totalChanges} changes verified (${Math.round((aiResult.summary.verified / aiResult.summary.totalChanges) * 100)}%)</p>
+          <p style="font-size: 8pt; color: #9CA3AF;">Verified changes have been confirmed against source documents. 
+          Changes requiring review should be manually verified before use in official training materials.</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Create blob and download
+    const blob = new Blob([html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Change_Impact_Delta_Pack_${file1?.title || 'Document'}_${new Date().toISOString().split('T')[0]}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Render diff content - with proper table support
   const renderDiffContent = (
     fullDiff: Array<{ value: string; added?: boolean; removed?: boolean }>,
@@ -890,8 +1193,8 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
             </button>
             <GitCompare className="w-8 h-8" />
             <div>
-              <h1 className="text-xl font-bold">Document Change Review</h1>
-              <p className="text-purple-200 text-sm">Side-by-side comparison with full traceability</p>
+              <h1 className="text-xl font-bold">Change Impact Review</h1>
+              <p className="text-purple-200 text-sm">Side-by-side comparison with full traceability and verification</p>
             </div>
           </div>
           
@@ -907,10 +1210,10 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
         <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white">
           <div className="flex items-center gap-3 mb-2">
             <GitCompare className="w-8 h-8" />
-            <h2 className="text-2xl font-bold">Document Change Review</h2>
+            <h2 className="text-2xl font-bold">Change Impact Review</h2>
           </div>
           <p className="text-purple-100">
-            Side-by-side comparison of controlled document versions with full traceability
+            Side-by-side comparison of controlled documents with full traceability and verification.
           </p>
         </div>
 
@@ -918,9 +1221,9 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
         <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
           {/* File Uploader */}
           <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Upload SOPs</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Upload Documents</h3>
             <p className="text-sm text-gray-600 mb-4">
-              Drag and drop PDF or DOCX SOPs here, then pick which versions you want to compare below.
+              Upload two document versions to identify and validate all changes.
             </p>
             
             <div
@@ -1008,12 +1311,12 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
 
           {/* Selection */}
           <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Select SOPs to Compare</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Select Documents to Compare</h3>
             
             <div className="grid md:grid-cols-2 gap-4 mb-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  SOP 1 (Baseline)
+                  Baseline Document (Approved)
                 </label>
                 <select
                   value={sop1}
@@ -1021,7 +1324,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                   disabled={completedFiles.length < 2}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
                 >
-                  <option value="">{completedFiles.length < 2 ? 'Upload at least two SOPs...' : 'Select SOP...'}</option>
+                  <option value="">{completedFiles.length < 2 ? 'Upload at least two documents...' : 'Select document...'}</option>
                   {completedFiles.map((file) => (
                     <option key={file.id} value={file.id}>
                       {file.title}
@@ -1032,7 +1335,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  SOP 2 (Comparison)
+                  Comparison Document (Revised)
                 </label>
                 <select
                   value={sop2}
@@ -1040,7 +1343,7 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                   disabled={completedFiles.length < 2}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400"
                 >
-                  <option value="">{completedFiles.length < 2 ? 'Upload at least two SOPs...' : 'Select SOP...'}</option>
+                  <option value="">{completedFiles.length < 2 ? 'Upload at least two documents...' : 'Select document...'}</option>
                   {completedFiles.map((file) => (
                     <option
                       key={file.id}
@@ -1052,6 +1355,34 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Enhanced Comparison Toggle */}
+            <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-6 h-6 text-purple-600" />
+                  <div>
+                    <p className="font-bold text-purple-900">Source-Verified Comparison</p>
+                    <p className="text-sm text-purple-700">Comprehensive change detection with validation</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useAIComparison}
+                    onChange={(e) => setUseAIComparison(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-14 h-7 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+              {useAIComparison && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-purple-700">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>All detected changes are validated against source documents</span>
+                </div>
+              )}
             </div>
 
             {/* Error Display */}
@@ -1073,19 +1404,231 @@ export default function SOPComparisonTool({ user, onBack }: SOPComparisonToolPro
               {comparisonLoading ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Comparing...
+                  Analyzing Changes...
                 </>
               ) : (
                 <>
                   <GitCompare className="w-5 h-5" />
-                  Compare SOPs
+                  Run Change Impact Review
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* Comparison Results */}
+        {/* Verified Comparison Results */}
+        {aiResult && (
+          <div className="space-y-6">
+            {/* Results Header */}
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl shadow-xl p-6 text-white">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Verified Comparison Results</h2>
+                    <p className="text-purple-200">All detected changes are validated against source documents.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={exportAIDeltaTrainingPack}
+                  className="px-4 py-2 bg-white text-purple-700 rounded-lg font-bold hover:bg-purple-50 transition-all flex items-center gap-2 shadow-lg"
+                >
+                  <Download className="w-5 h-5" />
+                  Export Delta Pack
+                </button>
+              </div>
+              
+              {/* Document Metadata Comparison */}
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="bg-white/10 rounded-lg p-4">
+                  <p className="text-sm text-purple-200 mb-1">Original Document</p>
+                  <p className="font-bold">{aiResult.oldMetadata.title || 'Unknown'}</p>
+                  <p className="text-sm">Version: {aiResult.oldMetadata.version || 'N/A'}</p>
+                  <p className="text-sm">Effective: {aiResult.oldMetadata.effectiveDate || 'N/A'}</p>
+                </div>
+                <div className="bg-white/10 rounded-lg p-4">
+                  <p className="text-sm text-purple-200 mb-1">Modified Document</p>
+                  <p className="font-bold">{aiResult.newMetadata.title || 'Unknown'}</p>
+                  <p className="text-sm">Version: {aiResult.newMetadata.version || 'N/A'}</p>
+                  <p className="text-sm">Effective: {aiResult.newMetadata.effectiveDate || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Change Summary</h3>
+              <div className={`grid gap-4 ${aiResult.summary.unverified > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <p className="text-3xl font-bold text-blue-600">{aiResult.summary.totalChanges}</p>
+                  <p className="text-sm text-blue-700">Total Changes</p>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-4 text-center">
+                  <p className="text-3xl font-bold text-orange-600">{aiResult.summary.substantive}</p>
+                  <p className="text-sm text-orange-700">Substantive (Impacting)</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <p className="text-3xl font-bold text-gray-600">{aiResult.summary.editorial}</p>
+                  <p className="text-sm text-gray-700">Editorial / Formatting</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 text-center">
+                  <p className="text-3xl font-bold text-green-600">{aiResult.summary.verified}</p>
+                  <p className="text-sm text-green-700">Source-Verified</p>
+                </div>
+                {aiResult.summary.unverified > 0 && (
+                  <div className="bg-amber-50 rounded-lg p-4 text-center">
+                    <p className="text-3xl font-bold text-amber-600">{aiResult.summary.unverified}</p>
+                    <p className="text-sm text-amber-700">Requires Review</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Document Control Changes */}
+            {aiResult.metadataChanges.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-blue-600 text-white px-6 py-4">
+                  <h3 className="text-lg font-bold">Document Control Changes</h3>
+                  <p className="text-blue-200 text-sm">Version, effective date, and header changes</p>
+                </div>
+                <div className="p-6 space-y-4">
+                  {aiResult.metadataChanges.map((change, idx) => (
+                    <div key={idx} className={`p-4 rounded-lg border-2 ${change.verified ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900">{change.description}</span>
+                          {change.verified ? (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> Source-Verified
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">Requires Review</span>
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-500">{change.section}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mt-3">
+                        <div className="bg-red-50 border border-red-200 rounded p-3">
+                          <p className="text-xs text-red-600 font-semibold mb-1">OLD VALUE</p>
+                          <p className="text-red-800 font-mono">{change.oldValue || '(empty)'}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded p-3">
+                          <p className="text-xs text-green-600 font-semibold mb-1">NEW VALUE</p>
+                          <p className="text-green-800 font-mono">{change.newValue || '(empty)'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Procedural and Policy Changes */}
+            {aiResult.contentChanges.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-orange-600 text-white px-6 py-4">
+                  <h3 className="text-lg font-bold">Procedural and Policy Changes</h3>
+                  <p className="text-orange-200 text-sm">Changes affecting procedures, requirements, or compliance</p>
+                </div>
+                <div className="p-6 space-y-4">
+                  {aiResult.contentChanges.map((change, idx) => (
+                    <div key={idx} className={`p-4 rounded-lg border-2 ${
+                      change.significance === 'substantive' 
+                        ? (change.verified ? 'border-orange-200 bg-orange-50' : 'border-amber-200 bg-amber-50')
+                        : 'border-gray-200 bg-gray-50'
+                    }`}>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-gray-900">{change.description}</span>
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                            change.significance === 'substantive' 
+                              ? 'bg-orange-100 text-orange-700' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {change.significance === 'substantive' ? 'Substantive' : 'Editorial'}
+                          </span>
+                          <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">
+                            {change.category}
+                          </span>
+                          {change.verified ? (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> Source-Verified
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">Requires Review</span>
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-500">{change.sectionNumber} {change.section}</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 mt-3">
+                        <div className="bg-red-50 border border-red-200 rounded p-3">
+                          <p className="text-xs text-red-600 font-semibold mb-1">OLD VALUE</p>
+                          <p className="text-red-800">{change.oldValue || '(none - added)'}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded p-3">
+                          <p className="text-xs text-green-600 font-semibold mb-1">NEW VALUE</p>
+                          <p className="text-green-800">{change.newValue || '(none - removed)'}</p>
+                        </div>
+                      </div>
+                      
+                      {change.impact && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-600 font-semibold mb-1">IMPACT</p>
+                          <p className="text-blue-800 text-sm">{change.impact}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Analysis Summary */}
+            {aiResult.aiAnalysis && (
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-purple-600" />
+                  Change Analysis Summary
+                </h3>
+                <p className="text-gray-700">{aiResult.aiAnalysis}</p>
+              </div>
+            )}
+
+            {/* CapNorth Hub Differentiator */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl shadow-xl p-6 text-white">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-green-400" />
+                Designed for Regulated Environments
+              </h3>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Source-Verified Changes</p>
+                    <p className="text-slate-300 text-sm">Every change validated against original documents</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Section-Level Traceability</p>
+                    <p className="text-slate-300 text-sm">Clear attribution to document sections</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Export-Ready</p>
+                    <p className="text-slate-300 text-sm">Audit and training impact assessment</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Traditional Comparison Results */}
         {hybridResult && (
           <div className="space-y-6">
             {/* Decision Panel - Primary Focus */}
