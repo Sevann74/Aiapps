@@ -1042,9 +1042,7 @@ export default function UnifiedROICalculator() {
         ['Metric', 'Traditional', 'With Learning Conversion', 'Savings'],
         ['Development Hours per Course', formatHours(courseBuilderResults.traditional.devHours), formatHours(courseBuilderResults.ai.devHours), formatHours(courseBuilderResults.savings.hoursPerCourse)],
         ['Cost per Course', formatCurrency(courseBuilderResults.traditional.costPerCourse), formatCurrency(courseBuilderResults.ai.costPerCourse), formatCurrency(courseBuilderResults.savings.costPerCourse)],
-        ['Annual Total Cost', formatCurrency(courseBuilderResults.traditional.totalAnnualCost), formatCurrency(courseBuilderResults.ai.totalAnnualCost), formatCurrency(courseBuilderResults.savings.annualCost)],
-        ['Time Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentTimeSaved)],
-        ['Cost Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentCostSaved)]
+        ['Annual Total Cost', formatCurrency(courseBuilderResults.traditional.totalAnnualCost), formatCurrency(courseBuilderResults.ai.totalAnnualCost), formatCurrency(courseBuilderResults.savings.annualCost)]
       ];
 
       autoTable(doc, {
