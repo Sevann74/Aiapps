@@ -969,7 +969,7 @@ export default function UnifiedROICalculator() {
     return ratio.toFixed(1);
   };
 
-const generatePDFReport = () => {
+  const generatePDFReport = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 20;
