@@ -970,10 +970,18 @@ export default function UnifiedROICalculator() {
   };
 
   const generatePDFReport = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-    let yPosition = margin;
+    try {
+      console.log('generatePDFReport called');
+      console.log('selectedApp:', selectedApp);
+      console.log('courseBuilderResults:', courseBuilderResults);
+      console.log('careerResults:', careerResults);
+      console.log('complianceResults:', complianceResults);
+      console.log('onboardingResults:', onboardingResults);
+      
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      let yPosition = margin;
 
     // Helper function to add new page if needed
     const checkPageBreak = (requiredHeight: number) => {
@@ -1257,8 +1265,14 @@ export default function UnifiedROICalculator() {
     }
 
     // Save the PDF
-    const fileName = `${appInfo.name.replace(/\s+/g, '_')}_ROI_Analysis_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
+      const fileName = `${appInfo.name.replace(/\s+/g, '_')}_ROI_Analysis_${new Date().toISOString().split('T')[0]}.pdf`;
+      console.log('Saving PDF:', fileName);
+      doc.save(fileName);
+      console.log('PDF saved successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error generating PDF report. Please check the console for details.');
+    }
   };
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
