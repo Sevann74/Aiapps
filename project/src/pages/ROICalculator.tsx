@@ -978,6 +978,18 @@ export default function UnifiedROICalculator() {
       console.log('complianceResults:', complianceResults);
       console.log('onboardingResults:', onboardingResults);
       
+      // Check if results exist for the selected app
+      const hasResults = 
+        (selectedApp === 'coursebuilder' && courseBuilderResults) ||
+        (selectedApp === 'career' && careerResults) ||
+        (selectedApp === 'compliance' && complianceResults) ||
+        (selectedApp === 'onboarding' && onboardingResults);
+      
+      if (!hasResults) {
+        alert('Please fill out the calculator inputs and view the results before downloading the analysis.');
+        return;
+      }
+      
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const margin = 20;
