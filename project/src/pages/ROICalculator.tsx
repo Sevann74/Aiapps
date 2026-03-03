@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calculator, TrendingUp, DollarSign, Users, Clock, CheckCircle, PieChart, BarChart3, ArrowRight, Download, RefreshCw, ChevronDown, ChevronUp, Layers, FileText, Zap, Info, Shield } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { saveAs } from 'file-saver';
 
 // ============================================
 // APP DEFINITIONS
@@ -966,6 +969,297 @@ export default function UnifiedROICalculator() {
     return ratio.toFixed(1);
   };
 
+const generatePDFReport = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    let yPosition = margin;
+
+    // Helper function to add new page if needed
+    const checkPageBreak = (requiredHeight: number) => {
+      if (yPosition + requiredHeight > doc.internal.pageSize.getHeight() - margin) {
+        doc.addPage();
+        yPosition = margin;
+      }
+    };
+
+    // Title and App Information
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    const appInfo = APPS[selectedApp];
+    doc.text(appInfo.name + ' - ROI Analysis Report', margin, yPosition);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    yPosition += 10;
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPosition);
+    yPosition += 15;
+
+    // Executive Summary
+    checkPageBreak(40);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Executive Summary', margin, yPosition);
+    yPosition += 10;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    
+    if (selectedApp === 'coursebuilder' && courseBuilderResults) {
+      const summary = [
+        ['Metric', 'Traditional', 'AI-Powered', 'Savings'],
+        ['Development Hours per Course', formatHours(courseBuilderResults.traditional.devHours), formatHours(courseBuilderResults.ai.devHours), formatHours(courseBuilderResults.savings.hoursPerCourse)],
+        ['Cost per Course', formatCurrency(courseBuilderResults.traditional.costPerCourse), formatCurrency(courseBuilderResults.ai.costPerCourse), formatCurrency(courseBuilderResults.savings.costPerCourse)],
+        ['Annual Total Cost', formatCurrency(courseBuilderResults.traditional.totalAnnualCost), formatCurrency(courseBuilderResults.ai.totalAnnualCost), formatCurrency(courseBuilderResults.savings.annualCost)],
+        ['Time Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentTimeSaved)],
+        ['Cost Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentCostSaved)],
+        ['Payback Period', '-', '-', displayPayback(courseBuilderResults.roi.paybackMonths)],
+        ['3-Year Net Benefit', '-', '-', formatCurrency(courseBuilderResults.roi.threeYearBenefit)]
+      ];
+
+      autoTable(doc, {
+        head: [summary[0]],
+        body: summary.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 5 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255 },
+        alternateRowStyles: { fillColor: [249, 250, 251] }
+      });
+      yPosition = (doc as any).lastAutoTable.finalY + 15;
+
+      // Input Parameters
+      checkPageBreak(30);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Input Parameters', margin, yPosition);
+      yPosition += 10;
+
+      const inputs = [
+        ['Parameter', 'Value', 'Description'],
+        ['Seat Time (minutes)', courseBuilderInputs.seatTimeMinutes.toString(), COURSEBUILDER_METRICS.seatTimeMinutes.description],
+        ['Courses Per Year', courseBuilderInputs.coursesPerYear.toString(), COURSEBUILDER_METRICS.coursesPerYear.description],
+        ['Development Ratio', courseBuilderInputs.developmentRatio.toString(), COURSEBUILDER_METRICS.developmentRatio.description],
+        ['Blended Rate ($/hour)', formatCurrency(courseBuilderInputs.blendedRate), COURSEBUILDER_METRICS.blendedRate.description],
+        ['Traditional Tools ($/year)', formatCurrency(courseBuilderInputs.traditionalToolCosts), COURSEBUILDER_METRICS.traditionalToolCosts.description],
+        ['AI Platform ($/year)', formatCurrency(courseBuilderInputs.aiToolCosts), COURSEBUILDER_METRICS.aiToolCosts.description],
+        ['Implementation Cost', formatCurrency(courseBuilderInputs.implementationCost), COURSEBUILDER_METRICS.implementationCost.description]
+      ];
+
+      autoTable(doc, {
+        head: [inputs[0]],
+        body: inputs.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [34, 197, 94], textColor: 255 },
+        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' } }
+      });
+      yPosition = (doc as any).lastAutoTable.finalY + 15;
+
+      // Phase Breakdown
+      checkPageBreak(30);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Development Phase Breakdown', margin, yPosition);
+      yPosition += 10;
+
+      const phases = [
+        ['Phase', 'Traditional Hours', 'AI Hours', 'Hours Saved'],
+        ['Content Preparation', formatHours(courseBuilderResults.traditional.phases.contentPrep), formatHours(courseBuilderResults.ai.phases.contentPrep), formatHours(courseBuilderResults.traditional.phases.contentPrep - courseBuilderResults.ai.phases.contentPrep)],
+        ['Storyboard & Design', formatHours(courseBuilderResults.traditional.phases.storyboard), formatHours(courseBuilderResults.ai.phases.storyboard), formatHours(courseBuilderResults.traditional.phases.storyboard - courseBuilderResults.ai.phases.storyboard)],
+        ['Build in Tool', formatHours(courseBuilderResults.traditional.phases.build), formatHours(courseBuilderResults.ai.phases.build), formatHours(courseBuilderResults.traditional.phases.build - courseBuilderResults.ai.phases.build)],
+        ['QA & Review', formatHours(courseBuilderResults.traditional.phases.qaReview), formatHours(courseBuilderResults.ai.phases.qaReview), formatHours(courseBuilderResults.traditional.phases.qaReview - courseBuilderResults.ai.phases.qaReview)]
+      ];
+
+      autoTable(doc, {
+        head: [phases[0]],
+        body: phases.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 5 },
+        headStyles: { fillColor: [168, 85, 247], textColor: 255 }
+      });
+    }
+
+    if (selectedApp === 'career' && careerResults) {
+      const summary = [
+        ['Metric', 'Value'],
+        ['Total Annual Benefit', formatCurrency(careerResults.roi.totalAnnualBenefit)],
+        ['First-Year ROI', formatPercent(careerResults.roi.firstYearROI)],
+        ['Payback Period', displayPayback(careerResults.roi.paybackMonths)],
+        ['Productivity Gains', formatCurrency(careerResults.components.productivityGains)],
+        ['Turnover Savings', formatCurrency(careerResults.components.turnoverSavings)],
+        ['Internal Mobility Savings', formatCurrency(careerResults.components.internalMobilitySavings)],
+        ['Project Efficiency Gains', formatCurrency(careerResults.components.projectEfficiencyGains)],
+        ['Total Annual Cost', formatCurrency(careerResults.costs.totalCost)]
+      ];
+
+      autoTable(doc, {
+        head: [summary[0]],
+        body: summary.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 5 },
+        headStyles: { fillColor: [249, 115, 22], textColor: 255 },
+        alternateRowStyles: { fillColor: [249, 250, 251] }
+      });
+      yPosition = (doc as any).lastAutoTable.finalY + 15;
+
+      // Input Parameters
+      checkPageBreak(30);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Input Parameters', margin, yPosition);
+      yPosition += 10;
+
+      const inputs = [
+        ['Parameter', 'Value', 'Description'],
+        ['Number of Employees', careerInputs.employees.toString(), CAREER_METRICS.employees.description],
+        ['Average Salary', formatCurrency(careerInputs.averageSalary), CAREER_METRICS.averageSalary.description],
+        ['Annual Platform Cost', formatCurrency(careerInputs.annualPlatformCost), CAREER_METRICS.annualPlatformCost.description],
+        ['Industry', careerIndustry.charAt(0).toUpperCase() + careerIndustry.slice(1), 'Industry preset applied'],
+        ['Turnover Rate', formatPercent(careerInputs.turnoverRate), CAREER_METRICS.turnoverRate.description],
+        ['Replacement Cost Multiplier', formatPercent(careerInputs.replacementCostMultiplier), CAREER_METRICS.replacementCostMultiplier.description],
+        ['Productivity Drag', formatPercent(careerInputs.productivityDrag), CAREER_METRICS.productivityDrag.description]
+      ];
+
+      autoTable(doc, {
+        head: [inputs[0]],
+        body: inputs.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [34, 197, 94], textColor: 255 },
+        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' } }
+      });
+    }
+
+    if (selectedApp === 'compliance' && complianceResults) {
+      const summary = [
+        ['Metric', 'Value'],
+        ['Annual Queries', complianceResults.usage.annualQueries.toString()],
+        ['Productivity Hours Saved', formatHours(complianceResults.usage.productivityHoursSaved)],
+        ['Total Annual Benefit', formatCurrency(complianceResults.roi.totalAnnualBenefit)],
+        ['First Year ROI', formatPercent(complianceResults.roi.firstYearROI)],
+        ['Payback Period', displayPayback(complianceResults.roi.paybackMonths)],
+        ['Three Year Benefit', formatCurrency(complianceResults.roi.threeYearBenefit)],
+        ['Productivity Savings', formatCurrency(complianceResults.usage.productivitySavings)],
+        ['SME Savings', formatCurrency(complianceResults.benefits.smeSavings)],
+        ['Audit Savings', formatCurrency(complianceResults.benefits.auditSavings)],
+        ['First Year Cost', formatCurrency(complianceResults.costs.firstYearCost)],
+        ['Ongoing Annual Cost', formatCurrency(complianceResults.costs.ongoingAnnualCost)]
+      ];
+
+      autoTable(doc, {
+        head: [summary[0]],
+        body: summary.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 5 },
+        headStyles: { fillColor: [147, 51, 234], textColor: 255 },
+        alternateRowStyles: { fillColor: [249, 250, 251] }
+      });
+      yPosition = (doc as any).lastAutoTable.finalY + 15;
+
+      // Input Parameters
+      checkPageBreak(30);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Input Parameters', margin, yPosition);
+      yPosition += 10;
+
+      const inputs = [
+        ['Parameter', 'Value', 'Description'],
+        ['Team Size', teamSizePreset, 'Team size preset'],
+        ['Query Frequency', queryFreqPreset, 'Query frequency preset'],
+        ['Answer Speed', answerSpeedPreset, 'Answer speed preset'],
+        ['Audit Burden', auditBurdenPreset, 'Audit burden preset'],
+        ['Annual License', formatCurrency(complianceInputs.annualLicense), COMPLIANCE_METRICS.annualLicense.description],
+        ['Implementation Cost', formatCurrency(complianceInputs.implementationCost), COMPLIANCE_METRICS.implementationCost.description],
+        ['Blended Rate', formatCurrency(complianceInputs.blendedRate), COMPLIANCE_METRICS.blendedRate.description]
+      ];
+
+      autoTable(doc, {
+        head: [inputs[0]],
+        body: inputs.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [34, 197, 94], textColor: 255 },
+        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' } }
+      });
+    }
+
+    if (selectedApp === 'onboarding' && onboardingResults) {
+      const summary = [
+        ['Metric', 'Value'],
+        ['Total Annual Benefit', formatCurrency(onboardingResults.benefits.totalAnnualBenefit)],
+        ['First Year ROI', formatPercent(onboardingResults.roi.firstYearROI)],
+        ['Payback Period', displayPayback(onboardingResults.roi.paybackMonths)],
+        ['Three Year Benefit', formatCurrency(onboardingResults.roi.threeYearBenefit)],
+        ['Annual Time Savings', formatCurrency(onboardingResults.benefits.annualTimeSavings)],
+        ['Annual Productivity Gains', formatCurrency(onboardingResults.benefits.annualProductivityGains)],
+        ['Annual Retention Savings', formatCurrency(onboardingResults.benefits.annualRetentionSavings)],
+        ['Total First Year Cost', formatCurrency(onboardingResults.costs.totalFirstYearCost)],
+        ['Ongoing Annual Cost', formatCurrency(onboardingResults.costs.ongoingAnnualCost)]
+      ];
+
+      autoTable(doc, {
+        head: [summary[0]],
+        body: summary.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 10, cellPadding: 5 },
+        headStyles: { fillColor: [16, 185, 129], textColor: 255 },
+        alternateRowStyles: { fillColor: [249, 250, 251] }
+      });
+      yPosition = (doc as any).lastAutoTable.finalY + 15;
+
+      // Input Parameters
+      checkPageBreak(30);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Input Parameters', margin, yPosition);
+      yPosition += 10;
+
+      const inputs = [
+        ['Parameter', 'Value', 'Description'],
+        ['Annual Hires', annualHires.toString(), 'Number of new hires per year'],
+        ['HR Time per Hire', onboardingInputs.hrTimePerHire + ' hours', ONBOARDING_METRICS.hrTimePerHire.description],
+        ['Manager Time per Hire', onboardingInputs.managerTimePerHire + ' hours', ONBOARDING_METRICS.managerTimePerHire.description],
+        ['IT Time per Hire', onboardingInputs.itTimePerHire + ' hours', ONBOARDING_METRICS.itTimePerHire.description],
+        ['HR Hourly Rate', formatCurrency(onboardingInputs.hrHourlyRate), ONBOARDING_METRICS.hrHourlyRate.description],
+        ['Manager Hourly Rate', formatCurrency(onboardingInputs.managerHourlyRate), ONBOARDING_METRICS.managerHourlyRate.description],
+        ['IT Hourly Rate', formatCurrency(onboardingInputs.itHourlyRate), ONBOARDING_METRICS.itHourlyRate.description],
+        ['Average Salary', formatCurrency(onboardingInputs.averageSalary), ONBOARDING_METRICS.averageSalary.description]
+      ];
+
+      autoTable(doc, {
+        head: [inputs[0]],
+        body: inputs.slice(1),
+        startY: yPosition,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [34, 197, 94], textColor: 255 },
+        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' } }
+      });
+    }
+
+    // Footer
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin - 20, doc.internal.pageSize.getHeight() - 10);
+      doc.text('Confidential ROI Analysis Report - Navigant Learning Solutions', margin, doc.internal.pageSize.getHeight() - 10);
+    }
+
+    // Save the PDF
+    const fileName = `${appInfo.name.replace(/\s+/g, '_')}_ROI_Analysis_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
       <div className="max-w-7xl mx-auto py-12">
@@ -1802,7 +2096,7 @@ export default function UnifiedROICalculator() {
 
             {/* Actions */}
             <div className="flex justify-center gap-4">
-              <button className="px-8 py-4 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold hover:shadow-xl transition-all flex items-center gap-2">
+              <button onClick={generatePDFReport} className="px-8 py-4 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold hover:shadow-xl transition-all flex items-center gap-2">
                 <Download className="w-5 h-5" />
                 Download Analysis
               </button>
@@ -2223,7 +2517,7 @@ export default function UnifiedROICalculator() {
 
             {/* Actions */}
             <div className="flex justify-center gap-4">
-              <button className="px-8 py-4 rounded-lg bg-gradient-to-r from-orange-600 to-red-600 text-white font-bold hover:shadow-xl transition-all flex items-center gap-2">
+              <button onClick={generatePDFReport} className="px-8 py-4 rounded-lg bg-gradient-to-r from-orange-600 to-red-600 text-white font-bold hover:shadow-xl transition-all flex items-center gap-2">
                 <Download className="w-5 h-5" />
                 Download Analysis
               </button>
@@ -2976,7 +3270,7 @@ export default function UnifiedROICalculator() {
 
                 {/* Actions */}
                 <div className="flex justify-center gap-4">
-                  <button className="px-8 py-4 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold hover:shadow-xl transition-all flex items-center gap-2">
+                  <button onClick={generatePDFReport} className="px-8 py-4 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold hover:shadow-xl transition-all flex items-center gap-2">
                     <Download className="w-5 h-5" />
                     Download Full Report
                   </button>
