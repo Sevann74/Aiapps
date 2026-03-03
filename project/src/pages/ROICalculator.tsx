@@ -21,7 +21,7 @@ const APPS: Record<AppId, {
 }> = {
   coursebuilder: {
     id: 'coursebuilder',
-    name: 'AI Course Builder',
+    name: 'Learning Conversion',
     description: 'Build compliance courses 20x faster',
     color: 'from-blue-500 to-purple-600',
     icon: FileText,
@@ -971,13 +971,6 @@ export default function UnifiedROICalculator() {
 
   const generatePDFReport = () => {
     try {
-      console.log('generatePDFReport called');
-      console.log('selectedApp:', selectedApp);
-      console.log('courseBuilderResults:', courseBuilderResults);
-      console.log('careerResults:', careerResults);
-      console.log('complianceResults:', complianceResults);
-      console.log('onboardingResults:', onboardingResults);
-      
       // Check if results exist for the selected app
       const hasResults = 
         (selectedApp === 'coursebuilder' && courseBuilderResults) ||
@@ -1004,56 +997,75 @@ export default function UnifiedROICalculator() {
     };
 
     // Title and App Information
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
     const appInfo = APPS[selectedApp];
-    doc.text(appInfo.name + ' - ROI Analysis Report', margin, yPosition);
     
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    yPosition += 10;
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPosition);
-    yPosition += 15;
-
-    // Executive Summary
-    checkPageBreak(40);
-    doc.setFontSize(16);
+    // Header with branding
+    doc.setFillColor(59, 130, 246);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
-    doc.text('Executive Summary', margin, yPosition);
-    yPosition += 10;
-
-    doc.setFontSize(11);
+    doc.text(appInfo.name + ' - ROI Analysis', margin, 15);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
+    doc.text('Navigant Learning Solutions', margin, 25);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth - margin - 60, 25);
+    
+    yPosition = 45;
+    doc.setTextColor(0, 0, 0);
     
     if (selectedApp === 'coursebuilder' && courseBuilderResults) {
+      // Value Summary Box
+      doc.setFillColor(34, 197, 94);
+      doc.roundedRect(margin, yPosition, pageWidth - 2 * margin, 45, 3, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Your ROI Summary', margin + 10, yPosition + 12);
+      
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Annual Savings: ${formatCurrency(courseBuilderResults.savings.annualCost)} (${formatPercent(courseBuilderResults.savings.percentCostSaved)} reduction)`, margin + 10, yPosition + 22);
+      doc.text(`Time Saved: ${formatPercent(courseBuilderResults.savings.percentTimeSaved)} per course (${formatHours(courseBuilderResults.savings.annualHours)}/year)`, margin + 10, yPosition + 30);
+      doc.text(`Payback: ${displayPayback(courseBuilderResults.roi.paybackMonths)} | 3-Year Benefit: ${formatCurrency(courseBuilderResults.roi.threeYearBenefit)}`, margin + 10, yPosition + 38);
+      
+      yPosition += 55;
+      doc.setTextColor(0, 0, 0);
+      
+      // Detailed Comparison
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Detailed Cost Comparison', margin, yPosition);
+      yPosition += 8;
+      
       const summary = [
-        ['Metric', 'Traditional', 'AI-Powered', 'Savings'],
+        ['Metric', 'Traditional', 'With Learning Conversion', 'Savings'],
         ['Development Hours per Course', formatHours(courseBuilderResults.traditional.devHours), formatHours(courseBuilderResults.ai.devHours), formatHours(courseBuilderResults.savings.hoursPerCourse)],
         ['Cost per Course', formatCurrency(courseBuilderResults.traditional.costPerCourse), formatCurrency(courseBuilderResults.ai.costPerCourse), formatCurrency(courseBuilderResults.savings.costPerCourse)],
         ['Annual Total Cost', formatCurrency(courseBuilderResults.traditional.totalAnnualCost), formatCurrency(courseBuilderResults.ai.totalAnnualCost), formatCurrency(courseBuilderResults.savings.annualCost)],
         ['Time Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentTimeSaved)],
-        ['Cost Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentCostSaved)],
-        ['Payback Period', '-', '-', displayPayback(courseBuilderResults.roi.paybackMonths)],
-        ['3-Year Net Benefit', '-', '-', formatCurrency(courseBuilderResults.roi.threeYearBenefit)]
+        ['Cost Savings', '-', '-', formatPercent(courseBuilderResults.savings.percentCostSaved)]
       ];
 
       autoTable(doc, {
         head: [summary[0]],
         body: summary.slice(1),
         startY: yPosition,
-        theme: 'grid',
-        styles: { fontSize: 10, cellPadding: 5 },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255 },
-        alternateRowStyles: { fillColor: [249, 250, 251] }
+        theme: 'striped',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 
+          3: { textColor: [34, 197, 94], fontStyle: 'bold' }
+        }
       });
-      yPosition = (doc as any).lastAutoTable.finalY + 15;
+      yPosition = (doc as any).lastAutoTable.finalY + 12;
 
       // Input Parameters
       checkPageBreak(30);
-      doc.setFontSize(16);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('Input Parameters', margin, yPosition);
-      yPosition += 10;
+      doc.text('Your Input Parameters', margin, yPosition);
+      yPosition += 8;
 
       const inputs = [
         ['Parameter', 'Value', 'Description'],
@@ -1070,19 +1082,19 @@ export default function UnifiedROICalculator() {
         head: [inputs[0]],
         body: inputs.slice(1),
         startY: yPosition,
-        theme: 'grid',
-        styles: { fontSize: 9, cellPadding: 4 },
-        headStyles: { fillColor: [34, 197, 94], textColor: 255 },
-        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' } }
+        theme: 'striped',
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [100, 116, 139], textColor: 255, fontSize: 9 },
+        columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 28, fontStyle: 'bold' }, 2: { cellWidth: 'auto' } }
       });
-      yPosition = (doc as any).lastAutoTable.finalY + 15;
+      yPosition = (doc as any).lastAutoTable.finalY + 12;
 
       // Phase Breakdown
       checkPageBreak(30);
-      doc.setFontSize(16);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
       doc.text('Development Phase Breakdown', margin, yPosition);
-      yPosition += 10;
+      yPosition += 8;
 
       const phases = [
         ['Phase', 'Traditional Hours', 'AI Hours', 'Hours Saved'],
@@ -1096,9 +1108,12 @@ export default function UnifiedROICalculator() {
         head: [phases[0]],
         body: phases.slice(1),
         startY: yPosition,
-        theme: 'grid',
-        styles: { fontSize: 10, cellPadding: 5 },
-        headStyles: { fillColor: [168, 85, 247], textColor: 255 }
+        theme: 'striped',
+        styles: { fontSize: 9, cellPadding: 4 },
+        headStyles: { fillColor: [168, 85, 247], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 
+          3: { textColor: [34, 197, 94], fontStyle: 'bold' }
+        }
       });
     }
 
@@ -1278,9 +1293,7 @@ export default function UnifiedROICalculator() {
 
     // Save the PDF
       const fileName = `${appInfo.name.replace(/\s+/g, '_')}_ROI_Analysis_${new Date().toISOString().split('T')[0]}.pdf`;
-      console.log('Saving PDF:', fileName);
       doc.save(fileName);
-      console.log('PDF saved successfully');
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF report. Please check the console for details.');
